@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
+import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
 import { extractCnpjRaiz } from '@/composables/useParsing';
@@ -37,6 +38,19 @@ const filterStore = useFilterStore();
 const { formatCurrencyFull } = useFormatting();
 const { conexaoMsClass } = useStatusClass();
 const copiedKey = ref(null);
+const loadingRef = computed(() => props.isLoading);
+const tableSnapshot = useFrozenData(
+  () => ({
+    cnpjs: props.cnpjs,
+    totalRecords: props.totalRecords,
+    first: props.first,
+    rows: props.rows,
+    sortField: props.sortField,
+    sortOrder: props.sortOrder,
+    tableKpis: props.tableKpis,
+  }),
+  loadingRef,
+);
 
 function formatValue(valor) {
   if (valor == null) return '—';
@@ -123,8 +137,8 @@ function onLazyLoad(event) {
 }
 
 const tableFooter = computed(() => {
-  const totalSemComprovacao = Number(props.tableKpis?.total_sem_comprovacao ?? 0);
-  const totalMov = Number(props.tableKpis?.total_mov ?? 0);
+  const totalSemComprovacao = Number(tableSnapshot.value.tableKpis?.total_sem_comprovacao ?? 0);
+  const totalMov = Number(tableSnapshot.value.tableKpis?.total_mov ?? 0);
 
   return {
     totalSemComprovacao: formatCurrencyCompact(totalSemComprovacao),
@@ -138,7 +152,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 </script>
 
 <template>
-  <div class="ind-table-card" :class="{ 'is-refreshing': isLoading }">
+  <div class="ind-table-card">
     <div class="section-header">
       <div class="header-icon-box">
         <i class="pi pi-list" />
@@ -146,7 +160,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
       <div class="header-text-box">
         <h3>Farmácias por Indicador</h3>
         <span class="subtitle">
-          {{ indicadorLabel }} — {{ totalRecords }} estabelecimentos
+          {{ indicadorLabel }} — {{ tableSnapshot.totalRecords }} estabelecimentos
         </span>
       </div>
       <div v-if="selectedRegiaoNome || selectedMunicipioNome" class="header-filter-chips">
@@ -169,17 +183,17 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
     </div>
 
     <DataTable
-      :value="cnpjs"
+      :value="tableSnapshot.cnpjs"
       size="small"
       stripedRows
       removableSort
       paginator
       lazy
-      :first="first"
-      :rows="rows"
-      :totalRecords="totalRecords"
-      :sortField="sortField"
-      :sortOrder="sortOrder"
+      :first="tableSnapshot.first"
+      :rows="tableSnapshot.rows"
+      :totalRecords="tableSnapshot.totalRecords"
+      :sortField="tableSnapshot.sortField"
+      :sortOrder="tableSnapshot.sortOrder"
       class="enterprise-table ind-cnpj-table clickable-rows"
       @page="onLazyLoad"
       @sort="onLazyLoad"
@@ -413,14 +427,6 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: opacity 0.3s ease;
-}
-
-.ind-table-card.is-refreshing {
-  pointer-events: none;
-}
-
-.ind-table-card.is-refreshing :deep(.p-datatable-tbody) {
-  opacity: 0.58;
 }
 
 .section-header {

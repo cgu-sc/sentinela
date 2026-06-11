@@ -37,7 +37,7 @@ const props = defineProps({
   selectedRegiao: { type: String, default: null },
 });
 
-const emit = defineEmits(['select-municipio', 'select-uf']);
+const emit = defineEmits(['select-municipio', 'select-uf', 'back-to-uf', 'clear-geography']);
 
 const geoStore = useGeoStore();
 const { chartTheme } = useChartTheme();
@@ -92,6 +92,19 @@ const hoverBorder = computed(() => `${themeStore.tokens.primary}B3`);
 
 // ── Modo de exibição ──────────────────────────────────────────────────────────
 const isNational = computed(() => !props.activeUf || props.activeUf === 'Todos');
+const hasRegionScope = computed(
+  () => Boolean(props.selectedRegiao && props.selectedRegiao !== 'Todos')
+);
+const backButtonLabel = computed(() => hasRegionScope.value ? props.activeUf : 'Brasil');
+const backButtonTooltip = computed(
+  () => hasRegionScope.value
+    ? `Voltar ao mapa de ${props.activeUf}`
+    : 'Voltar ao mapa do Brasil'
+);
+
+function handleBackClick() {
+  emit(hasRegionScope.value ? 'back-to-uf' : 'clear-geography');
+}
 
 // ── GeoJSON nacional (para modo nacional) ────────────────────────────────────
 const nationalMapReady = ref(false);
@@ -452,6 +465,16 @@ function onMapClick(params) {
         <h2>Municípios</h2>
         <span>% de farmácias críticas por {{ isNational ? 'UF' : 'município' }} · {{ indicadorLabel }}</span>
       </div>
+      <button
+        v-if="!isNational"
+        type="button"
+        class="map-back-button"
+        v-tooltip.bottom="backButtonTooltip"
+        @click="handleBackClick"
+      >
+        <i class="pi pi-arrow-left" />
+        <span>{{ backButtonLabel }}</span>
+      </button>
       <div v-if="summaryItems.length" class="map-summary">
         <div
           v-for="item in summaryItems"
@@ -550,6 +573,36 @@ function onMapClick(params) {
 .map-title span {
   font-size: 0.68rem;
   color: var(--text-muted);
+}
+
+.map-back-button {
+  height: 2rem;
+  padding: 0 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-bg) 92%, var(--primary-color) 8%);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.map-back-button:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 42%, var(--card-border));
+  color: var(--primary-color);
+}
+
+.map-back-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.map-back-button:focus-visible {
+  outline: 1px solid var(--primary-color);
+  outline-offset: 2px;
 }
 
 .map-summary {

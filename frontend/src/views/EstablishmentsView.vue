@@ -68,6 +68,17 @@ function onSelectUf(uf) {
   filterStore.selectedUF = uf;
 }
 
+function returnMapToUf() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+}
+
+function clearMapGeography() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedUF = 'Todos';
+}
+
 // Em indicadores, o fetch traz a UF/Região inteira (para o mapa ficar colorido).
 // Filtramos localmente para que os KPIs e a Tabela reflitam apenas a seleção atual.
 const displayedKpis = computed(() => {
@@ -198,6 +209,8 @@ function onCnpjTableLazy(event) {
           :selected-regiao="filterStore.selectedRegiaoSaude"
           @select-municipio="onSelectMunicipio"
           @select-uf="onSelectUf"
+          @back-to-uf="returnMapToUf"
+          @clear-geography="clearMapGeography"
         />
 
         <!-- Tabela ranqueada de CNPJs -->

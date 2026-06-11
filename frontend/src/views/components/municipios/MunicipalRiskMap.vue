@@ -26,7 +26,7 @@ const props = defineProps({
   selectedRegiaoNome: { type: String, default: null },
 });
 
-const emit = defineEmits(['select-municipio', 'select-uf']);
+const emit = defineEmits(['select-municipio', 'select-uf', 'back-to-uf', 'clear-geography']);
 
 const geoStore = useGeoStore();
 const themeStore = useThemeStore();
@@ -44,6 +44,19 @@ const regionDataSnapshot = ref(null);
 let resizeObserver = null;
 
 const isNational = computed(() => !props.activeUf || props.activeUf === 'Todos');
+const hasRegionScope = computed(
+  () => Boolean(props.selectedRegiao && props.selectedRegiao !== 'Todos')
+);
+const backButtonLabel = computed(() => hasRegionScope.value ? props.activeUf : 'Brasil');
+const backButtonTooltip = computed(
+  () => hasRegionScope.value
+    ? `Voltar ao mapa de ${props.activeUf}`
+    : 'Voltar ao mapa do Brasil'
+);
+
+function handleBackClick() {
+  emit(hasRegionScope.value ? 'back-to-uf' : 'clear-geography');
+}
 const activeScale = computed(() => MAP_VISUAL_SCALE[themeStore.isDark ? 'dark' : 'light']);
 const mapAreaColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)');
 const mapBorderColor = computed(() => themeStore.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.14)');
@@ -439,6 +452,16 @@ function onMapClick(params) {
           por {{ isNational ? 'UF' : 'município' }} · {{ metricLabel }}
         </span>
       </div>
+      <button
+        v-if="!isNational"
+        type="button"
+        class="map-back-button"
+        v-tooltip.bottom="backButtonTooltip"
+        @click="handleBackClick"
+      >
+        <i class="pi pi-arrow-left" />
+        <span>{{ backButtonLabel }}</span>
+      </button>
       <div class="map-summary">
         <div v-if="metricMode === 'indicator'" class="summary-item summary-item--critical">
           <span>Críticos</span>
@@ -552,6 +575,36 @@ function onMapClick(params) {
   color: var(--text-color);
   font-size: 0.72rem;
   font-weight: 500;
+}
+
+.map-back-button {
+  height: 2rem;
+  padding: 0 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-bg) 92%, var(--primary-color) 8%);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.map-back-button:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 42%, var(--card-border));
+  color: var(--primary-color);
+}
+
+.map-back-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.map-back-button:focus-visible {
+  outline: 1px solid var(--primary-color);
+  outline-offset: 2px;
 }
 
 .map-summary {

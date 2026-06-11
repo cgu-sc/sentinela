@@ -42,6 +42,11 @@ const enabledTargetKeys = computed(() =>
 );
 
 const first = computed(() => (page.value - 1) * rowsPerPage.value);
+const activeUf = computed(() => filterStore.selectedUF);
+const selectedMunicipioIbge7 = computed(() => {
+  const value = filterStore.selectedMunicipio;
+  return value && value !== 'Todos' ? Number(value) : null;
+});
 
 function normalizeRouteTarget(rawTarget) {
   const key = String(rawTarget || DEFAULT_TARGET_KEY);
@@ -63,6 +68,27 @@ function openClinicalIncompatibilityDialog(cnpj) {
   if (!cnpj) return;
   clinicalIncompatibilityCnpj.value = cnpj;
   clinicalIncompatibilityDialogVisible.value = true;
+}
+
+function onSelectUf(uf) {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedUF = uf;
+}
+
+function onSelectMunicipio(ibge7) {
+  filterStore.selectedMunicipio = ibge7 ? String(ibge7) : 'Todos';
+}
+
+function returnMapToUf() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+}
+
+function clearMapGeography() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedUF = 'Todos';
 }
 
 watch(
@@ -93,38 +119,46 @@ watch(
 
 <template>
   <div class="targets-page">
-    <div class="targets-main">
-      <TargetKpiStrip
-        :title="selectedTargetMeta.label"
-        :description="selectedTargetMeta.description"
-        :kpis="targetKpis"
-        :source-notice="sourceNotice"
-      />
+    <TargetKpiStrip
+      :kpis="targetKpis"
+      :source-notice="sourceNotice"
+    />
 
-      <TargetMap
-        :map-data="mapData"
-        :source-notice="sourceNotice"
-      />
+    <div class="targets-layout">
+      <div class="targets-main">
+        <TargetMap
+          :map-data="mapData"
+          :active-uf="activeUf"
+          :selected-ibge7="selectedMunicipioIbge7"
+          :selected-regiao="filterStore.selectedRegiaoSaude"
+          :is-loading="isLoading"
+          :source-notice="sourceNotice"
+          @select-uf="onSelectUf"
+          @select-municipio="onSelectMunicipio"
+          @back-to-uf="returnMapToUf"
+          @clear-geography="clearMapGeography"
+        />
 
-      <TargetTableRenderer
-        :target-key="selectedTarget"
-        :rows="rows"
-        :loading="isTableLoading || isLoading"
-        :total-records="totalRecords"
-        :first="first"
-        :rows-per-page="rowsPerPage"
-        :sort-field="sortField"
-        :sort-order="sortOrder"
-        :source-notice="sourceNotice"
-        @lazy-load="onTableLazyLoad"
-        @open-incompatibility="openClinicalIncompatibilityDialog"
+        <TargetTableRenderer
+          :target-key="selectedTarget"
+          :rows="rows"
+          :loading="isTableLoading || isLoading"
+          :total-records="totalRecords"
+          :first="first"
+          :rows-per-page="rowsPerPage"
+          :sort-field="sortField"
+          :sort-order="sortOrder"
+          :source-notice="sourceNotice"
+          @lazy-load="onTableLazyLoad"
+          @open-incompatibility="openClinicalIncompatibilityDialog"
+        />
+      </div>
+
+      <TargetSelector
+        :selected-target="selectedTarget"
+        @select="selectTarget"
       />
     </div>
-
-    <TargetSelector
-      :selected-target="selectedTarget"
-      @select="selectTarget"
-    />
 
     <ClinicalIncompatibilityDialog
       v-model="clinicalIncompatibilityDialogVisible"
@@ -136,6 +170,13 @@ watch(
 <style scoped>
 .targets-page {
   --target-selector-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.targets-layout {
   display: flex;
   align-items: flex-start;
   gap: 1rem;

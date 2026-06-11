@@ -1,10 +1,10 @@
 <script setup>
 import { computed } from 'vue';
 import { useFormatting } from '@/composables/useFormatting';
+import { DEFAULT_KPI_STYLE } from '@/config/uiConfig';
+import { TARGET_KPI_CONFIGS } from '@/config/targetConfig';
 
 const props = defineProps({
-  title: { type: String, required: true },
-  description: { type: String, required: true },
   kpis: { type: Array, default: () => [] },
   sourceNotice: { type: String, default: null },
 });
@@ -21,23 +21,20 @@ function formatKpiValue(kpi) {
 }
 
 const displayKpis = computed(() =>
-  props.kpis.map(kpi => ({ ...kpi, displayValue: formatKpiValue(kpi) }))
+  props.kpis.map(kpi => ({
+    ...kpi,
+    ...DEFAULT_KPI_STYLE,
+    ...TARGET_KPI_CONFIGS[kpi.key],
+    displayValue: formatKpiValue(kpi),
+  }))
 );
 </script>
 
 <template>
-  <section class="target-kpi-card">
-    <div class="target-kpi-header">
-      <div class="target-title-block">
-        <span class="target-eyebrow">Alvo investigativo</span>
-        <h1>{{ title }}</h1>
-        <p>{{ description }}</p>
-      </div>
-
-      <div v-if="sourceNotice" class="target-contract-note">
-        <i class="pi pi-database" />
-        <span>{{ sourceNotice }}</span>
-      </div>
+  <section class="target-kpi-section">
+    <div v-if="sourceNotice" class="target-contract-note">
+      <i class="pi pi-database" />
+      <span>{{ sourceNotice }}</span>
     </div>
 
     <div class="target-kpi-grid">
@@ -45,58 +42,29 @@ const displayKpis = computed(() =>
         v-for="kpi in displayKpis"
         :key="kpi.label"
         class="target-kpi"
+        :style="{
+          borderBottom: `3px solid color-mix(in srgb, ${kpi.color} 50%, transparent)`,
+          background: `linear-gradient(to top, color-mix(in srgb, ${kpi.color} 6%, var(--card-bg)) 0%, var(--card-bg) 60%)`,
+        }"
       >
-        <span>{{ kpi.label }}</span>
-        <strong>{{ kpi.displayValue }}</strong>
+        <div
+          class="target-kpi-icon"
+          :style="{ backgroundColor: `${kpi.color}20`, color: kpi.color }"
+        >
+          <i :class="kpi.icon" />
+        </div>
+        <div class="target-kpi-content">
+          <span>{{ kpi.label }}</span>
+          <strong>{{ kpi.displayValue }}</strong>
+        </div>
       </article>
     </div>
   </section>
 </template>
 
 <style scoped>
-.target-kpi-card {
-  padding: 1rem;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm);
-}
-
-.target-kpi-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.target-title-block {
-  min-width: 0;
-}
-
-.target-eyebrow {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: var(--primary-color);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.target-title-block h1 {
-  margin: 0;
-  color: var(--text-color-85);
-  font-size: 1.08rem;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-
-.target-title-block p {
-  margin: 0.35rem 0 0;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  line-height: 1.45;
+.target-kpi-section {
+  width: 100%;
 }
 
 .target-contract-note {
@@ -111,37 +79,60 @@ const displayKpis = computed(() =>
   color: var(--risk-indicator-warning);
   font-size: 0.72rem;
   font-weight: 500;
+  margin-bottom: 1rem;
 }
 
 .target-kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.8rem;
+  gap: 1.15rem;
+  width: 100%;
 }
 
 .target-kpi {
-  min-height: 4.2rem;
-  padding: 0.75rem;
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg));
+  min-height: 0;
+  padding: 0.8rem 1rem;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 15%, var(--sidebar-border));
+  border-radius: 12px;
 }
 
-.target-kpi span {
-  color: var(--text-muted);
-  font-size: 0.66rem;
+.target-kpi-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  font-size: 1.25rem;
+}
+
+.target-kpi-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.target-kpi-content span {
+  margin-bottom: 0.3rem;
+  color: var(--text-color);
+  opacity: 0.7;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  line-height: 1;
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
-.target-kpi strong {
-  color: var(--text-color-85);
-  font-size: 1rem;
+.target-kpi-content strong {
+  color: var(--text-color);
+  opacity: 0.9;
+  font-size: 1.3rem;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 </style>

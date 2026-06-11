@@ -1,14 +1,16 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
+import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 
-defineProps({
+const props = defineProps({
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   totalRecords: { type: Number, default: 0 },
@@ -24,6 +26,18 @@ const router = useRouter();
 const { formatCurrencyFull, formatTitleCase } = useFormatting();
 const { conexaoMsClass } = useStatusClass();
 const copiedKey = ref(null);
+const loadingRef = computed(() => props.loading);
+const tableSnapshot = useFrozenData(
+  () => ({
+    rows: props.rows,
+    totalRecords: props.totalRecords,
+    first: props.first,
+    rowsPerPage: props.rowsPerPage,
+    sortField: props.sortField,
+    sortOrder: props.sortOrder,
+  }),
+  loadingRef,
+);
 
 function formatInteger(value) {
   if (value == null) return '—';
@@ -84,17 +98,16 @@ function openIncompatibilityDialog(event, cnpj) {
     </div>
 
     <DataTable
-      :value="rows"
+      :value="tableSnapshot.rows"
       size="small"
       class="enterprise-table target-table ind-cnpj-table clickable-rows"
       lazy
       paginator
-      :loading="loading"
-      :first="first"
-      :rows="rowsPerPage"
-      :totalRecords="totalRecords"
-      :sortField="sortField"
-      :sortOrder="sortOrder"
+      :first="tableSnapshot.first"
+      :rows="tableSnapshot.rowsPerPage"
+      :totalRecords="tableSnapshot.totalRecords"
+      :sortField="tableSnapshot.sortField"
+      :sortOrder="tableSnapshot.sortOrder"
       @page="emit('lazy-load', $event)"
       @sort="emit('lazy-load', $event)"
       @row-click="goToEstabelecimento"
@@ -162,7 +175,10 @@ function openIncompatibilityDialog(event, cnpj) {
       <Column field="valor_incompativel" header="Valor dos CPFs < 50 anos" sortable headerClass="col-money" bodyClass="col-money">
         <template #body="{ data }">
           <div class="metric-stack align-right">
-            <span class="metric-main">{{ formatCurrencyFull(data.valor_incompativel) }}</span>
+            <span
+              class="metric-main"
+              :class="{ 'high-value-audit': data.valor_incompativel >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+            >{{ formatCurrencyFull(data.valor_incompativel) }}</span>
             <span class="metric-sub">Part. Município {{ formatPercent(data.participacao_municipio) }}</span>
           </div>
         </template>
@@ -398,6 +414,19 @@ function openIncompatibilityDialog(event, cnpj) {
   font-size: 0.8rem;
   font-weight: 600;
   line-height: 1.12;
+}
+
+.high-value-audit {
+  padding: 0.15rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--risk-high);
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+  border-left: 3px solid var(--risk-high);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .metric-sub {

@@ -179,6 +179,23 @@ function handleClearRegiaoFilter() {
   filterStore.selectedMunicipio = 'Todos';
 }
 
+function handleSelectUf(uf) {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedUF = uf;
+}
+
+function handleMapBackToUf() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+}
+
+function handleMapBackToBrazil() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedUF = 'Todos';
+}
+
 function handleRiskIndicatorSelect(key) {
   fetchRiskIndicator(key);
 }
@@ -211,7 +228,9 @@ function handleRiskIndicatorSelect(key) {
           :selected-municipio-nome="selectedLocalidade?.no_municipio ?? null"
           :selected-regiao-nome="selectedRegiaoNome"
           @select-municipio="handleSelectMunicipio"
-          @select-uf="(uf) => { filterStore.selectedUF = uf; }"
+          @select-uf="handleSelectUf"
+          @back-to-uf="handleMapBackToUf"
+          @clear-geography="handleMapBackToBrazil"
         />
 
         <MunicipalRiskTable

@@ -254,6 +254,29 @@ def get_parkinson_menor_50(
             detail=f"Perfil sem is_matriz/is_conexao_ativa para alvo Parkinson: id_cnpj={ids}.",
         )
 
+    map_profile = _build_profile_filter(perfil, uf, regiao_id, None)
+    map_rows = cnpj_base.join(map_profile, on=["id_cnpj", "id_ibge7"], how="inner")
+
+    map_total_valor = float(map_rows.select(pl.sum("valor_incompativel")).item() or 0.0)
+    mapa_df = (
+        map_rows
+        .group_by(["id_ibge7", "municipio", "uf"])
+        .agg(
+            [
+                pl.n_unique("id_cnpj").alias("total_farmacias"),
+                pl.col("valor_incompativel").sum().alias("valor_incompativel"),
+                pl.col("casos_observados").sum().alias("casos_observados"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.lit(map_total_valor) > 0)
+            .then(pl.col("valor_incompativel") / pl.lit(map_total_valor))
+            .otherwise(None)
+            .alias("participacao_uf")
+        )
+        .sort("valor_incompativel", descending=True)
+    )
+
     profile = _build_profile_filter(perfil, uf, regiao_id, id_ibge7)
     rows = cnpj_base.join(profile, on=["id_cnpj", "id_ibge7"], how="inner")
 
@@ -266,7 +289,7 @@ def get_parkinson_menor_50(
                 TargetKpiSchema(key="municipios", label="Municipios", value=0),
                 TargetKpiSchema(key="ufs", label="UFs", value=0),
             ],
-            mapa=[],
+            mapa=[TargetMapRowSchema(**item) for item in mapa_df.to_dicts()],
             items=[],
             total=0,
             page=page,
@@ -316,25 +339,6 @@ def get_parkinson_menor_50(
     total_valor = float(rows.select(pl.sum("valor_incompativel")).item() or 0.0)
     total_cpfs = int(rows.select(pl.sum("casos_observados")).item() or 0)
     total_farmacias = int(rows.select(pl.n_unique("id_cnpj")).item() or 0)
-
-    mapa_df = (
-        rows
-        .group_by(["id_ibge7", "municipio", "uf"])
-        .agg(
-            [
-                pl.n_unique("id_cnpj").alias("total_farmacias"),
-                pl.col("valor_incompativel").sum().alias("valor_incompativel"),
-                pl.col("casos_observados").sum().alias("casos_observados"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.lit(total_valor) > 0)
-            .then(pl.col("valor_incompativel") / pl.lit(total_valor))
-            .otherwise(None)
-            .alias("participacao_uf")
-        )
-        .sort("valor_incompativel", descending=True)
-    )
 
     page_df = _sort_and_page(rows, page, page_size, sort_field, sort_order)
 

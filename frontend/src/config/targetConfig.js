@@ -1,4 +1,29 @@
+import { PALETTE, RISK_COLORS } from './colors.js';
+
 export const DEFAULT_TARGET_KEY = 'parkinson_menor_50';
+
+export const TARGET_KPI_CONFIGS = {
+  farmacias: {
+    icon: 'pi pi-building',
+    color: PALETTE.blue[500],
+  },
+  valor_incompativel: {
+    icon: 'pi pi-money-bill',
+    color: RISK_COLORS.HIGH,
+  },
+  cpfs_envolvidos: {
+    icon: 'pi pi-users',
+    color: PALETTE.violet[500],
+  },
+  municipios: {
+    icon: 'pi pi-map-marker',
+    color: PALETTE.emerald[500],
+  },
+  ufs: {
+    icon: 'pi pi-map',
+    color: PALETTE.amber[500],
+  },
+};
 
 export const TARGET_GROUPS = [
   {

@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
+import { useGeoStore } from '@/stores/geo';
 import RiskChart from './components/charts/RiskChart.vue';
 import BrazilMap from './components/maps/BrazilMap.vue';
 import TopUfRiskChart from './components/charts/TopUfRiskChart.vue';
@@ -11,9 +12,9 @@ import SemesterProductionChart from './components/charts/SemesterProductionChart
 
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
+const geoStore = useGeoStore();
 const {
   enrichedKpis,
-  fatorRisco,
   resultadoSentinelaUF,
   cacheStatus,
   isLoading,
@@ -38,12 +39,6 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
 const monthFormatter = new Intl.DateTimeFormat('pt-BR', {
   month: 'short',
   year: 'numeric',
-});
-
-const currencyFormatter = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  maximumFractionDigits: 0,
 });
 
 function normalizeLabel(label) {
@@ -108,13 +103,25 @@ const ufCount = computed(() =>
   (resultadoSentinelaUF.value || []).filter((item) => item?.uf).length
 );
 
-const dominantRiskBucket = computed(() => {
-  const buckets = fatorRisco.value || [];
-  return buckets.reduce((best, bucket) => {
-    const current = Number(bucket?.qtd ?? 0);
-    const bestValue = Number(best?.qtd ?? -1);
-    return current > bestValue ? bucket : best;
-  }, null);
+const financialScopeMetric = computed(() => {
+  const municipio = filterStore.selectedMunicipio;
+  if (municipio && municipio !== 'Todos') {
+    const nome = geoStore.getMunicipioNomeByIbge7(municipio);
+    if (!nome) throw new Error('Municipio selecionado sem nome no contrato de localidades.');
+    return { label: 'Município', value: nome };
+  }
+
+  const regiao = filterStore.selectedRegiaoSaude;
+  if (regiao && regiao !== 'Todos') {
+    const nome = geoStore.getRegiaoNomeById(regiao);
+    if (!nome) throw new Error('Regiao selecionada sem nome no contrato de localidades.');
+    return { label: 'Região', value: nome };
+  }
+
+  const uf = filterStore.selectedUF;
+  if (uf && uf !== 'Todos') return { label: 'UF', value: uf };
+
+  return { label: 'Escopo', value: 'Brasil' };
 });
 
 const cacheModules = computed(() =>
@@ -164,37 +171,22 @@ const coverageCardMetrics = computed(() => [
   {
     label: 'Período',
     value: periodText.value,
+    wide: true,
   },
 ]);
 
 const financialCardMetrics = computed(() => [
   {
-    label: 'Sem comprovação',
+    label: 'Valor sem comprovação',
     value: getKpiValue('SEM COMPROVACAO'),
+    tone: 'critical',
   },
   {
     label: '% sem comprovação',
     value: getKpiValue('% SEM COMPROVACAO'),
+    tone: 'warning',
   },
-]);
-
-const indicatorCardMetrics = computed(() => [
-  {
-    label: 'Faixas ativas',
-    value: `${fatorRisco.value?.length || '-'}`,
-  },
-  {
-    label: 'Estab. na faixa',
-    value: dominantRiskBucket.value?.qtd
-      ? Number(dominantRiskBucket.value.qtd).toLocaleString('pt-BR')
-      : '-',
-  },
-  {
-    label: 'Valor s/ comp.',
-    value: dominantRiskBucket.value?.valor_raw
-      ? currencyFormatter.format(Number(dominantRiskBucket.value.valor_raw))
-      : '-',
-  },
+  financialScopeMetric.value,
 ]);
 
 const priorityCards = computed(() => [
@@ -202,38 +194,30 @@ const priorityCards = computed(() => [
     title: 'Status operacional',
     eyebrow: 'Sistema',
     value: statusInfo.value.label,
-    detail: 'Disponibilidade da visão analítica atual',
+    detail: 'Integridade dos módulos carregados',
     metrics: statusCardMetrics.value,
+    metricsLayout: 'system',
     icon: statusInfo.value.icon,
     tone: statusInfo.value.tone,
     hasModulePanel: true,
   },
   {
-    title: 'Cobertura da análise',
+    title: 'Escopo da análise',
     eyebrow: 'Escopo monitorado',
     value: getKpiValue('CNPJS'),
-    detail: 'farmácias com dados no escopo selecionado',
+    detail: 'CNPJs com movimentação',
     metrics: coverageCardMetrics.value,
     icon: 'pi pi-map',
     tone: 'info',
   },
   {
-    title: 'Movimento financeiro',
-    eyebrow: 'Produção auditada',
+    title: 'Movimentação financeira',
+    eyebrow: 'Produção',
     value: getKpiValue('VALOR DAS VENDAS'),
     detail: 'valor movimentado no período selecionado',
     metrics: financialCardMetrics.value,
     icon: 'pi pi-money-bill',
     tone: 'critical',
-  },
-  {
-    title: 'Indicadores',
-    eyebrow: 'Sinais de auditoria',
-    value: dominantRiskBucket.value?.faixa || '-',
-    detail: 'faixa com maior concentração de estabelecimentos',
-    metrics: indicatorCardMetrics.value,
-    icon: 'pi pi-shield',
-    tone: 'warning',
   },
 ]);
 </script>
@@ -257,8 +241,17 @@ const priorityCards = computed(() => [
             <strong>{{ card.title }}</strong>
             <span class="priority-value">{{ card.value }}</span>
             <p>{{ card.detail }}</p>
-            <div v-if="card.metrics" class="priority-metrics">
-              <div v-for="metric in card.metrics" :key="metric.label" class="priority-metric">
+            <div
+              v-if="card.metrics"
+              class="priority-metrics"
+              :class="card.metricsLayout ? `priority-metrics--${card.metricsLayout}` : null"
+            >
+              <div
+                v-for="metric in card.metrics"
+                :key="metric.label"
+                class="priority-metric"
+                :class="[metric.tone ? `priority-metric--${metric.tone}` : null, { 'priority-metric--wide': metric.wide }]"
+              >
                 <span>{{ metric.label }}</span>
                 <strong>{{ metric.value }}</strong>
               </div>
@@ -327,7 +320,7 @@ const priorityCards = computed(() => [
 
 .priority-eyebrow {
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--primary-color);
@@ -336,7 +329,7 @@ const priorityCards = computed(() => [
 
 .priority-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1.35fr);
   gap: 1rem;
 }
 
@@ -346,8 +339,8 @@ const priorityCards = computed(() => [
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.8rem;
   align-items: flex-start;
-  min-height: 8.2rem;
-  padding: 0.95rem;
+  min-height: 8.8rem;
+  padding: 1rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
@@ -446,7 +439,7 @@ const priorityCards = computed(() => [
 .operational-panel__header span {
   color: var(--text-muted);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -477,7 +470,7 @@ const priorityCards = computed(() => [
   gap: 0.35rem;
   color: var(--text-muted);
   font-size: 0.64rem;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -511,7 +504,7 @@ const priorityCards = computed(() => [
   overflow: hidden;
   color: var(--text-color-85);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -519,7 +512,7 @@ const priorityCards = computed(() => [
 .operational-module strong {
   color: var(--text-muted);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -574,8 +567,8 @@ const priorityCards = computed(() => [
 
 .priority-value {
   color: var(--text-color-85);
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1.55rem;
+  font-weight: 600;
   line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
@@ -584,28 +577,43 @@ const priorityCards = computed(() => [
 
 .priority-metrics {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.55fr) minmax(0, 1.65fr);
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.priority-metrics--system {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.55fr);
 }
 
 .priority-metric {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 0.45rem;
-  align-items: center;
-  padding: 0.38rem 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0.52rem 0.58rem;
   border: 1px solid color-mix(in srgb, var(--priority-color) 16%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--priority-color) 6%, transparent);
 }
 
+.priority-metric--critical {
+  border-color: color-mix(in srgb, var(--risk-indicator-critical) 34%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 10%, transparent);
+}
+
+.priority-metric--warning {
+  border-color: color-mix(in srgb, var(--risk-indicator-medium) 34%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-medium) 10%, transparent);
+}
+
 .priority-metric span {
   display: block;
   color: var(--text-muted);
-  font-size: 0.58rem;
-  font-weight: 700;
+  font-size: 0.66rem;
+  font-weight: 600;
   line-height: 1.1;
   text-transform: uppercase;
 }
@@ -613,13 +621,13 @@ const priorityCards = computed(() => [
 .priority-metric strong {
   display: block;
   color: var(--text-color-85);
-  font-size: 0.78rem;
-  font-weight: 800;
-  line-height: 1;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.08;
   white-space: nowrap;
   overflow: hidden;
+  max-width: 100%;
   text-overflow: ellipsis;
-  text-align: right;
 }
 
 .priority-content p {

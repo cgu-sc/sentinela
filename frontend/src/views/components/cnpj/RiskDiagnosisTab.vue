@@ -81,6 +81,7 @@ const riskMetricOptions = [
 
 const isAnimationPreviewActive = computed(() => {
   if (!filterStore.animationMode) return false;
+  if (filterStore.animationPreload.status !== 'ready') return false;
   const [inicio, fim] = filterStore.animationFrameRange ?? [];
   return (
     inicio instanceof Date &&
@@ -150,11 +151,16 @@ const hasMovementInPeriod = computed(() => {
   return Number(props.cnpjData?.totalMov ?? 0) > 0;
 });
 
-const noMovementInPeriod = computed(() =>
-  !props.periodLoading &&
-  Boolean(props.cnpjData) &&
-  !hasMovementInPeriod.value
-);
+const noMovementInPeriod = computed(() => {
+  // Durante a animação, nunca ocultamos os gráficos por falta de dados num frame individual.
+  // A detecção de ausência de movimentação só faz sentido para o período global selecionado.
+  if (isAnimationPreviewActive.value) return false;
+  return (
+    !props.periodLoading &&
+    Boolean(props.cnpjData) &&
+    !hasMovementInPeriod.value
+  );
+});
 
 // Máximos globais calculados sobre todos os trimestres — usados para fixar os
 // eixos do scatter durante a animação e evitar que a escala salte entre passos.
@@ -501,8 +507,13 @@ watch(() => filterStore.animationMode, (isActive) => {
       loadRegional();
       return;
     }
-    updateRiskCurve();
-    loadRegional();
+});
+
+watch(isAnimationPreviewActive, (active) => {
+    if (active) {
+      updateRiskCurve();
+      loadRegional();
+    }
 });
 
 
@@ -618,7 +629,7 @@ const riskRankBadge = computed(() => {
                    :cnpj-atual="cnpj"
                    :regiao-nome="regionalScope === 'uf' ? geoData.sg_uf : geoData.no_regiao_saude"
                    :active-metric="riskMetric"
-                   :x-axis-max="isAnimationPreviewActive ? animationXMax : null"
+                   :x-axis-max="null"
                    :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
                  />
              </div>
@@ -684,7 +695,7 @@ const riskRankBadge = computed(() => {
                 :ranking-text="rankingText"
                 :metric-label="riskMetric === 'score' ? 'Score de Risco' : '% Não-Comprovação'"
                 :rank-badge="riskRankBadge"
-                :show-marker="!noMovementInPeriod"
+                :show-marker="hasMovementInPeriod"
                 :y-axis-max="isAnimationPreviewActive ? (riskMetric === 'percentual_sem_comprovacao' ? animationYMaxPct : animationYMax) : null"
               />
             <!-- AJUDA CONTEXTUAL CARD 2 -->

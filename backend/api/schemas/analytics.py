@@ -135,15 +135,15 @@ class RegionalResponse(BaseModel):
 
 
 class RegionalAnimationQuarterSchema(BaseModel):
-    """Dados de um trimestre para animação do scatter de posicionamento regional."""
-    trimestre: str          # ex: "2015-Q3"
+    """Dados de uma janela móvel trimestral para animação do scatter regional."""
+    trimestre: str          # mantido por compatibilidade; representa o mês inicial da janela
     inicio: date
     fim: date
     farmacias: List[RegionalFarmaciaSchema]
 
 
 class RegionalAnimationResponse(BaseModel):
-    """Payload completo para animação trimestral — todos os trimestres em uma única chamada."""
+    """Payload completo para animação — todas as janelas móveis em uma única chamada."""
     nome_regiao: str
     quarters: List[RegionalAnimationQuarterSchema]
 
@@ -153,7 +153,7 @@ class PercentilesPointSchema(BaseModel):
     score: float
 
 class PercentilesQuarterSchema(BaseModel):
-    """Dados de percentis de uma janela de 2 meses para animação da curva de risco."""
+    """Dados de percentis de uma janela móvel trimestral para animação da curva de risco."""
     inicio: date
     fim: date
     percentiles: List[PercentilesPointSchema]

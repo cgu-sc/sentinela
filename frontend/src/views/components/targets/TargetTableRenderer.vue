@@ -1,0 +1,39 @@
+<script setup>
+import { computed } from 'vue';
+import ParkinsonTargetTable from './tables/ParkinsonTargetTable.vue';
+
+const props = defineProps({
+  targetKey: { type: String, required: true },
+  rows: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  totalRecords: { type: Number, default: 0 },
+  first: { type: Number, default: 0 },
+  rowsPerPage: { type: Number, default: 20 },
+  sortField: { type: String, default: null },
+  sortOrder: { type: Number, default: -1 },
+  sourceNotice: { type: String, default: null },
+});
+
+const emit = defineEmits(['lazy-load', 'open-incompatibility']);
+
+const tableComponent = computed(() => {
+  if (props.targetKey === 'parkinson_menor_50') return ParkinsonTargetTable;
+  throw new Error(`Tabela sem componente para alvo: ${props.targetKey}`);
+});
+</script>
+
+<template>
+  <component
+    :is="tableComponent"
+    :rows="rows"
+    :loading="loading"
+    :total-records="totalRecords"
+    :first="first"
+    :rows-per-page="rowsPerPage"
+    :sort-field="sortField"
+    :sort-order="sortOrder"
+    :source-notice="sourceNotice"
+    @lazy-load="emit('lazy-load', $event)"
+    @open-incompatibility="emit('open-incompatibility', $event)"
+  />
+</template>

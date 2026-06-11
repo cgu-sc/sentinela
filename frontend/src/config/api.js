@@ -60,6 +60,7 @@ export const API_ENDPOINTS = {
   analyticsCpfTimeline: (cpf, cnpj) => `${BASE_URL}/api/v1/analytics/cpf/${cpf}/timeline?cnpj=${cnpj}`,
   analyticsIndicadoresAnalise: `${BASE_URL}/api/v1/analytics/indicadores-analise`,
   analyticsIndicadoresAnaliseCnpjs: `${BASE_URL}/api/v1/analytics/indicadores-analise/cnpjs`,
+  targetParkinsonMenor50: `${BASE_URL}/api/v1/targets/parkinson-menor-50`,
   analyticsClientPerf: `${BASE_URL}/api/v1/analytics/client-perf`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,

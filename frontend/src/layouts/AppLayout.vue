@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import { useThemeStore } from "@/stores/theme";
 import { useFilterStore } from "@/stores/filters";
@@ -11,7 +11,6 @@ import SyncDialog from "@/layouts/components/dialogs/SyncDialog.vue";
 const route = useRoute();
 const themeStore = useThemeStore();
 const filterStore = useFilterStore();
-const activeModule = ref("consolidado");
 
 // Lógica Profissional: Esconde a sidebar se a rota atual pedir via meta: { hideSidebar: true }
 const isSidebarHidden = computed(() => !!route.meta?.hideSidebar);
@@ -29,8 +28,8 @@ onMounted(() => {});
       'analysis-route': isAnalysisRoute
     }"
   >
-    <AppNavbar v-model="activeModule" />
-    <AppSidebar v-if="!isSidebarHidden" :active-module="activeModule" />
+    <AppNavbar />
+    <AppSidebar v-if="!isSidebarHidden" active-module="consolidado" />
 
     <main class="main-container">
       <CnpjDialog />
@@ -158,6 +157,10 @@ onMounted(() => {});
   text-transform: uppercase;
   font-weight: 700;
   border-bottom: 2px solid var(--sidebar-border) !important;
+}
+
+:global(.admin-layout) .p-datatable .p-datatable-tbody > tr > td {
+  text-transform: none;
 }
 
 :global(.dark-mode) .p-datatable .p-datatable-thead > tr > th,

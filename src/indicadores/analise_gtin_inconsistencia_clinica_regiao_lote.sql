@@ -36,8 +36,8 @@ GO
 DECLARE @DataInicio DATE = '2015-07-01';
 DECLARE @DataFim    DATE = '2024-12-10';
 DECLARE @PipelineVersao VARCHAR(40) = 'v1_2026_05_23';
-DECLARE @RegiaoSaudeAlvo BIGINT = 50004;
-DECLARE @ResetResultados BIT = 1;
+DECLARE @RegiaoSaudeAlvo BIGINT = 31007;
+DECLARE @ResetResultados BIT = 0;
 
 DECLARE @InicioProcesso DATETIME2(7) = SYSDATETIME();
 DECLARE @InicioEtapa    DATETIME2(7) = @InicioProcesso;
@@ -372,15 +372,15 @@ DROP TABLE IF EXISTS #medicamentos_clinicos;
 SELECT DISTINCT
     M.codigo_barra,
     CAST(M.qnt_comprimidos_caixa AS DECIMAL(10,0)) AS qnt_comprimidos_caixa,
-    M.Patologia AS patologia,
+    UPPER(LTRIM(RTRIM(M.Patologia))) AS patologia,
     CASE
-        WHEN M.Patologia = 'OSTEOPOROSE'
+        WHEN UPPER(LTRIM(RTRIM(M.Patologia))) = 'OSTEOPOROSE'
             THEN 'SEXO_MASCULINO'
-        WHEN M.Patologia = 'DIABETES'
+        WHEN UPPER(LTRIM(RTRIM(M.Patologia))) = 'DIABETES'
             THEN 'IDADE_MENOR_20'
-        WHEN M.Patologia = 'DOENCA DE PARKINSON'
+        WHEN UPPER(LTRIM(RTRIM(M.Patologia))) = 'DOENCA DE PARKINSON'
             THEN 'IDADE_MENOR_50'
-        WHEN M.Patologia = 'HIPERTENSAO'
+        WHEN UPPER(LTRIM(RTRIM(M.Patologia))) = 'HIPERTENSAO'
             THEN 'IDADE_MENOR_20'
     END AS regra_clinica
 INTO #medicamentos_clinicos
@@ -388,7 +388,7 @@ FROM temp_CGUSC.fp.medicamentos_patologia M
 WHERE M.codigo_barra IS NOT NULL
   AND TRY_CAST(M.qnt_comprimidos_caixa AS DECIMAL(10,0)) IS NOT NULL
   AND TRY_CAST(M.qnt_comprimidos_caixa AS DECIMAL(10,0)) <> 0
-  AND M.Patologia IN ('OSTEOPOROSE', 'DIABETES', 'DOENCA DE PARKINSON', 'HIPERTENSAO');
+  AND UPPER(LTRIM(RTRIM(M.Patologia))) IN ('OSTEOPOROSE', 'DIABETES', 'DOENCA DE PARKINSON', 'HIPERTENSAO');
 
 SET @QtdLinhas = @@ROWCOUNT;
 

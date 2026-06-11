@@ -187,7 +187,7 @@ const chartOption = computed(() => {
   <div class="chart-section" :class="{ 'is-refreshing': showRefreshing }">
     <div class="chart-header">
       <i class="pi pi-chart-bar"></i>
-      <h3>FATOR RISCO X QTD ESTAB</h3>
+      <h3>Estabelecimentos por faixa de não comprovação</h3>
       <div class="spacer"></div>
       <i
         class="pi pi-info-circle info-icon"

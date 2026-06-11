@@ -184,7 +184,7 @@ const financialCardMetrics = computed(() => [
   {
     label: '% sem comprovação',
     value: getKpiValue('% SEM COMPROVACAO'),
-    tone: 'warning',
+    tone: 'critical',
   },
   financialScopeMetric.value,
 ]);

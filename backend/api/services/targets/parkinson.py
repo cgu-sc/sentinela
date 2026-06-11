@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
 
@@ -5,22 +6,51 @@ import polars as pl
 from fastapi import HTTPException
 
 from data_cache import (
-    get_df_dados_ibge_demografia,
     get_df_perfil_estabelecimento,
     scan_analise_gtin_inconsistencia_clinica,
 )
 from ...schemas.targets import (
-    ParkinsonTargetResponse,
-    ParkinsonTargetRowSchema,
+    ClinicalTargetResponse,
+    ClinicalTargetRowSchema,
     TargetKpiSchema,
     TargetMapRowSchema,
 )
 
 
-_PARKINSON_PATOLOGIA = "DOENCA DE PARKINSON"
-_PARKINSON_REGRA = "IDADE_MENOR_50"
-_PARKINSON_PREVALENCIA_50_MAIS = 0.0086
-_IBGE_ANO_CENSO_DEMOGRAFIA = 2022
+@dataclass(frozen=True)
+class ClinicalTargetConfig:
+    key: str
+    label: str
+    patologia: str
+    regra_clinica: str
+
+
+_TARGETS = {
+    "parkinson_menor_50": ClinicalTargetConfig(
+        key="parkinson_menor_50",
+        label="Parkinson em menores de 50 anos",
+        patologia="DOENCA DE PARKINSON",
+        regra_clinica="IDADE_MENOR_50",
+    ),
+    "diabetes_menor_20": ClinicalTargetConfig(
+        key="diabetes_menor_20",
+        label="Diabetes em menores de 20 anos",
+        patologia="DIABETES",
+        regra_clinica="IDADE_MENOR_20",
+    ),
+    "hipertensao_menor_20": ClinicalTargetConfig(
+        key="hipertensao_menor_20",
+        label="Hipertensao em menores de 20 anos",
+        patologia="HIPERTENSÃO",
+        regra_clinica="IDADE_MENOR_20",
+    ),
+    "osteoporose_homens": ClinicalTargetConfig(
+        key="osteoporose_homens",
+        label="Osteoporose em homens",
+        patologia="OSTEOPOROSE",
+        regra_clinica="SEXO_MASCULINO",
+    ),
+}
 
 _CLINICO_REQUIRED = {
     "id_cnpj",
@@ -31,6 +61,7 @@ _CLINICO_REQUIRED = {
     "qtd_cpfs_incompativeis",
     "qtd_autorizacoes_incompativeis",
     "valor_incompativel_pago",
+    "cpfs_incompativeis_esperados_regiao",
 }
 
 _PERFIL_REQUIRED = {
@@ -45,20 +76,12 @@ _PERFIL_REQUIRED = {
     "is_conexao_ativa",
 }
 
-_DEMOGRAFIA_REQUIRED = {
-    "id_ibge7",
-    "ano_censo",
-    "idade_min",
-    "nu_populacao",
-}
-
 _SORT_FIELDS = {
     "razao_social",
     "is_conexao_ativa",
     "municipio",
     "uf",
     "ano_base",
-    "populacao_50_mais",
     "casos_esperados",
     "casos_observados",
     "casos_observados_municipio",
@@ -84,6 +107,32 @@ def _year_start(data_inicio: date | None) -> int | None:
 
 def _year_end(data_fim: date | None) -> int | None:
     return data_fim.year if data_fim else None
+
+
+def _empty_response(
+    *,
+    page: int,
+    page_size: int,
+    sort_field: str,
+    sort_order: str,
+    mapa: list[TargetMapRowSchema] | None = None,
+) -> ClinicalTargetResponse:
+    return ClinicalTargetResponse(
+        kpis=[
+            TargetKpiSchema(key="farmacias", label="Farmacias", value=0),
+            TargetKpiSchema(key="valor_incompativel", label="Valor incompativel", value=0.0),
+            TargetKpiSchema(key="cpfs_envolvidos", label="CPFs envolvidos", value=0),
+            TargetKpiSchema(key="municipios", label="Municipios", value=0),
+            TargetKpiSchema(key="ufs", label="UFs", value=0),
+        ],
+        mapa=mapa or [],
+        items=[],
+        total=0,
+        page=page,
+        page_size=page_size,
+        sort_field=sort_field,
+        sort_order=sort_order,
+    )
 
 
 def _build_profile_filter(
@@ -116,25 +165,6 @@ def _build_profile_filter(
     return profile
 
 
-def _build_demografia_50_mais() -> pl.DataFrame:
-    demografia = get_df_dados_ibge_demografia()
-    _require_columns(demografia.columns, _DEMOGRAFIA_REQUIRED, "dados_ibge_demografia")
-
-    return (
-        demografia
-        .with_columns(pl.col("id_ibge7").cast(pl.Int32, strict=False).alias("id_ibge7"))
-        .filter(
-            (pl.col("ano_censo") == _IBGE_ANO_CENSO_DEMOGRAFIA)
-            & (pl.col("idade_min").cast(pl.Int16, strict=False) >= 50)
-        )
-        .group_by("id_ibge7")
-        .agg(pl.col("nu_populacao").cast(pl.Int64, strict=False).sum().alias("populacao_50_mais"))
-        .with_columns(
-            (pl.col("populacao_50_mais") * _PARKINSON_PREVALENCIA_50_MAIS).alias("casos_esperados")
-        )
-    )
-
-
 def _sort_and_page(
     df: pl.DataFrame,
     page: int,
@@ -143,7 +173,7 @@ def _sort_and_page(
     sort_order: str,
 ) -> pl.DataFrame:
     if sort_field not in _SORT_FIELDS:
-        raise HTTPException(status_code=422, detail=f"Campo de ordenacao invalido para alvo Parkinson: {sort_field}.")
+        raise HTTPException(status_code=422, detail=f"Campo de ordenacao invalido para alvo clinico: {sort_field}.")
     if sort_order not in {"asc", "desc"}:
         raise HTTPException(status_code=422, detail="sort_order deve ser asc ou desc.")
 
@@ -153,7 +183,8 @@ def _sort_and_page(
     )
 
 
-def get_parkinson_menor_50(
+def _get_clinical_target(
+    config: ClinicalTargetConfig,
     *,
     data_inicio: date | None = None,
     data_fim: date | None = None,
@@ -164,7 +195,7 @@ def get_parkinson_menor_50(
     page_size: int = 20,
     sort_field: str = "valor_incompativel",
     sort_order: str = "desc",
-) -> ParkinsonTargetResponse:
+) -> ClinicalTargetResponse:
     if page < 1:
         raise HTTPException(status_code=422, detail="page deve ser maior ou igual a 1.")
     if page_size < 1 or page_size > 200:
@@ -184,13 +215,14 @@ def get_parkinson_menor_50(
             [
                 pl.col("patologia").cast(pl.Utf8).str.to_uppercase().alias("_patologia_norm"),
                 pl.col("regra_clinica").cast(pl.Utf8).str.to_uppercase().alias("_regra_norm"),
+                pl.col("id_cnpj").cast(pl.Int32, strict=False).alias("id_cnpj"),
                 pl.col("id_ibge7").cast(pl.Int32, strict=False).alias("id_ibge7"),
                 pl.col("ano_base").cast(pl.Int16, strict=False).alias("ano_base"),
             ]
         )
         .filter(
-            (pl.col("_patologia_norm") == _PARKINSON_PATOLOGIA)
-            & (pl.col("_regra_norm") == _PARKINSON_REGRA)
+            (pl.col("_patologia_norm") == config.patologia)
+            & (pl.col("_regra_norm") == config.regra_clinica)
         )
     )
     if ano_inicio is not None:
@@ -204,6 +236,7 @@ def get_parkinson_menor_50(
         .agg(
             [
                 pl.col("qtd_cpfs_incompativeis").sum().alias("casos_observados"),
+                pl.col("cpfs_incompativeis_esperados_regiao").sum().alias("casos_esperados"),
                 pl.col("qtd_autorizacoes_incompativeis").sum().alias("autorizacoes"),
                 pl.col("valor_incompativel_pago").sum().alias("valor_incompativel"),
             ]
@@ -212,26 +245,13 @@ def get_parkinson_menor_50(
         .collect()
     )
 
-    if cnpj_base.filter(pl.col("id_ibge7").is_null() | pl.col("ano_base").is_null()).height > 0:
-        raise HTTPException(status_code=500, detail="Alvo Parkinson possui id_ibge7/ano_base invalido no cache clinico.")
+    if cnpj_base.filter(pl.col("id_cnpj").is_null() | pl.col("id_ibge7").is_null() | pl.col("ano_base").is_null()).height > 0:
+        raise HTTPException(status_code=500, detail=f"Alvo {config.label} possui id_cnpj/id_ibge7/ano_base invalido no cache clinico.")
+    if cnpj_base.filter(pl.col("casos_esperados").is_null()).height > 0:
+        raise HTTPException(status_code=500, detail=f"Alvo {config.label} possui casos_esperados nulo no cache clinico.")
 
     if cnpj_base.is_empty():
-        return ParkinsonTargetResponse(
-            kpis=[
-                TargetKpiSchema(key="farmacias", label="Farmacias", value=0),
-                TargetKpiSchema(key="valor_incompativel", label="Valor incompativel", value=0.0),
-                TargetKpiSchema(key="cpfs_envolvidos", label="CPFs envolvidos", value=0),
-                TargetKpiSchema(key="municipios", label="Municipios", value=0),
-                TargetKpiSchema(key="ufs", label="UFs", value=0),
-            ],
-            mapa=[],
-            items=[],
-            total=0,
-            page=page,
-            page_size=page_size,
-            sort_field=sort_field,
-            sort_order=sort_order,
-        )
+        return _empty_response(page=page, page_size=page_size, sort_field=sort_field, sort_order=sort_order)
 
     perfil = get_df_perfil_estabelecimento()
     _require_columns(perfil.columns, _PERFIL_REQUIRED, "perfil_estabelecimento")
@@ -240,7 +260,7 @@ def get_parkinson_menor_50(
     missing_profile = cnpj_base.join(full_profile.select("id_cnpj"), on="id_cnpj", how="anti")
     if missing_profile.height > 0:
         ids = missing_profile.select("id_cnpj").head(10).to_series().to_list()
-        raise HTTPException(status_code=500, detail=f"Perfil ausente para alvo Parkinson: id_cnpj={ids}.")
+        raise HTTPException(status_code=500, detail=f"Perfil ausente para alvo {config.label}: id_cnpj={ids}.")
 
     invalid_profile = (
         cnpj_base
@@ -251,12 +271,11 @@ def get_parkinson_menor_50(
         ids = invalid_profile.select("id_cnpj").head(10).to_series().to_list()
         raise HTTPException(
             status_code=500,
-            detail=f"Perfil sem is_matriz/is_conexao_ativa para alvo Parkinson: id_cnpj={ids}.",
+            detail=f"Perfil sem is_matriz/is_conexao_ativa para alvo {config.label}: id_cnpj={ids}.",
         )
 
     map_profile = _build_profile_filter(perfil, uf, regiao_id, None)
     map_rows = cnpj_base.join(map_profile, on=["id_cnpj", "id_ibge7"], how="inner")
-
     map_total_valor = float(map_rows.select(pl.sum("valor_incompativel")).item() or 0.0)
     mapa_df = (
         map_rows
@@ -281,21 +300,12 @@ def get_parkinson_menor_50(
     rows = cnpj_base.join(profile, on=["id_cnpj", "id_ibge7"], how="inner")
 
     if rows.is_empty():
-        return ParkinsonTargetResponse(
-            kpis=[
-                TargetKpiSchema(key="farmacias", label="Farmacias", value=0),
-                TargetKpiSchema(key="valor_incompativel", label="Valor incompativel", value=0.0),
-                TargetKpiSchema(key="cpfs_envolvidos", label="CPFs envolvidos", value=0),
-                TargetKpiSchema(key="municipios", label="Municipios", value=0),
-                TargetKpiSchema(key="ufs", label="UFs", value=0),
-            ],
-            mapa=[TargetMapRowSchema(**item) for item in mapa_df.to_dicts()],
-            items=[],
-            total=0,
+        return _empty_response(
             page=page,
             page_size=page_size,
             sort_field=sort_field,
             sort_order=sort_order,
+            mapa=[TargetMapRowSchema(**item) for item in mapa_df.to_dicts()],
         )
 
     municipal_totals = (
@@ -309,20 +319,17 @@ def get_parkinson_menor_50(
         )
     )
 
-    demografia_50 = _build_demografia_50_mais()
     rows = (
         rows
         .join(municipal_totals, on=["id_ibge7", "ano_base"], how="left")
-        .join(demografia_50, on="id_ibge7", how="left")
         .with_columns(
             [
                 pl.col("ano_base").cast(pl.Int16),
-                pl.col("populacao_50_mais").fill_null(0).cast(pl.Int64),
-                pl.col("casos_esperados").fill_null(0.0).cast(pl.Float64),
+                pl.col("casos_esperados").cast(pl.Float64),
                 pl.col("casos_observados").cast(pl.Int64),
-                pl.col("casos_observados_municipio").fill_null(0).cast(pl.Int64),
-                pl.col("valor_incompativel").fill_null(0.0).cast(pl.Float64),
-                pl.col("autorizacoes").fill_null(0).cast(pl.Int64),
+                pl.col("casos_observados_municipio").cast(pl.Int64),
+                pl.col("valor_incompativel").cast(pl.Float64),
+                pl.col("autorizacoes").cast(pl.Int64),
                 pl.when(pl.col("casos_esperados") > 0)
                 .then(pl.col("casos_observados") / pl.col("casos_esperados"))
                 .otherwise(None)
@@ -339,10 +346,9 @@ def get_parkinson_menor_50(
     total_valor = float(rows.select(pl.sum("valor_incompativel")).item() or 0.0)
     total_cpfs = int(rows.select(pl.sum("casos_observados")).item() or 0)
     total_farmacias = int(rows.select(pl.n_unique("id_cnpj")).item() or 0)
-
     page_df = _sort_and_page(rows, page, page_size, sort_field, sort_order)
 
-    return ParkinsonTargetResponse(
+    return ClinicalTargetResponse(
         kpis=[
             TargetKpiSchema(key="farmacias", label="Farmacias", value=total_farmacias),
             TargetKpiSchema(key="valor_incompativel", label="Valor incompativel", value=round(total_valor, 2)),
@@ -351,10 +357,26 @@ def get_parkinson_menor_50(
             TargetKpiSchema(key="ufs", label="UFs", value=rows.select(pl.n_unique("uf")).item()),
         ],
         mapa=[TargetMapRowSchema(**item) for item in mapa_df.to_dicts()],
-        items=[ParkinsonTargetRowSchema(**item) for item in page_df.to_dicts()],
+        items=[ClinicalTargetRowSchema(**item) for item in page_df.to_dicts()],
         total=total_records,
         page=page,
         page_size=page_size,
         sort_field=sort_field,
         sort_order=sort_order,
     )
+
+
+def get_parkinson_menor_50(**kwargs) -> ClinicalTargetResponse:
+    return _get_clinical_target(_TARGETS["parkinson_menor_50"], **kwargs)
+
+
+def get_diabetes_menor_20(**kwargs) -> ClinicalTargetResponse:
+    return _get_clinical_target(_TARGETS["diabetes_menor_20"], **kwargs)
+
+
+def get_hipertensao_menor_20(**kwargs) -> ClinicalTargetResponse:
+    return _get_clinical_target(_TARGETS["hipertensao_menor_20"], **kwargs)
+
+
+def get_osteoporose_homens(**kwargs) -> ClinicalTargetResponse:
+    return _get_clinical_target(_TARGETS["osteoporose_homens"], **kwargs)

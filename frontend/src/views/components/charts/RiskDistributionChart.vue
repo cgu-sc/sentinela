@@ -12,6 +12,7 @@ import {
 } from 'echarts/components';
 
 import { useChartTheme } from '@/config/chartTheme';
+import { useFilterStore } from '@/stores/filters';
 
 use([
   TitleComponent,
@@ -30,10 +31,11 @@ const props = defineProps({
   metricLabel:  { type: String,  default: 'Score de Risco' },
   rankBadge:    { type: Object,  default: null },
   showMarker:   { type: Boolean, default: true },
-  yAxisMax:     { type: Number,  default: null }
+  yAxisMax:     { type: Number,  default: null },
 });
 
 const { chartTheme } = useChartTheme();
+const filterStore = useFilterStore();
 
 // Cache local: mantém os dados do render anterior visíveis enquanto novos chegam.
 // Só atualiza quando há dados reais E não está carregando — exatamente como o RegionalRankChart
@@ -43,16 +45,25 @@ const localScore = ref(0);
 const localLabel = ref('Score de Risco');
 const isReady    = ref(false);
 
+// Atualiza dados e label apenas quando chegam dados reais (e não está carregando)
 watch(
-  [() => props.data, () => props.currentScore, () => props.metricLabel],
-  ([data, score, label]) => {
+  [() => props.data, () => props.metricLabel],
+  ([data, label]) => {
     if (data?.length && !props.loading) {
       localData.value  = [...data];
-      localScore.value = score;
       localLabel.value = label;
       isReady.value    = true;
     }
   },
+  { immediate: true }
+);
+
+// Atualiza o score (posição da linha tracejada) imediatamente, sem depender dos dados.
+// Durante a animação, a curva de percentis pode ser servida do cache e não mudar,
+// mas o score do CNPJ muda a cada frame — este watch garante que a marca acompanhe.
+watch(
+  () => props.currentScore,
+  (score) => { localScore.value = score; },
   { immediate: true }
 );
 
@@ -117,9 +128,11 @@ const chartOption = computed(() => {
         }
       }
     },
-    animation:         true,
-    animationDuration: 500,
-    animationEasing:   'cubicOut',
+    animation:               true,
+    animationDuration:       0,                              // sem tween na carga inicial
+    animationDurationUpdate: filterStore.animationDuration,  // suave durante playback
+    animationEasingUpdate:   'linear',
+    animationEasing:         'cubicOut',
     backgroundColor:   'transparent',
     grid: { top: 80, right: 24, bottom: 36, left: 56, containLabel: false },
     tooltip: {

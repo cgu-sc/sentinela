@@ -19,6 +19,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# === ARTEFATOS LOCAIS DE TESTE VISUAL ===
+.playwright-mcp/
+/targets-map-*.png
+
 # === TAURI (SE USAR NO FUTURO) ===
 src-tauri/target/
 

@@ -140,9 +140,10 @@ const previewCurrentFarmacia = computed(() => {
 });
 
 const hasMovementInPeriod = computed(() => {
-  if (isAnimationPreviewActive.value) {
-    return Number(previewCurrentFarmacia.value?.totalMov ?? 0) > 0;
-  }
+  // Durante a animação, sempre mantemos o marcador visível.
+  // O currentScore já tem lógica de fallback para o score consolidado quando
+  // a farmácia não aparece no scatter de um frame específico.
+  if (isAnimationPreviewActive.value) return true;
 
   if (props.periodSummary) {
     return Number(props.periodSummary.totalMov ?? 0) > 0;

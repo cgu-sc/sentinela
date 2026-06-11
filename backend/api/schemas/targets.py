@@ -19,7 +19,7 @@ class TargetMapRowSchema(BaseModel):
     participacao_uf: Optional[float] = None
 
 
-class ParkinsonTargetRowSchema(BaseModel):
+class ClinicalTargetRowSchema(BaseModel):
     id_cnpj: int
     cnpj: str
     razao_social: str
@@ -30,7 +30,6 @@ class ParkinsonTargetRowSchema(BaseModel):
     id_ibge7: int
     id_regiao_saude: int
     ano_base: int
-    populacao_50_mais: int
     casos_esperados: float
     casos_observados: int
     casos_observados_municipio: int
@@ -40,12 +39,16 @@ class ParkinsonTargetRowSchema(BaseModel):
     participacao_municipio: Optional[float] = None
 
 
-class ParkinsonTargetResponse(BaseModel):
+class ClinicalTargetResponse(BaseModel):
     kpis: list[TargetKpiSchema] = Field(default_factory=list)
     mapa: list[TargetMapRowSchema] = Field(default_factory=list)
-    items: list[ParkinsonTargetRowSchema] = Field(default_factory=list)
+    items: list[ClinicalTargetRowSchema] = Field(default_factory=list)
     total: int
     page: int
     page_size: int
     sort_field: str
     sort_order: str
+
+
+ParkinsonTargetRowSchema = ClinicalTargetRowSchema
+ParkinsonTargetResponse = ClinicalTargetResponse

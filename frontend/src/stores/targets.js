@@ -68,19 +68,26 @@ export const useTargetsStore = defineStore('targets', {
   actions: {
     setSelectedTarget(key) {
       const meta = getEnabledTargetMeta(key);
+      if (meta.sourceStatus === 'pending') {
+        this.kpis = [];
+        this.mapData = [];
+        this.rows = [];
+        this.totalRecords = 0;
+        this.isLoading = false;
+        this.isTableLoading = false;
+        this.sourceNotice = 'Fonte de dados do alvo ainda não conectada.';
+        localStorage.setItem(STORAGE_KEY, key);
+      } else {
+        this.isLoading = true;
+        this.isTableLoading = true;
+        this.sourceNotice = null;
+      }
       this.selectedTarget = key;
       this.page = 1;
       this.rowsPerPage = 20;
       this.sortField = meta.defaultSortField;
       this.sortOrder = meta.defaultSortOrder;
-      this.kpis = [];
-      this.mapData = [];
-      this.rows = [];
-      this.totalRecords = 0;
       this.error = null;
-      this.sourceNotice = meta.sourceStatus === 'pending'
-        ? 'Fonte de dados do alvo ainda não conectada.'
-        : null;
       localStorage.setItem(STORAGE_KEY, key);
     },
 
@@ -105,8 +112,9 @@ export const useTargetsStore = defineStore('targets', {
         return;
       }
 
-      if (meta.key !== 'parkinson_menor_50') {
-        throw new Error(`Fonte de dados do alvo sem implementação: ${meta.key}`);
+      const endpoint = API_ENDPOINTS[meta.endpoint];
+      if (!endpoint) {
+        throw new Error(`Endpoint sem configuração para alvo: ${meta.key}`);
       }
 
       this.isLoading = true;
@@ -119,7 +127,7 @@ export const useTargetsStore = defineStore('targets', {
       targetAbortController = new AbortController();
 
       try {
-        const response = await axios.get(API_ENDPOINTS[meta.endpoint], {
+        const response = await axios.get(endpoint, {
           params: this._buildParams(),
           signal: targetAbortController.signal,
         });

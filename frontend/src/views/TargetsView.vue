@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { DEFAULT_TARGET_KEY, TARGET_GROUPS } from '@/config/targetConfig';
 import { useTargetsStore } from '@/stores/targets';
 import { useFilterStore } from '@/stores/filters';
+import { useFrozenData } from '@/composables/useFrozenData';
 import TargetSelector from './components/targets/TargetSelector.vue';
 import TargetKpiStrip from './components/targets/TargetKpiStrip.vue';
 import TargetMap from './components/targets/TargetMap.vue';
@@ -43,6 +44,10 @@ const enabledTargetKeys = computed(() =>
 
 const first = computed(() => (page.value - 1) * rowsPerPage.value);
 const activeUf = computed(() => filterStore.selectedUF);
+const displayedTargetMeta = useFrozenData(
+  () => selectedTargetMeta.value,
+  computed(() => isLoading.value),
+);
 const selectedMunicipioIbge7 = computed(() => {
   const value = filterStore.selectedMunicipio;
   return value && value !== 'Todos' ? Number(value) : null;
@@ -127,6 +132,7 @@ watch(
     <div class="targets-layout">
       <div class="targets-main">
         <TargetMap
+          :target-meta="displayedTargetMeta"
           :map-data="mapData"
           :active-uf="activeUf"
           :selected-ibge7="selectedMunicipioIbge7"
@@ -141,6 +147,7 @@ watch(
 
         <TargetTableRenderer
           :target-key="selectedTarget"
+          :target-meta="displayedTargetMeta"
           :rows="rows"
           :loading="isTableLoading || isLoading"
           :total-records="totalRecords"

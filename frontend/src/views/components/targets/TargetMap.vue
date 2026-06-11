@@ -13,6 +13,7 @@ import { MAP_VISUAL_SCALE } from '@/config/colors';
 use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 
 const props = defineProps({
+  targetMeta: { type: Object, required: true },
   mapData: { type: Array, default: () => [] },
   activeUf: { type: String, default: null },
   selectedIbge7: { type: Number, default: null },
@@ -110,7 +111,7 @@ const mapTotalValue = computed(() =>
 
 const summaryItems = computed(() => [
   {
-    label: 'Valor dos CPFs < 50 anos',
+    label: props.targetMeta.mapValueLabel,
     value: formatCurrency(mapTotalValue.value),
   },
   {
@@ -309,7 +310,7 @@ const chartOption = computed(() => {
         }
         return `<div style="min-width:210px;color:${colors.tooltipText}">
           <div style="font-weight:600;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid ${colors.tooltipBorder}">${label}</div>
-          <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:5px"><span style="opacity:.7">Valor</span><strong>${formatCurrency(data.valor_incompativel)}</strong></div>
+          <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:5px"><span style="opacity:.7">${props.targetMeta.mapValueLabel}</span><strong>${formatCurrency(data.valor_incompativel)}</strong></div>
           <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:5px"><span style="opacity:.7">CPFs únicos</span><strong>${formatInteger(data.casos_observados)}</strong></div>
           <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:5px"><span style="opacity:.7">Farmácias</span><strong>${formatInteger(data.total_farmacias)}</strong></div>
           <div style="display:flex;justify-content:space-between;gap:20px"><span style="opacity:.7">Participação</span><strong>${formatPercent(data.participacao)}</strong></div>
@@ -398,7 +399,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
         <i class="pi pi-map" />
         <div>
           <h2>Mapa do alvo</h2>
-          <span>Valor dos CPFs abaixo de 50 anos por {{ isNational ? 'UF' : 'município' }}</span>
+          <span>{{ targetMeta.mapScopeLabel }} por {{ isNational ? 'UF' : 'município' }}</span>
         </div>
       </div>
 
@@ -422,11 +423,11 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
     </div>
 
     <div
-      v-if="sourceNotice || (!mapData.length && !isLoading)"
+      v-if="sourceNotice"
       class="map-empty"
     >
       <i class="pi pi-map-marker" />
-      <span>{{ sourceNotice || 'Nenhum município encontrado para o alvo no recorte atual.' }}</span>
+      <span>{{ sourceNotice }}</span>
     </div>
 
     <div v-else ref="containerRef" class="map-wrapper">
@@ -439,6 +440,14 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
         autoresize
         @click="handleMapClick"
       />
+
+      <div
+        v-if="!mapData.length && !isLoading"
+        class="map-empty map-empty-overlay"
+      >
+        <i class="pi pi-map-marker" />
+        <span>Nenhum município encontrado para o alvo no recorte atual.</span>
+      </div>
 
       <div class="map-controls">
         <button type="button" @click="handleZoom(0.5)" v-tooltip.bottom="'Aumentar zoom'">
@@ -639,5 +648,14 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
 
 .map-empty span {
   font-size: 0.78rem;
+}
+
+.map-empty-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--card-bg) 78%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 </style>

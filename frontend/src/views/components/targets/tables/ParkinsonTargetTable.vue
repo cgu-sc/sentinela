@@ -11,6 +11,7 @@ import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 
 const props = defineProps({
+  targetMeta: { type: Object, required: true },
   rows: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   totalRecords: { type: Number, default: 0 },
@@ -93,7 +94,7 @@ function openIncompatibilityDialog(event, cnpj) {
       </div>
       <div class="section-title-block">
         <h2>Farmácias do alvo</h2>
-        <span>Ranking de estabelecimentos com recorte de Parkinson em menores de 50 anos</span>
+        <span>{{ targetMeta.tableSubtitle }}</span>
       </div>
     </div>
 
@@ -172,7 +173,7 @@ function openIncompatibilityDialog(event, cnpj) {
           </div>
         </template>
       </Column>
-      <Column field="valor_incompativel" header="Valor dos CPFs < 50 anos" sortable headerClass="col-money" bodyClass="col-money">
+      <Column field="valor_incompativel" :header="targetMeta.valueHeader" sortable headerClass="col-money" bodyClass="col-money">
         <template #body="{ data }">
           <div class="metric-stack align-right">
             <span

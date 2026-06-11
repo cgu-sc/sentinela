@@ -455,24 +455,41 @@ onUnmounted(() => {
 
 watch(riskMetric, () => {
     if (filterStore.animationMode) {
+      stopPlay();
       clearAnimationState();
-      filterStore.animationPreload.status = 'idle';
+      const { inicio, fim } = getApiParams();
+      filterStore.animationPreload.dataInicio = inicio;
+      filterStore.animationPreload.dataFim = fim;
+      filterStore.animationPreload.status = 'loading'; // re-preloada com nova métrica; startAnimation() é chamado ao terminar
+    } else {
+      updateRiskCurve();
     }
-    updateRiskCurve();
 });
 
 watch(regionalScope, () => {
-    clearAnimationState();
-    filterStore.animationPreload.status = 'idle';
-    loadRegional();
+    if (filterStore.animationMode) {
+      stopPlay();
+      clearAnimationState();
+      const { inicio, fim } = getApiParams();
+      filterStore.animationPreload.dataInicio = inicio;
+      filterStore.animationPreload.dataFim = fim;
+      filterStore.animationPreload.status = 'loading';
+    } else {
+      loadRegional();
+    }
 });
 
 watch(riskScope, () => {
     if (filterStore.animationMode) {
+      stopPlay();
       clearAnimationState();
-      filterStore.animationPreload.status = 'idle';
+      const { inicio, fim } = getApiParams();
+      filterStore.animationPreload.dataInicio = inicio;
+      filterStore.animationPreload.dataFim = fim;
+      filterStore.animationPreload.status = 'loading'; // re-preloada com novo escopo; startAnimation() é chamado ao terminar
+    } else {
+      updateRiskCurve();
     }
-    updateRiskCurve();
 });
 
 watch(() => props.geoData?.sg_uf, () => {

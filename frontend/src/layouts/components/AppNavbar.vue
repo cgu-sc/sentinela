@@ -35,7 +35,6 @@ const tabs = computed(() => {
   if (activeModule.value === 'consolidado') {
     return [
       { label: 'Home',                 path: '/' },
-      { label: 'Nacional',             path: '/nacional' },
       { label: 'Municípios',           path: '/municipios' },
       { label: 'Estabelecimentos',     path: '/estabelecimentos' },
 
@@ -61,7 +60,7 @@ onMounted(() => {
 watch(activeModule, (newVal) => {
   if (
     newVal === 'consolidado' &&
-    !route.path.match(/^\/(?:nacional|municipios|empresa|estabelecimentos|regional|listas|$)/)
+    !route.path.match(/^\/(?:municipios|empresa|estabelecimentos|regional|listas|$)/)
   ) {
     router.push('/');
   } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {

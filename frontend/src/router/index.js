@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import HomeView from '@/views/HomeView.vue'
-import NationalView from '@/views/NationalView.vue'
 
 const routes = [
   {
@@ -9,8 +8,6 @@ const routes = [
     component: AppLayout,
     children: [
       { path: '', name: 'Home', component: HomeView },
-      { path: 'nacional', name: 'Dashboard', component: NationalView },
-      { path: 'dispersao', component: NationalView },
       { path: 'dispersao-beneficio', component: () => import('@/views/BenefitDispersionView.vue') },
       { path: 'municipios', name: 'Municipalities', component: () => import('@/views/MunicipalView.vue') },
       { path: 'estabelecimentos', name: 'Establishments', component: () => import('@/views/EstablishmentsView.vue') },

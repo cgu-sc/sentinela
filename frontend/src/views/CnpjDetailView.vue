@@ -116,10 +116,11 @@ const resetVisitedTabs = (activeIndex = cnpjNav.activeTabIndex) => {
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
-const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
+const { formatCurrencyFull, formatNumberFull, formatarData, formatTitleCase } = useFormatting();
 const toast = useToast();
 
 import { usePdfExport } from "@/composables/usePdfExport";
+import { loadCnpjPdfReportData } from "@/composables/useCnpjPdfReportData";
 const { isExporting, exportCnpjPdf } = usePdfExport();
 
 const financialMovementTabRef = ref(null);
@@ -140,35 +141,34 @@ const qtdMunicipiosRegiao = computed(
 );
 
 const handleExport = async () => {
-  // Garante que temos os dados de risco de todos os municípios da região
-  const geo = geoData.value;
-  if (geo?.sg_uf && geo?.id_regiao_saude) {
-    const p = getApiParams();
-    await cnpjDetailStore.fetchMunicipiosRegiao(
-      geo.sg_uf,
-      geo.id_regiao_saude,
-      p.inicio,
-      p.fim,
-    );
-  }
+  try {
+    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
+    const payload = await loadCnpjPdfReportData({
+      cnpj: cnpj.value,
+      inicio,
+      fim,
+      volumeAtipicoPercentual,
+      geoStore,
+      formatTitleCase,
+      formatarData,
+    });
 
-  exportCnpjPdf({
-    cnpjData: cnpjData.value,
-    geoData: geoData.value,
-    cadastro: dadosCadastro.value,
-    cnpj: cnpj.value,
-    qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
-    financialMovementTabRef,
-    indicatorsTabRef,
-    authTabRef,
-    falecidosTabRef,
-    cnpjNavStore: cnpjNav,
-    geoStore,
-    resultadoMunicipios: cnpjDetailStore.municipiosRegiao,
-    formatCurrencyFull,
-    formatNumberFull,
-    formatarData,
-  });
+    await exportCnpjPdf({
+      ...payload,
+      geoStore,
+      formatCurrencyFull,
+      formatNumberFull,
+      formatarData,
+    });
+  } catch (error) {
+    console.error("Erro ao gerar Relatório PDF:", error);
+    toast.add({
+      severity: "error",
+      summary: "Erro ao gerar Relatório PDF",
+      detail: error?.message || "Não foi possível gerar o arquivo.",
+      life: 8000,
+    });
+  }
 };
 const isGeneratingNote = ref(false);
 const regionalDialogVisible = ref(false);

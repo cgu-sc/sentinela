@@ -888,7 +888,7 @@ export function usePdfExport() {
           head: [['Indicador', 'Risco Regional', 'Valor Farmácia', 'Mediana Regional']],
           body: pontosCriticos.map((p) => [
             p.label,
-            p.riscoReg.toFixed(1) + 'x acima',
+            p.riscoReg != null ? p.riscoReg.toFixed(1) + 'x acima' : '—',
             fmtVal(p.valor, p.formato, formatCurrencyFull),
             fmtVal(p.medReg, p.formato, formatCurrencyFull),
           ]),
@@ -991,15 +991,12 @@ export function usePdfExport() {
       });
 
       // ── PÁGINA 4 — Prescritores ────────────────────────────
-      if (authTabRef?.value) {
-        cnpjNavStore.activeTabIndex = 4;
-        await sleep(500);
+      const crmPayload = reportData.crm;
+      const summary = crmPayload.summary || {};
+      const top20 = (crmPayload.crmsInteresse || []).slice(0, 20);
+      const kpis = crmPayload.kpis || {};
 
-        const summary = authTabRef.value.getSummary() || {};
-        const top20 = (authTabRef.value.getCrmsInteresse?.() || []).slice(0, 20);
-        const kpis = authTabRef.value.getKpis?.() || {};
-
-        if (top20.length > 0) {
+      if (top20.length > 0) {
           pdf.addPage();
           pageHeader('Análise de CRMs e Prescritores', cnpjData.razao_social, PI.USERS);
 
@@ -1013,7 +1010,7 @@ export function usePdfExport() {
           const red    = [239, 68,  68 ];
           const orange = [249, 115, 22 ];
           const green  = [16,  185, 129];
-          const summary2 = authTabRef.value.getSummary() || {};
+          const summary2 = summary;
           const crmCards = [
             { label: 'TOP 1 CRM - VOLUME R$',         val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop1        > 40 ? red : kpis.concentracaoTop1 > 20 ? red : green,    subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
             { label: 'TOP 5 CRMs - VOLUME R$',         val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop5        > 70 ? red : kpis.concentracaoTop5 > 50 ? red : green,    subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },
@@ -1112,16 +1109,15 @@ export function usePdfExport() {
               }
             }
           });
-        }
       }
 
       // ── PÁGINA 5 — Falecidos ─────────────────────────────
-      if (falecidosTabRef?.value?.hasData()) {
-        cnpjNavStore.activeTabIndex = 5;
-        await sleep(500);
+      const falecidosPayload = reportData.falecidos;
+      const falecidosSummary = falecidosPayload.summary || {};
+      const agrupados = falecidosPayload.agrupados || [];
 
-        const summary    = falecidosTabRef.value.getSummary();
-        const agrupados  = falecidosTabRef.value.getAgrupados();
+      if (agrupados.length > 0) {
+        const summary = falecidosSummary;
 
         pdf.addPage();
         pageHeader('Vendas para Pacientes Falecidos', cnpjData.razao_social, PI.EXCLAMATION_TRIANGLE);
@@ -1211,8 +1207,8 @@ export function usePdfExport() {
 
     } catch (err) {
       console.error('[usePdfExport] Critical failure during PDF generation:', err);
+      throw err;
     } finally {
-      cnpjNavStore.activeTabIndex = originalTab;
       isExporting.value = false;
     }
   }

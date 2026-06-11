@@ -9,6 +9,7 @@ import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
 import { useFormatting } from "@/composables/useFormatting";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import { usePdfExport } from "@/composables/usePdfExport";
+import { loadCnpjPdfReportData } from "@/composables/useCnpjPdfReportData";
 import { API_ENDPOINTS } from "@/config/api";
 import { getApiErrorMessage } from "@/utils/apiErrors";
 import { downloadBlobFromResponse } from "@/utils/download";
@@ -22,7 +23,7 @@ const filterStore = useFilterStore();
 const geoStore = useGeoStore();
 const notaTecnicaConfig = useNotaTecnicaConfigStore();
 const toast = useToast();
-const { formatBRL, formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
+const { formatBRL, formatCurrencyFull, formatNumberFull, formatarData, formatTitleCase } = useFormatting();
 const { getApiParams } = useFilterParameters();
 const { exportCnpjPdf } = usePdfExport();
 const watchlistAnalytics = ref([]);
@@ -172,35 +173,31 @@ async function gerarRelatorio(item) {
 
   exportingReportCnpj.value = item.cnpj;
   try {
-    await exportCnpjPdf({
-      cnpjData: {
-        cnpj: item.cnpj,
-        razao_social: item.razaoSocial,
-        municipio: item.municipio !== "—" ? item.municipio : null,
-        uf: item.uf !== "—" ? item.uf : null,
-        percValSemComp: item.percValSemComp,
-        score_risco_final: item.scoreRisco,
-        classificacao_risco: item.classificacao,
-        totalMov: item.totalMov ?? 0,
-        valSemComp: item.valSemComp ?? 0,
-      },
-      geoData: {
-        no_municipio: item.municipio !== "—" ? item.municipio : null,
-        sg_uf: item.uf !== "—" ? item.uf : null,
-      },
-      cadastro: null,
+    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
+    const payload = await loadCnpjPdfReportData({
       cnpj: item.cnpj,
-      qtdMunicipiosRegiao: null,
-      financialMovementTabRef: { value: null },
-      indicatorsTabRef: { value: null },
-      authTabRef: { value: null },
-      falecidosTabRef: { value: null },
-      cnpjNavStore: { activeTabIndex: 0 },
+      inicio,
+      fim,
+      volumeAtipicoPercentual,
       geoStore,
-      resultadoMunicipios: [],
+      formatTitleCase,
+      formatarData,
+    });
+
+    await exportCnpjPdf({
+      ...payload,
+      geoStore,
       formatCurrencyFull,
       formatNumberFull,
       formatarData,
+    });
+  } catch (error) {
+    console.error("Erro ao gerar Relatório PDF:", error);
+    toast.add({
+      severity: "error",
+      summary: "Erro ao gerar Relatório PDF",
+      detail: error?.message || "Não foi possível gerar o arquivo.",
+      life: 8000,
     });
   } finally {
     exportingReportCnpj.value = null;

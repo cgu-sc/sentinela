@@ -44,6 +44,12 @@ const {
 } = useFormatting();
 
 const activeIndex = ref(0);
+const selectedCnpj = ref('');
+
+const cleanCnpj = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? digits.padStart(14, '0').slice(-14) : '';
+};
 
 const periodoInicio = computed(() => {
   const [start] = filterStore.periodo ?? [];
@@ -56,7 +62,20 @@ const periodoFim = computed(() => {
 });
 
 watch(
-  () => [props.modelValue, props.cnpj, periodoInicio.value, periodoFim.value],
+  () => [props.modelValue, props.cnpj],
+  ([visible, cnpj]) => {
+    if (!visible || !cnpj) return;
+    const clean = cleanCnpj(cnpj);
+    if (clean && clean !== selectedCnpj.value) {
+      selectedCnpj.value = clean;
+      activeIndex.value = 0;
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [props.modelValue, selectedCnpj.value, periodoInicio.value, periodoFim.value],
   async ([visible, cnpj]) => {
     if (!visible || !cnpj) return;
     await cnpjDetailStore.fetchIncompatibilidadePatologica(cnpj, periodoInicio.value, periodoFim.value);
@@ -76,33 +95,58 @@ watch(
 const patologias = computed(() => incompatibilidadePatologicaData.value?.patologias ?? []);
 const activePatologia = computed(() => patologias.value[activeIndex.value] ?? null);
 const parkinson = computed(() => activePatologia.value?.demografia_parkinson ?? null);
+const evolucaoAnual = computed(() => (
+  [...(activePatologia.value?.evolucao_anual ?? [])]
+    .sort((a, b) => Number(a.ano_base) - Number(b.ano_base))
+));
 
 const formatRatioPercent = (value) => {
   if (value === null || value === undefined) return '—';
   return formatPercent(Number(value) * 100);
 };
 
+const formatExpectedCases = (value) => {
+  if (value === null || value === undefined) return '—';
+  return formatNumberFull(Math.round(Number(value)));
+};
+
 const pathologyCards = computed(() => {
   const item = activePatologia.value;
   if (!item) return [];
+  const criterioResumido = item.criterio
+    .replace(/^beneficiários com /i, '')
+    .replace(/^beneficiários do /i, '');
+  const anosComIncompatibilidade = [
+    ...new Set(
+      (item.evolucao_anual ?? [])
+        .filter((row) => Number(row.qtd_cpfs_incompativeis) > 0)
+        .map((row) => Number(row.ano_base)),
+    ),
+  ]
+    .sort((a, b) => a - b)
+    .join(', ');
+
   return [
     {
-      label: 'Valor incompatível',
+      label: `Valor total - ${item.titulo}`,
+      value: formatCurrencyFull(item.valor_total_pago ?? 0),
+    },
+    {
+      label: `Valor: ${criterioResumido}`,
       value: formatCurrencyFull(item.valor_incompativel_pago ?? 0),
     },
     {
-      label: 'CPFs incompatíveis',
-      value: formatNumberFull(item.qtd_cpfs_incompativeis ?? 0),
+      label: 'Anos com CPFs incompatíveis',
+      value: anosComIncompatibilidade || '—',
+      multiline: true,
     },
     {
-      label: 'Autorizações',
+      label: 'Autorizações totais',
+      value: formatNumberFull(item.qtd_autorizacoes ?? 0),
+    },
+    {
+      label: `Autorizações: ${criterioResumido}`,
       value: formatNumberFull(item.qtd_autorizacoes_incompativeis ?? 0),
-    },
-    {
-      label: 'Razão vs. região',
-      value: item.razao_media_percentual_vs_regiao == null
-        ? '—'
-        : `${Number(item.razao_media_percentual_vs_regiao).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x`,
     },
   ];
 });
@@ -129,6 +173,9 @@ const parkinsonCompareOption = computed(() => {
   const c = chartText.value;
   const expected = demo?.casos_esperados ?? 0;
   const observed = demo?.cpfs_observados ?? 0;
+  const observedLabel = demo?.ano_observado
+    ? `CPFs observados (${demo.ano_observado})`
+    : 'CPFs observados';
   return {
     backgroundColor: c.bg,
     color: [PALETTE.blue[500], PALETTE.rose[500]],
@@ -139,16 +186,26 @@ const parkinsonCompareOption = computed(() => {
       backgroundColor: c.tooltip,
       borderColor: c.tooltipBorder,
       textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      formatter: (params) => {
+        const item = params?.[0];
+        if (!item) return '';
+        return `${item.name}: <strong>${formatExpectedCases(item.value)}</strong>`;
+      },
     },
     xAxis: {
       type: 'category',
-      data: ['Casos esperados', 'CPFs observados'],
+      data: ['Casos esperados', observedLabel],
       axisLabel: { color: c.axis, fontSize: 11 },
       axisLine: { lineStyle: { color: c.grid } },
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: c.axis, fontSize: 10 },
+      minInterval: 1,
+      axisLabel: {
+        color: c.axis,
+        fontSize: 10,
+        formatter: (value) => formatExpectedCases(value),
+      },
       splitLine: { lineStyle: { color: c.grid } },
     },
     series: [
@@ -223,6 +280,28 @@ const rowClass = (row) => ({
   'clin-row-target': row?.is_alvo || row?.grupo === 'Farmácia analisada',
 });
 
+const rankingRowClass = (row) => ({
+  ...rowClass(row),
+  'clin-row-clickable': Boolean(row?.cnpj),
+});
+
+const annualRowClass = (row) => ({
+  'clin-row-target': parkinson.value?.ano_observado === Number(row?.ano_base),
+});
+
+const formatValueShare = (row) => {
+  const total = Number(row?.valor_total_pago ?? 0);
+  if (total <= 0) return '—';
+  return formatRatioPercent(Number(row?.valor_incompativel_pago ?? 0) / total);
+};
+
+const handleRankingRowClick = ({ data }) => {
+  const clean = cleanCnpj(data?.cnpj);
+  if (!clean || clean === selectedCnpj.value) return;
+  selectedCnpj.value = clean;
+  activeIndex.value = 0;
+};
+
 const close = () => emit('update:modelValue', false);
 </script>
 
@@ -266,10 +345,10 @@ const close = () => emit('update:modelValue', false);
         </div>
 
         <section v-if="activePatologia" class="clin-panel">
-          <div class="clin-kpis clin-kpis-small">
+          <div class="clin-kpis clin-kpis-five clin-kpis-small">
             <div v-for="card in pathologyCards" :key="card.label" class="clin-kpi">
               <span>{{ card.label }}</span>
-              <strong>{{ card.value }}</strong>
+              <strong :class="{ 'clin-kpi-value--multiline': card.multiline }">{{ card.value }}</strong>
             </div>
           </div>
 
@@ -300,18 +379,25 @@ const close = () => emit('update:modelValue', false);
             <div class="clin-section-head">
               <div>
                 <h3>Doença de Parkinson: beneficiários com menos de 50 anos</h3>
-                <p>Comparação entre a dispensação observada na farmácia e a estimativa epidemiológica municipal.</p>
+                <p>
+                  Comparação entre CPFs observados em {{ parkinson.ano_observado }}
+                  e a estimativa epidemiológica municipal.
+                </p>
               </div>
             </div>
 
-            <div class="clin-kpis clin-kpis-small">
+            <div class="clin-kpis clin-kpis-six clin-kpis-small">
               <div class="clin-kpi">
-                <span>CPFs observados</span>
+                <span>Ano observado</span>
+                <strong>{{ parkinson.ano_observado }}</strong>
+              </div>
+              <div class="clin-kpi">
+                <span>CPFs no ano-pico</span>
                 <strong>{{ formatNumberFull(parkinson.cpfs_observados) }}</strong>
               </div>
               <div class="clin-kpi">
                 <span>Casos esperados</span>
-                <strong>{{ parkinson.casos_esperados.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) }}</strong>
+                <strong>{{ formatExpectedCases(parkinson.casos_esperados) }}</strong>
               </div>
               <div class="clin-kpi">
                 <span>Razão observado/esperado</span>
@@ -321,11 +407,15 @@ const close = () => emit('update:modelValue', false);
                 <span>População 50+</span>
                 <strong>{{ formatNumberFull(parkinson.populacao_50_mais) }}</strong>
               </div>
+              <div class="clin-kpi">
+                <span>População total</span>
+                <strong>{{ formatNumberFull(parkinson.populacao_total) }}</strong>
+              </div>
             </div>
 
             <div class="clin-grid">
               <div class="clin-card clin-card-chart">
-                <h4>Observado x esperado</h4>
+                <h4>Observado x esperado em {{ parkinson.ano_observado }}</h4>
                 <VChart class="clin-chart clin-chart-small" :option="parkinsonCompareOption" autoresize />
               </div>
               <div class="clin-card clin-card-chart">
@@ -335,12 +425,12 @@ const close = () => emit('update:modelValue', false);
             </div>
 
             <div class="clin-card">
-              <h4>Memória de cálculo epidemiológica</h4>
+              <h4>Memória epidemiológica do ano-pico</h4>
               <DataTable :value="[parkinson]" size="small" class="clin-table">
                 <Column field="municipio" header="Município">
                   <template #body="{ data }">{{ data.municipio }}/{{ data.uf }}</template>
                 </Column>
-                <Column field="ano_censo" header="Censo" />
+                <Column field="ano_observado" header="Ano observado" />
                 <Column field="populacao_total" header="Pop. total">
                   <template #body="{ data }">{{ formatNumberFull(data.populacao_total) }}</template>
                 </Column>
@@ -351,10 +441,45 @@ const close = () => emit('update:modelValue', false);
                   <template #body="{ data }">{{ formatRatioPercent(data.prevalencia_50_mais) }}</template>
                 </Column>
                 <Column field="casos_esperados" header="Esperados">
-                  <template #body="{ data }">{{ data.casos_esperados.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) }}</template>
+                  <template #body="{ data }">{{ formatExpectedCases(data.casos_esperados) }}</template>
                 </Column>
                 <Column field="cpfs_observados" header="Observados">
                   <template #body="{ data }">{{ formatNumberFull(data.cpfs_observados) }}</template>
+                </Column>
+              </DataTable>
+            </div>
+
+            <div class="clin-card">
+              <h4>Evolução anual da incompatibilidade clínica</h4>
+              <DataTable
+                :value="evolucaoAnual"
+                size="small"
+                scrollable
+                scrollHeight="300px"
+                :rowClass="annualRowClass"
+                class="clin-table"
+              >
+                <Column field="ano_base" header="Ano" />
+                <Column field="qtd_cpfs_distintos" header="CPFs observados">
+                  <template #body="{ data }">{{ formatNumberFull(data.qtd_cpfs_distintos) }}</template>
+                </Column>
+                <Column field="qtd_cpfs_incompativeis" header="CPFs incompatíveis">
+                  <template #body="{ data }">{{ formatNumberFull(data.qtd_cpfs_incompativeis) }}</template>
+                </Column>
+                <Column field="qtd_autorizacoes" header="Autorizações totais">
+                  <template #body="{ data }">{{ formatNumberFull(data.qtd_autorizacoes) }}</template>
+                </Column>
+                <Column field="qtd_autorizacoes_incompativeis" header="Autorizações incompatíveis">
+                  <template #body="{ data }">{{ formatNumberFull(data.qtd_autorizacoes_incompativeis) }}</template>
+                </Column>
+                <Column field="valor_total_pago" header="Valor total">
+                  <template #body="{ data }">{{ formatCurrencyFull(data.valor_total_pago) }}</template>
+                </Column>
+                <Column field="valor_incompativel_pago" header="Valor incompatível">
+                  <template #body="{ data }">{{ formatCurrencyFull(data.valor_incompativel_pago) }}</template>
+                </Column>
+                <Column field="percentual_valor_incompativel" header="% valor incompatível">
+                  <template #body="{ data }">{{ formatValueShare(data) }}</template>
                 </Column>
               </DataTable>
             </div>
@@ -367,7 +492,8 @@ const close = () => emit('update:modelValue', false);
               size="small"
               scrollable
               scrollHeight="300px"
-              :rowClass="rowClass"
+              :rowClass="rankingRowClass"
+              @row-click="handleRankingRowClick"
               class="clin-table"
             >
               <Column field="posicao" header="#" />
@@ -379,16 +505,22 @@ const close = () => emit('update:modelValue', false);
                   </div>
                 </template>
               </Column>
+              <Column field="valor_total_pago" header="Valor total">
+                <template #body="{ data }">{{ formatCurrencyFull(data.valor_total_pago) }}</template>
+              </Column>
               <Column field="valor_incompativel_pago" header="Valor incompatível">
                 <template #body="{ data }">{{ formatCurrencyFull(data.valor_incompativel_pago) }}</template>
               </Column>
-              <Column field="qtd_cpfs_incompativeis" header="CPFs">
-                <template #body="{ data }">{{ formatNumberFull(data.qtd_cpfs_incompativeis) }}</template>
+              <Column field="percentual_valor_incompativel" header="% valor incompatível">
+                <template #body="{ data }">{{ formatValueShare(data) }}</template>
               </Column>
-              <Column field="qtd_autorizacoes_incompativeis" header="Autorizações">
+              <Column field="qtd_autorizacoes" header="Autorizações totais">
+                <template #body="{ data }">{{ formatNumberFull(data.qtd_autorizacoes) }}</template>
+              </Column>
+              <Column field="qtd_autorizacoes_incompativeis" header="Autorizações incompatíveis">
                 <template #body="{ data }">{{ formatNumberFull(data.qtd_autorizacoes_incompativeis) }}</template>
               </Column>
-              <Column field="participacao_municipal" header="Part. municipal">
+              <Column field="participacao_municipal" header="Part. valor incompatível municipal">
                 <template #body="{ data }">{{ formatRatioPercent(data.participacao_municipal) }}</template>
               </Column>
             </DataTable>
@@ -411,6 +543,14 @@ const close = () => emit('update:modelValue', false);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.clin-kpis-five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.clin-kpis-six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .clin-kpis-small {
@@ -440,6 +580,14 @@ const close = () => emit('update:modelValue', false);
   font-weight: 600;
   color: var(--text-color);
   line-height: 1.15;
+}
+
+.clin-kpi-value--multiline {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25 !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .clin-loading,
@@ -620,6 +768,14 @@ const close = () => emit('update:modelValue', false);
 
 :deep(.clin-table .p-datatable-tbody > tr:hover > td) {
   background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+}
+
+:deep(.clin-table .p-datatable-tbody > tr.clin-row-clickable) {
+  cursor: pointer;
+}
+
+:deep(.clin-table .p-datatable-tbody > tr.clin-row-clickable:hover > td) {
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
 }
 
 :deep(.clin-table .p-datatable-tbody > tr.clin-row-target > td),

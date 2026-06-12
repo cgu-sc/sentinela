@@ -169,7 +169,7 @@ function openIncompatibilityDialog(event, cnpj) {
         <template #body="{ data }">
           <div class="metric-stack align-right">
             <span class="metric-main">Observados {{ formatInteger(data.casos_observados) }}</span>
-            <span class="metric-sub">Esperados {{ formatDecimal(data.casos_esperados, 1) }} | Razão {{ formatDecimal(data.razao_observado_esperado, 2) }}</span>
+            <span class="metric-sub">Esperados {{ formatInteger(data.casos_esperados) }} | Razão {{ formatDecimal(data.razao_observado_esperado, 2) }}</span>
           </div>
         </template>
       </Column>

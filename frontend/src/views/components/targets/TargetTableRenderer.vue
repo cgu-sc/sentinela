@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import ParkinsonTargetTable from './tables/ParkinsonTargetTable.vue';
+import ClinicalTargetTable from './tables/ClinicalTargetTable.vue';
 
 const props = defineProps({
   targetKey: { type: String, required: true },
@@ -18,7 +18,7 @@ const props = defineProps({
 const emit = defineEmits(['lazy-load', 'open-incompatibility']);
 
 const tableComponent = computed(() => {
-  if (props.targetMeta.tableComponent === 'ParkinsonTargetTable') return ParkinsonTargetTable;
+  if (props.targetMeta.tableComponent === 'ClinicalTargetTable') return ClinicalTargetTable;
   throw new Error(`Tabela sem componente para alvo: ${props.targetKey}`);
 });
 </script>

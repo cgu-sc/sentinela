@@ -315,11 +315,10 @@ class ClinicoMunicipalRankingRowSchema(BaseModel):
     cnpj: str
     razao_social: str
     is_alvo: bool
-    qtd_cpfs_distintos: int
-    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes: int
     qtd_autorizacoes_incompativeis: int
+    valor_total_pago: float
     valor_incompativel_pago: float
-    percentual_cpfs_incompativeis: Optional[float] = None
     participacao_municipal: Optional[float] = None
 
 

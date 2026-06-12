@@ -661,7 +661,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         const params = {};
         if (inicio) params.data_inicio = inicio;
         if (fim)    params.data_fim    = fim;
-        params.ranking_municipal_limite = 0;
+        params.ranking_municipal_limite = 10;
         const { data } = await axios.get(API_ENDPOINTS.analyticsIncompatibilidadePatologica(clean), { params });
         if (this.incompatibilidadePatologicaRequestKey !== requestKey) return null;
         if (!data || !data.summary || !Array.isArray(data.patologias)) {

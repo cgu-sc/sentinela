@@ -30,10 +30,12 @@ class ClinicalTargetRowSchema(BaseModel):
     id_ibge7: int
     id_regiao_saude: int
     ano_base: int
-    casos_esperados: float
+    casos_esperados: Optional[float] = None
     casos_observados: int
     casos_observados_municipio: int
     razao_observado_esperado: Optional[float] = None
+    populacao_referencia: Optional[int] = None
+    percentual_observado_populacao: Optional[float] = None
     valor_incompativel: float
     autorizacoes: int
     participacao_municipio: Optional[float] = None

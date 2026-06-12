@@ -76,6 +76,54 @@ def _add_internal_hyperlink(
     return hyperlink
 
 
+def _add_external_hyperlink(
+    paragraph,
+    text: str,
+    url: str,
+    *,
+    color: str = '2563EB',
+    size: float = 10,
+    bold: bool = False,
+    underline: bool = True,
+):
+    """Adiciona um hyperlink externo ao paragrafo informado."""
+    if not url:
+        raise RuntimeError("URL de hyperlink externo obrigatoria para Nota Tecnica.")
+
+    relationship_id = paragraph.part.relate_to(url, RT.HYPERLINK, is_external=True)
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), relationship_id)
+    hyperlink.set(qn('w:history'), '1')
+
+    run = OxmlElement('w:r')
+    r_pr = OxmlElement('w:rPr')
+
+    if bold:
+        r_pr.append(OxmlElement('w:b'))
+
+    color_el = OxmlElement('w:color')
+    color_el.set(qn('w:val'), color)
+    r_pr.append(color_el)
+
+    underline_el = OxmlElement('w:u')
+    underline_el.set(qn('w:val'), 'single' if underline else 'none')
+    r_pr.append(underline_el)
+
+    size_el = OxmlElement('w:sz')
+    size_el.set(qn('w:val'), str(int(round(size * 2))))
+    r_pr.append(size_el)
+
+    run.append(r_pr)
+    t = OxmlElement('w:t')
+    if text.startswith(' ') or text.endswith(' '):
+        t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+    t.text = text
+    run.append(t)
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+    return hyperlink
+
+
 def _cell_bg(cell, fill_hex: str):
     """Define cor de fundo de uma celula."""
     tc = cell._tc

@@ -14,7 +14,13 @@ from .nota_tecnica_docx_utils import (
     _run,
     _set_table_fixed_widths,
 )
-from .nota_tecnica_formatters import _format_cpf_cnpj, _format_decimal_pt
+from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
+from .nota_tecnica_formatters import (
+    _format_cpf_cnpj,
+    _format_decimal_pt,
+    _format_patologia_pt,
+    _title_case_pt,
+)
 
 
 def _format_quadro_title(paragraph, *, space_before: float = 16, space_after: float = 8):
@@ -174,13 +180,17 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     )
 
     rows_data = gtin_comp["rows"]
-    table = doc.add_table(rows=len(rows_data) + 2, cols=4)
+    table = doc.add_table(rows=len(rows_data) + 2, cols=5)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.04), Inches(3.60), Inches(1.08), Inches(1.28)])
+    _set_table_fixed_widths(
+        table,
+        [Inches(0.94), Inches(2.56), Inches(1.08), Inches(1.08), Inches(1.34)],
+    )
 
     headers = [
         'GTIN',
         'Descrição',
+        'Patologia associada',
         'Quantidade de medicamentos sem comprovação',
         'Valor de vendas sem comprovação (R$)',
     ]
@@ -193,20 +203,32 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
         _run(cells[0].paragraphs[0], item["gtin"], color='0F172A', size=8)
-        _run(cells[1].paragraphs[0], item["descricao"], color='0F172A', size=8)
-        cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[2].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
-        cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        _run(cells[3].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color='0F172A', size=8)
+        _run(
+            cells[1].paragraphs[0],
+            _title_case_pt(item["descricao"]),
+            color='0F172A',
+            size=8,
+        )
+        cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+        _run(
+            cells[2].paragraphs[0],
+            _format_patologia_pt(item["patologia"]),
+            color='0F172A',
+            size=8,
+        )
+        cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[3].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
+        cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _run(cells[4].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color='0F172A', size=8)
 
     total_cells = table.rows[-1].cells
-    total_cells[0].merge(total_cells[1])
+    total_cells[0].merge(total_cells[2])
     _run(total_cells[0].paragraphs[0], 'TOTAIS', color='0F172A', size=8, bold=True)
     total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    total_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(total_cells[2].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
-    total_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    _run(total_cells[3].paragraphs[0], f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='0F172A', size=8, bold=True)
+    total_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(total_cells[3].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
+    total_cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _run(total_cells[4].paragraphs[0], f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='0F172A', size=8, bold=True)
     for cell in total_cells:
         _cell_bg(cell, 'F8FAFC')
 
@@ -267,6 +289,7 @@ def _add_quadro_evolucao_financeira(
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
         has_aumento_atipico = item.get("volume_atipico") and item.get("taxa_crescimento_pct") is not None
+        has_sem_comprovacao_relevante = item["irregular"] >= VOLUME_ATIPICO_AUMENTO_MINIMO
         cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         _run(cells[0].paragraphs[0], item.get("semestre_fmt") or item["semestre"], color='0F172A', size=8)
         for col_idx, key in enumerate(("total", "regular", "irregular"), start=1):
@@ -292,7 +315,7 @@ def _add_quadro_evolucao_financeira(
             )
         else:
             _run(cells[5].paragraphs[0], '-', color='64748B', size=8)
-        if has_aumento_atipico:
+        if has_aumento_atipico or has_sem_comprovacao_relevante:
             for cell in cells:
                 _cell_bg(cell, 'FEE2E2')
 
@@ -322,7 +345,7 @@ def _add_quadro_evolucao_financeira(
     _format_quadro_footnote(p_foot)
     _run(
         p_foot,
-        'Fonte: Sentinela, aba “Evolução Financeira”, a partir das dispensações informadas no Sistema Autorizador de Vendas do PFPB e do levantamento de “vendas sem comprovação”.',
+        'Fonte: Sistema Sentinela, com base nas dispensações registradas no SAV/PFPB e nas notas fiscais eletrônicas de aquisição de medicamentos.',
         color='64748B',
         size=8,
     )
@@ -514,6 +537,18 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     else:
         p_s = doc.add_paragraph(style='List Bullet')
         _run(p_s, "Informação de sócios não disponível ou nenhum sócio ativo identificado.", color='475569', size=10, italic=True)
+
+    p_socio_alerta = doc.add_paragraph()
+    p_socio_alerta.paragraph_format.space_before = Pt(6)
+    p_socio_alerta.paragraph_format.space_after = Pt(2)
+    _run(p_socio_alerta, 'ATENÇÃO: ', color='DC2626', size=10, bold=True, italic=True)
+    _run(
+        p_socio_alerta,
+        'Caso sejam identificadas criticidades em relação ao estabelecimento (sócio com características de “laranja”, endereço inexistente, alteração de endereço para outro município, sócio com vínculo empregatício, etc.), sugere-se trazer tais apontamentos na sequência do parágrafo anterior.',
+        color='DC2626',
+        size=10,
+        italic=True,
+    )
 
     # Contexto trabalhista/eSocial é renderizado fora do quadro cadastral.
 

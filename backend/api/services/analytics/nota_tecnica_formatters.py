@@ -37,6 +37,15 @@ def _title_case_pt(value: Any) -> str:
     return text.title() if text else "Não identificado"
 
 
+def _format_patologia_pt(value: Any) -> str:
+    """Formata patologias cadastradas para exibicao na Nota Tecnica."""
+    text = str(value or "").strip().upper()
+    labels = {
+        "DOENCA DE PARKINSON": "Doença De Parkinson",
+    }
+    return labels.get(text, text.title())
+
+
 def _format_month_year_pt(month_key: str) -> str:
     """Formata uma chave mensal YYYY-MM como MM/YYYY."""
     parts = (month_key or "").split("-")

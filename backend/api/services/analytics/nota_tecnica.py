@@ -20,7 +20,6 @@ from .crm import get_crm_data
 from .socios import get_socios_farmacia
 from .nota_tecnica_charts import (
     _add_figura_evolucao_financeira,
-    _add_figura_percentil_risco,
     _add_figura_posicionamento_regional,
 )
 from .nota_tecnica_anexo_ii import _add_anexo_ii_memoria_calculo, _build_anexo_ii_context
@@ -29,7 +28,6 @@ from .nota_tecnica_contexts import (
     _build_esocial_context,
     _build_evolucao_financeira_context,
     _build_gtin_sem_comprovacao_context,
-    _build_percentil_risco_context,
     _build_posicionamento_regional_context,
     _build_regional_comparison_context,
     _build_socios_volume_atipico_context,
@@ -49,10 +47,12 @@ from .nota_tecnica_criticidades import (
     _add_alto_custo_text,
     _add_dias_pico_text,
     _add_dispersao_geografica_text,
+    _add_dispersao_geografica_regional_text,
     _add_falecidos_criticidade_text,
     _add_indicador_regional_table,
     _add_indicadores_criticos_quadro,
     _add_incompatibilidade_patologica_text,
+    _add_parkinson_gtin_sem_comprovacao_text,
     _add_per_capita_text,
     _add_polimedicamento_text,
     _add_receita_paciente_text,
@@ -94,6 +94,7 @@ from .nota_tecnica_formatters import (
 )
 from .nota_tecnica_docx_utils import (
     _add_bookmark,
+    _add_external_hyperlink,
     _cell_bg,
     _cell_bg_run,
     _cell_borders,
@@ -280,8 +281,7 @@ def _add_sumario_official_header(
         for text, color, bold in parts:
             _run(p, text, color=color, size=size, bold=bold)
 
-    add_centered_line([('CONTROLADORIA-GERAL DA UNIÃO', default_color, True)], size=14, space_after=1)
-    add_centered_line([(regional["nome_unidade"], default_color, True)], size=9, space_after=1)
+    add_centered_line([(regional["nome_unidade"], default_color, True)], size=14, space_after=1)
     add_centered_line([(regional["linha_endereco"], default_color, False)], size=8, space_after=1)
     add_centered_line([(regional["linha_contato"], default_color, False)], size=8, space_after=8)
     add_centered_line(
@@ -594,7 +594,7 @@ def _build_sumario(
 
     _add_toc_entry(doc, '5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', page='6')
     _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
-    _add_toc_entry(doc, '  5.2', 'Contexto trabalhista e assistência técnica farmacêutica', page='6')
+    _add_toc_entry(doc, '  5.2', 'Vínculos Trabalhistas', page='6')
     _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='6')
     _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
 
@@ -710,9 +710,19 @@ def generate_nota_tecnica(
     timing.mark("contexto CRM base")
     crm_evidencias_comp = _build_crm_evidencias_complementares_context(cnpj, data_inicio, data_fim, crm_data=crm_data_comp)
     timing.mark("contexto evidencias CRM complementares")
-    anexo_crm_num = 'II' if crm_evidencias_comp else None
-    anexo_memoria_num = 'III' if crm_evidencias_comp else 'II'
-    anexo_falecidos_num = 'IV' if crm_evidencias_comp else 'III'
+    if crm_evidencias_comp:
+        crm_criticidade_final = next(
+            (key for key in ("hhi_crm", "crms_irregulares") if key in criticidade_order),
+            None,
+        )
+        if crm_criticidade_final is not None:
+            criticidade_order = [
+                key for key in criticidade_order
+                if key != crm_criticidade_final
+            ] + [crm_criticidade_final]
+    anexo_crm_num = 'I' if crm_evidencias_comp else None
+    anexo_memoria_num = 'II' if crm_evidencias_comp else 'I'
+    anexo_falecidos_num = 'III' if crm_evidencias_comp else 'II'
 
     # 3. Documento e margens
     doc = Document()
@@ -760,28 +770,87 @@ def generate_nota_tecnica(
         # Fallback para debug se não encontrar
         print(f"⚠️ Alerta: Brasão não encontrado em {brasao_path}")
     
-    p_header = doc.add_paragraph()
-    p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p_header, 'CONTROLADORIA-GERAL DA UNIÃO', color='0F172A', size=14, bold=True)
+    def add_cover_header_line(text: str, *, size: float, bold: bool, space_after: float = 1):
+        p_header = doc.add_paragraph()
+        p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_header.paragraph_format.line_spacing = 1.0
+        p_header.paragraph_format.space_after = Pt(space_after)
+        _run(p_header, text, color='0F172A', size=size, bold=bold)
+
+    add_cover_header_line(regional_emissora["nome_unidade"], size=14, bold=True)
+    add_cover_header_line(regional_emissora["linha_endereco"], size=8, bold=False)
+    add_cover_header_line(regional_emissora["linha_contato"], size=8, bold=False, space_after=8)
     
-    doc.add_paragraph('\n' * 3)
+    doc.add_paragraph('\n' * 2)
     
     # ── 5. Título da Nota Técnica ──────────────────────────────────────
     p_titulo = doc.add_paragraph()
     p_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p_titulo, 'NOTA TÉCNICA PRELIMINAR\n', color='0F172A', size=24, bold=True)
-    _run(p_titulo, 'SENTINELA', color='0F172A', size=14, bold=True)
-    _run(p_titulo, '\nPrograma Farmácia Popular do Brasil', color='64748B', size=10, italic=True)
+    p_titulo.paragraph_format.line_spacing = 1.0
+    _run(p_titulo, 'NOTA TÉCNICA Nº ', color='0F172A', size=14, bold=True)
+    _run(
+        p_titulo,
+        numero_nota_base,
+        color='DC2626' if numero_nota_placeholder else '0F172A',
+        size=14,
+        bold=True,
+    )
+    _run(
+        p_titulo,
+        f'/{generated_at.year}/NAE/{regional_emissora["codigo"]}/Regional/{regional_emissora["codigo"]}\n',
+        color='0F172A',
+        size=14,
+        bold=True,
+    )
+    _run(p_titulo, '(PROCESSO Nº ', color='0F172A', size=11, bold=True)
+    _run(
+        p_titulo,
+        numero_processo_texto,
+        color='DC2626' if numero_processo_placeholder else '0F172A',
+        size=11,
+        bold=True,
+    )
+    _run(p_titulo, ')', color='0F172A', size=11, bold=True)
 
-    doc.add_paragraph('\n' * 2)
+    doc.add_paragraph()
+
+    p_aviso_titulo = doc.add_paragraph()
+    p_aviso_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_aviso_titulo.paragraph_format.space_after = Pt(4)
+    _run(p_aviso_titulo, 'ATENÇÃO !', color='DC2626', size=10, bold=True)
+
+    p_aviso_1 = doc.add_paragraph()
+    p_aviso_1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    p_aviso_1.paragraph_format.line_spacing = 1.05
+    p_aviso_1.paragraph_format.space_after = Pt(3)
+    _run(
+        p_aviso_1,
+        'A presente Nota Técnica tem como objetivo padronizar a abordagem, nos trabalhos realizados pela DIOPE e NAEs, dos achados extraídos do Sistema Sentinela sobre possíveis irregularidades praticadas por estabelecimentos farmacêuticos no âmbito do Programa Farmácia Popular do Brasil.',
+        color='DC2626',
+        size=8,
+        italic=True,
+    )
+
+    p_aviso_2 = doc.add_paragraph()
+    p_aviso_2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    p_aviso_2.paragraph_format.line_spacing = 1.05
+    p_aviso_2.paragraph_format.space_after = Pt(18)
+    _run(
+        p_aviso_2,
+        'A padronização aqui proposta é principalmente de estrutura da NT e de explicação de cada um dos indicadores de criticidade idealizados sobre o Programa, ficando, por óbvio, os auditores livres para estenderem seus exames e apontamentos para o robustecimento de seus achados.',
+        color='DC2626',
+        size=8,
+        italic=True,
+    )
 
     # ── 6. Selo de Sigilo ──────────────────────────────────────────────
     p_sigilo = doc.add_paragraph()
     p_sigilo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sigilo.paragraph_format.space_after = Pt(10)
     r_sigilo = _run(p_sigilo, ' ACESSO RESTRITO ', color='FFFFFF', size=10, bold=True)
     _cell_bg_run(r_sigilo, 'EF4444') # Fundo vermelho para o selo de sigilo
     
-    doc.add_paragraph('\n')
+    doc.add_paragraph()
 
 
     # ── 6. Resumo Executivo da Auditoria (Capa) ──────────────────────────
@@ -906,14 +975,22 @@ def generate_nota_tecnica(
 
     # 3. INTRODUÇÃO
     _format_main_heading(doc.add_heading('3. INTRODUÇÃO', level=1))
-    doc.add_paragraph(f'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}).')
+    p_intro_contexto = doc.add_paragraph()
+    _run(p_intro_contexto, 'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia ', color='0F172A', size=11)
+    _run(p_intro_contexto, razao_social, color='334155', size=11, bold=True)
+    _run(p_intro_contexto, f' (CNPJ {cnpj_fmt}), no período de ', color='0F172A', size=11)
+    _run(p_intro_contexto, periodo_txt, color='334155', size=11, bold=True)
+    _run(p_intro_contexto, '.', color='0F172A', size=11)
     
     p_intro = doc.add_paragraph()
-    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, sintetizada no item 4 da NT e consignada no Relatório de Auditoria nº 823121 constante de seu ANEXO I, foi identificada, para a Farmácia ', color='0F172A', size=11)
-    _run(p_intro, razao_social, color='334155', size=11, bold=True)
-    _run(p_intro, ', no período de ', color='0F172A', size=11)
-    _run(p_intro, periodo_txt, color='334155', size=11, bold=True, underline=True)
-    _run(p_intro, ', conforme item 6 e detalhamento contido em seu ANEXO II, ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=11)
+    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, sintetizada no item 4 dessa NT e consignada no Relatório de Auditoria nº 823121 (', color='0F172A', size=11)
+    _add_external_hyperlink(
+        p_intro,
+        'Acesse aqui',
+        'https://cgugovbr.sharepoint.com/:b:/r/sites/intracgu-sc/Documentos%20Compartilhados/Sentinela/Relat%C3%B3rio_PFPB.pdf?csf=1&web=1&e=MBdcS8',
+        size=11,
+    )
+    _run(p_intro, f'), foi identificada, conforme item 6 e detalhamento contido no ANEXO {anexo_memoria_num} desta NT, ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=11)
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
@@ -947,7 +1024,7 @@ def generate_nota_tecnica(
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
     if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
     fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
-    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas a aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
+    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
 
     nota_pfpb_2 = (
         'Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, '
@@ -1038,8 +1115,15 @@ def generate_nota_tecnica(
     p_sent = doc.add_paragraph()
     _run(p_sent, 'Para enfrentar essa realidade, a CGU elaborou o ', color='0F172A', size=11)
     _run(p_sent, 'Relatório de Apuração nº 823121', color='334155', size=11, bold=True)
-    _run(p_sent, ' (ANEXO I desta NT), fundamentado no desenvolvimento do ', color='0F172A', size=11)
-    _run(p_sent, 'Sentinela', color='334155', size=11, bold=True)
+    _run(p_sent, ' (', color='0F172A', size=11)
+    _add_external_hyperlink(
+        p_sent,
+        'Acesse aqui',
+        'https://cgugovbr.sharepoint.com/:b:/r/sites/intracgu-sc/Documentos%20Compartilhados/Sentinela/Relat%C3%B3rio_PFPB.pdf?csf=1&web=1&e=MBdcS8',
+        size=11,
+    )
+    _run(p_sent, '), fundamentado no desenvolvimento do ', color='0F172A', size=11)
+    _run(p_sent, 'Sentinela', color='0F172A', size=11)
     _run(p_sent, ', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.', color='0F172A', size=11)
     p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Caso isso ocorra, a farmácia estaria praticando uma “venda sem comprovação”')
     _footnote_ref(doc, p_cgu, 7, nota_cgu_7)
@@ -1232,18 +1316,6 @@ def generate_nota_tecnica(
     _add_figura_posicionamento_regional(doc, razao_social, cnpj_fmt, posicionamento_regional_comp, figure_number=1)
     timing.mark("figura posicionamento regional")
 
-    percentil_risco_comp = _build_percentil_risco_context(cnpj_data, cadastro, data_inicio, data_fim)
-    timing.mark("contexto percentil de risco")
-    _add_figura_percentil_risco(
-        doc,
-        razao_social,
-        cnpj_fmt,
-        percentil_risco_comp,
-        figure_number=2,
-        show_title=False,
-    )
-    timing.mark("figura percentil de risco")
-
     tabela_num = 0
 
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
@@ -1290,7 +1362,9 @@ def generate_nota_tecnica(
         _run(p_54_analise, '. ', color='0F172A', size=10)
         crescimento_labels = _format_list_pt([
             (
-                f'{row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
+                f'{row["semestre_fmt"]} (+R$ {_format_decimal_pt(row["aumento_valor_semestre"], 2)}; +{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
+                if row.get("aumento_valor_semestre") is not None and row.get("taxa_crescimento_pct") is not None
+                else f'{row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
                 if row.get("taxa_crescimento_pct") is not None
                 else row["semestre_fmt"]
             )
@@ -1301,11 +1375,23 @@ def generate_nota_tecnica(
         _run(p_54_analise, crescimento_labels, color='0F172A', size=10, bold=True)
         _run(p_54_analise, ', sempre em comparação ao semestre imediatamente anterior. ', color='0F172A', size=10)
 
-        top_irregulares = evolucao_comp["top_irregulares"]
+        semestres_atipicos_keys = {
+            row.get("chave_semestre")
+            for row in semestres_atipicos
+            if row.get("chave_semestre") is not None
+        }
+        top_irregulares = [
+            row for row in evolucao_comp["top_irregulares"]
+            if row.get("chave_semestre") not in semestres_atipicos_keys
+        ]
         if top_irregulares:
-            top_labels = _format_list_pt([row["semestre_fmt"] for row in top_irregulares])
-            top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares), 2)
-            top_prefixo = 'no ' if len(top_irregulares) == 1 else 'nos semestres '
+            top_irregulares_ordenados = sorted(
+                top_irregulares,
+                key=lambda row: row.get("chave_semestre") or 0,
+            )
+            top_labels = _format_list_pt([row["semestre_fmt"] for row in top_irregulares_ordenados])
+            top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares_ordenados), 2)
+            top_prefixo = 'no ' if len(top_irregulares_ordenados) == 1 else 'nos '
             _run(p_54_analise, f'Também se verificam valores relevantes de “vendas sem comprovação” {top_prefixo}', color='0F172A', size=10)
             _run(p_54_analise, top_labels, color='0F172A', size=10)
             _run(p_54_analise, ', que somam ', color='0F172A', size=10)
@@ -1331,7 +1417,7 @@ def generate_nota_tecnica(
         p_socios_volume.paragraph_format.space_before = Pt(6)
         _run(p_socios_volume, 'Também se observam ingressos societários próximos a semestres com aumento atípico das transferências, conforme detalhado no quadro a seguir.', color='0F172A', size=10)
     _add_quadro_socios_volume_atipico(doc, socios_volume_atipico)
-    _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=3)
+    _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=2)
     timing.mark("quadros e figura evolucao financeira")
 
     # Seção 7 sem rodapé herdado da seção 6.
@@ -1391,6 +1477,12 @@ def generate_nota_tecnica(
                     )
                     tabela_num += _count_incompatibilidade_patologica_tables(clinico_comp)
                     _add_enquadramento_regional_indicador(key)
+                    _add_parkinson_gtin_sem_comprovacao_text(
+                        doc,
+                        clinico_comp,
+                        gtin_comp,
+                        tabela_gtins_num,
+                    )
                     resumo = _build_resumo_criticidade(num, key, clinico_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1499,6 +1591,7 @@ def generate_nota_tecnica(
                         bookmark_name=bookmark_name,
                     )
                     _add_enquadramento_regional_indicador(key)
+                    _add_dispersao_geografica_regional_text(doc, razao_social, dispersao_comp)
                     resumo = _build_resumo_criticidade(num, key, dispersao_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1513,17 +1606,25 @@ def generate_nota_tecnica(
                     crm_data=crm_data_comp,
                 )
                 if hhi_crm_comp:
+                    regional_context = _build_indicador_regional_context(cnpj, key, data_inicio, data_fim)
                     tabela_num += 1
+                    tabela_regional_num = tabela_num
+                    tabela_num += 1
+                    tabela_crms_num = tabela_num
                     _add_hhi_crm_text(
                         doc,
                         num,
                         razao_social,
                         cnpj_fmt,
                         hhi_crm_comp,
-                        tabela_num,
+                        tabela_crms_num,
+                        regional_table_renderer=lambda: _add_indicador_regional_table(
+                            doc,
+                            regional_context,
+                            tabela_regional_num,
+                        ),
                         bookmark_name=bookmark_name,
                     )
-                    _add_enquadramento_regional_indicador(key)
                     resumo = _build_resumo_criticidade(num, key, hhi_crm_comp, float(cnpj_data.get('totalMov') or 0.0))
                     if resumo:
                         resumos_criticidades.append(resumo)
@@ -1599,6 +1700,7 @@ def generate_nota_tecnica(
         color='DC2626',
         size=10,
         bold=True,
+        italic=True,
     )
 
     p_fontes_conclusao = doc.add_paragraph()

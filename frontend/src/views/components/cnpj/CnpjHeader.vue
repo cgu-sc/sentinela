@@ -1083,13 +1083,17 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 
 .ranking-grid-new {
   display: flex;
-  gap: 2.5rem;
+  flex: 1;
+  min-width: 0;
+  justify-content: space-between;
+  gap: clamp(0.75rem, 1.2vw, 2.5rem);
 }
 
 .rank-stat {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  flex-shrink: 0;
+  gap: clamp(0.45rem, 0.7vw, 0.8rem);
   transition: all 0.3s;
 }
 
@@ -1133,6 +1137,7 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 .rank-details {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .rank-label {
@@ -1142,12 +1147,15 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   color: var(--establishment-header-text);
   opacity: 0.85;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .rank-val {
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--establishment-header-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .rank-val small {

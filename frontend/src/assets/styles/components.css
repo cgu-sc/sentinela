@@ -166,6 +166,71 @@
   font-weight: 700;
 }
 
+/* TOASTS — PrimeVue Lara Light precisa ser sincronizado com os tokens do app */
+.p-toast .p-toast-message {
+  background: color-mix(in srgb, var(--card-bg) 96%, transparent) !important;
+  color: var(--text-color) !important;
+  border: 1px solid var(--card-border) !important;
+  border-left-width: 4px !important;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--bg-color) 45%, transparent) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.p-toast .p-toast-message-content {
+  color: var(--text-color) !important;
+}
+
+.p-toast .p-toast-summary {
+  color: var(--text-color) !important;
+  font-weight: 700 !important;
+}
+
+.p-toast .p-toast-detail {
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+.p-toast .p-toast-icon-close {
+  color: var(--text-muted) !important;
+}
+
+.p-toast .p-toast-icon-close:hover {
+  color: var(--text-color) !important;
+}
+
+.p-toast .p-toast-message-error {
+  border-left-color: var(--risk-high) !important;
+}
+
+.p-toast .p-toast-message-error .p-toast-message-icon {
+  color: var(--risk-high) !important;
+}
+
+.p-toast .p-toast-message-warn {
+  border-left-color: var(--risk-medium) !important;
+}
+
+.p-toast .p-toast-message-warn .p-toast-message-icon {
+  color: var(--risk-medium) !important;
+}
+
+.p-toast .p-toast-message-success {
+  border-left-color: var(--status-success) !important;
+}
+
+.p-toast .p-toast-message-success .p-toast-message-icon {
+  color: var(--status-success) !important;
+}
+
+.p-toast .p-toast-message-info {
+  border-left-color: var(--status-info) !important;
+}
+
+.p-toast .p-toast-message-info .p-toast-message-icon {
+  color: var(--status-info) !important;
+}
+
 /** 
  * ESTILO ENTERPRISE TABLE (PrimeVue DataTable)
  * Garante que a tabela siga o design system em qualquer modo.

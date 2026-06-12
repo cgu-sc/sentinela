@@ -1,6 +1,6 @@
 import os
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import polars as pl
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -1613,6 +1613,7 @@ def _add_hhi_crm_text(
     cnpj_fmt: str,
     hhi_crm_comp: dict[str, Any],
     tabela_num: int,
+    regional_table_renderer: Callable[[], None],
     bookmark_name: str | None = None,
 ):
     """Adiciona o subitem de concentração atípica de registros do mesmo CRM."""
@@ -1630,7 +1631,7 @@ def _add_hhi_crm_text(
     nome_medico = str(principal.get("no_medico") or "Não localizado")
 
     heading = doc.add_heading(
-        f"{num} Concentração atípica de registros de CRMs nas autorizações",
+        f"{num} Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB",
         level=2,
     )
     if bookmark_name:
@@ -1640,16 +1641,6 @@ def _add_hhi_crm_text(
     _run(
         p1,
         "Este indicador mede o grau de concentração das autorizações registradas no SAV em um conjunto restrito de médicos, identificados pelos respectivos CRMs. A métrica utilizada para essa análise é o Índice Herfindahl-Hirschman (HHI), que aumenta quando as autorizações se concentram em poucos prescritores e é menor quando os registros estão distribuídos de forma mais homogênea entre diversos médicos. Em um padrão ordinário, espera-se maior dispersão dos prescritores, pois os beneficiários tendem a apresentar receitas emitidas por diferentes profissionais, unidades de saúde e momentos de atendimento. Quando parcela relevante das dispensações da farmácia se concentra em poucos CRMs, em patamar superior ao observado para o conjunto de estabelecimentos comparáveis, o achado sugere dependência atípica da farmácia em relação a um grupo limitado de prescritores ou uso recorrente de determinadas identificações médicas nos registros de autorização.",
-        color="0F172A",
-        size=10,
-    )
-
-    p2 = doc.add_paragraph()
-    _run(p2, f"No período {periodo_intervalo}, foram identificados ", color="0F172A", size=10)
-    _run(p2, f"{total_medicos}", color="334155", size=10, bold=True)
-    _run(
-        p2,
-        f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento. A tabela a seguir apresenta os principais CRMs por valor pago, com indicação da participação individual de cada um na produção total da farmácia, observado o mínimo de 5 e o máximo de 10 médicos:",
         color="0F172A",
         size=10,
     )
@@ -1682,6 +1673,18 @@ def _add_hhi_crm_text(
         bold=True,
     )
     _run(p_comparativo, " a mediana das farmácias de todo o Brasil.", color="0F172A", size=10)
+
+    regional_table_renderer()
+
+    p2 = doc.add_paragraph()
+    _run(p2, f"No período {periodo_intervalo}, foram identificados ", color="0F172A", size=10)
+    _run(p2, f"{total_medicos}", color="334155", size=10, bold=True)
+    _run(
+        p2,
+        f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento. A tabela a seguir apresenta os principais CRMs por valor pago, com indicação da participação individual de cada um na produção total da farmácia, observado o mínimo de 5 e o máximo de 10 médicos:",
+        color="0F172A",
+        size=10,
+    )
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)

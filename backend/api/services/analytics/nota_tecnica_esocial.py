@@ -198,7 +198,7 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
 
 def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any]):
     """Renderiza o contexto trabalhista/eSocial na seção cadastral da Nota Técnica."""
-    doc.add_heading('5.2 Vínculos trabalhistas', level=2)
+    doc.add_heading('5.2 Vínculos Trabalhistas', level=2)
 
     if not esocial_comp.get("has_data"):
         p = doc.add_paragraph()

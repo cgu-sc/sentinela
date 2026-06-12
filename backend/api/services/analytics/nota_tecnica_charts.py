@@ -1341,6 +1341,15 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
     run = p_img.add_run()
     run.add_picture(chart_stream, width=Inches(7.1))
 
+    p_foot = doc.add_paragraph()
+    _format_figure_footnote(p_foot)
+    _run(
+        p_foot,
+        'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
+        color='64748B',
+        size=8,
+    )
+
 
 def _add_figura_percentil_risco(
     doc,

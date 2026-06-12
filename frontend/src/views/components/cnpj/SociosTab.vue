@@ -155,6 +155,9 @@ const copyAndSignal = (text, key) => {
                     <span v-if="s.is_falecido" class="deceased-badge-inline" v-tooltip.top="'Sócio consta como falecido na base unificada.'">
                       <i class="pi pi-exclamation-triangle" /> FALECIDO
                     </span>
+                    <span v-if="s.is_cadunico" class="cadunico-badge-inline" v-tooltip.top="'Sócio consta como inscrito no Cadastro Único.'">
+                      <i class="pi pi-id-card" /> CADÚNICO
+                    </span>
                     <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-name' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']" 
                        @click="copyAndSignal(s.nome_socio, s.cpf_cnpj_socio + '-name')" 
                        v-tooltip.top="'Copiar Nome'" />
@@ -606,13 +609,27 @@ const copyAndSignal = (text, key) => {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.65rem;
-  font-weight: 800;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  font-weight: 600;
+  color: var(--risk-critical);
+  background: color-mix(in srgb, var(--risk-critical) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--risk-critical) 30%, transparent);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   margin-left: 0.5rem;
+}
+
+.cadunico-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--risk-medium) 30%, transparent);
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  background: color-mix(in srgb, var(--risk-medium) 10%, transparent);
+  color: var(--risk-medium);
+  font-size: 0.65rem;
+  font-weight: 600;
 }
 
 /* States */

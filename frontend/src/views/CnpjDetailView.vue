@@ -92,6 +92,9 @@ const {
   bootstrapLoading,
   bootstrapGeoData,
   bootstrapPeriodSummary,
+  integrityAlertsData,
+  integrityAlertsLoading,
+  integrityAlertsError,
 } =
   storeToRefs(cnpjDetailStore);
 
@@ -260,6 +263,14 @@ const setActiveTab = (index, { syncUrl = true } = {}) => {
     params: route.params,
     query: { ...query, s: tabSlug },
   });
+};
+
+const navigateToSection = (slug) => {
+  const tabIndex = TAB_INDEX_BY_SLUG[slug];
+  if (!Number.isInteger(tabIndex)) {
+    throw new Error(`Aba de destino invalida para alerta de integridade: ${slug}`);
+  }
+  setActiveTab(tabIndex);
 };
 
 watch(
@@ -587,8 +598,12 @@ watch(
       :is-generating-note="isGeneratingNote"
       :period-summary="periodSummary"
       :period-loading="isPeriodSummaryLoading"
+      :integrity-alerts="integrityAlertsData"
+      :integrity-alerts-loading="integrityAlertsLoading"
+      :integrity-alerts-error="integrityAlertsError"
       @export="handleExport"
       @generate-note="handleGenerateNote"
+      @navigate-section="navigateToSection"
     />
 
     <NotaTecnicaRegionalDialog

@@ -45,6 +45,36 @@ function assertCrmTimelineDataset(data) {
   });
 }
 
+function assertIntegrityAlerts(data) {
+  if (
+    !data
+    || !Number.isInteger(data.total)
+    || !Number.isInteger(data.total_criticos)
+    || !Number.isInteger(data.total_atencao)
+    || !Array.isArray(data.alertas)
+  ) {
+    throw new Error('Contrato invalido em alertas-integridade.');
+  }
+
+  data.alertas.forEach((alerta, index) => {
+    const required = [
+      'tipo',
+      'escopo',
+      'entidade_id',
+      'entidade_nome',
+      'severidade',
+      'titulo',
+      'fonte',
+      'aba_destino',
+    ];
+    required.forEach((field) => {
+      if (!alerta?.[field]) {
+        throw new Error(`Contrato invalido em alertas-integridade: alertas[${index}].${field} obrigatorio.`);
+      }
+    });
+  });
+}
+
 function assertCrmDataLight(data) {
   if (!data || !Array.isArray(data.crms_interesse) || !data.summary) {
     throw new Error('Contrato invalido em crm-data: summary e crms_interesse obrigatorios.');
@@ -182,6 +212,13 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     sociosLoaded:  false,
     sociosRequestKey: null,
     sociosError:   null,
+
+    // ── Alertas de Integridade ────────────────────────────────────────────────
+    integrityAlertsData: null,
+    integrityAlertsLoading: false,
+    integrityAlertsLoaded: false,
+    integrityAlertsRequestKey: null,
+    integrityAlertsError: null,
 
     // ── Teia Societária (Grafo de Relacionamentos) ────────────────────────────
     networkData:    null,
@@ -426,6 +463,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],
         ['falecidos', () => this.fetchFalecidos(clean, inicio, fim)],
         ['socios', () => this.fetchSocios(clean)],
+        ['alertas-integridade', () => this.fetchIntegrityAlerts(clean)],
         ['teia-n2', () => this.fetchNetwork(clean, inicio, fim)],
       ];
 
@@ -744,6 +782,36 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (this.networkRequestKey === key) {
           this.networkLoading = false;
           this.networkRequestKey = null;
+        }
+      }
+    },
+
+    async fetchIntegrityAlerts(cnpj) {
+      const clean = normalizeCnpj(cnpj);
+      if (
+        !clean
+        || this.integrityAlertsLoaded === clean
+        || this.integrityAlertsRequestKey === clean
+      ) return;
+
+      this.integrityAlertsLoading = true;
+      this.integrityAlertsRequestKey = clean;
+      this.integrityAlertsError = null;
+
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.analyticsIntegrityAlerts(clean));
+        assertIntegrityAlerts(data);
+        if (this.integrityAlertsRequestKey !== clean) return;
+        this.integrityAlertsData = data;
+        this.integrityAlertsLoaded = clean;
+      } catch (e) {
+        if (this.integrityAlertsRequestKey !== clean) return;
+        console.error('Erro ao buscar alertas de integridade:', e);
+        this.integrityAlertsError = e?.response?.data?.detail || e?.message || ERROR_MSG;
+      } finally {
+        if (this.integrityAlertsRequestKey === clean) {
+          this.integrityAlertsLoading = false;
+          this.integrityAlertsRequestKey = null;
         }
       }
     },
@@ -1160,6 +1228,12 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.sociosLoaded  = false;
       this.sociosRequestKey = null;
       this.sociosError   = null;
+
+      this.integrityAlertsData = null;
+      this.integrityAlertsLoading = false;
+      this.integrityAlertsLoaded = false;
+      this.integrityAlertsRequestKey = null;
+      this.integrityAlertsError = null;
 
       this.networkData    = null;
       this.networkLoading = false;

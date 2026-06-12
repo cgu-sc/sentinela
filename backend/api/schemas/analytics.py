@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import date, datetime
 
 class AnalyticsKPISchema(BaseModel):
@@ -576,12 +576,34 @@ class SocioSchema(BaseModel):
     data_nascimento_socio: Optional[date] = None
     data_nascimento_representante: Optional[date] = None
     is_falecido: Optional[bool] = False
+    is_cadunico: bool
 
 class SociosResponse(BaseModel):
     cnpj: str
     socios: List[SocioSchema]
     data_processamento: Optional[date] = None
     from_cache: bool = False
+
+
+class IntegrityAlertSchema(BaseModel):
+    tipo: str
+    escopo: Literal["cnpj", "socio", "representante"]
+    entidade_id: str
+    entidade_nome: str
+    severidade: Literal["critico", "atencao"]
+    titulo: str
+    fonte: str
+    data_referencia: Optional[date] = None
+    aba_destino: str
+
+
+class IntegrityAlertsResponse(BaseModel):
+    cnpj: str
+    total: int
+    total_criticos: int
+    total_atencao: int
+    alertas: List[IntegrityAlertSchema]
+    data_processamento: Optional[date] = None
 
 # ── Teia Societária (Grafos) ───────────────────────────
 class NetworkNodeSchema(BaseModel):

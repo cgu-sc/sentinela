@@ -35,8 +35,13 @@ def load_socios(cnpj: str, engine=None) -> CacheLoadResult:
         return CacheLoadResult(
             pl.DataFrame(schema={
                 "cnpj": pl.Utf8,
+                "cpf_cnpj_socio": pl.Utf8,
                 "nome_socio": pl.Utf8,
+                "indicador_socio": pl.Utf8,
+                "data_exclusao_sociedade": pl.Date,
                 "data_processamento": pl.Date,
+                "is_falecido": pl.Boolean,
+                "is_cadunico": pl.Boolean,
             }),
             from_cache=False,
         )

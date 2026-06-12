@@ -13,6 +13,7 @@ import { useRouter } from "vue-router";
 import { extractCnpjRaiz } from "@/composables/useParsing";
 import { MONTH_LABELS } from "@/config/constants";
 import ObservationDialog from "./ObservationDialog.vue";
+import IntegrityAlertsDialog from "./IntegrityAlertsDialog.vue";
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -46,9 +47,12 @@ const props = defineProps({
   // Quando presentes, sobrepõem os valores globais do cnpjData.
   periodSummary: { type: Object,  default: null },  // { totalMov, valSemComp, percValSemComp }
   periodLoading: { type: Boolean, default: false },
+  integrityAlerts: { type: Object, default: null },
+  integrityAlertsLoading: { type: Boolean, default: false },
+  integrityAlertsError: { type: String, default: null },
 });
 
-const emit = defineEmits(["export", "generateNote"]);
+const emit = defineEmits(["export", "generateNote", "navigate-section"]);
 
 const copied = ref(false);
 const copyCnpj = () => {
@@ -202,6 +206,38 @@ const openObsDialog = () => {
 };
 
 const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
+const showIntegrityDialog = ref(false);
+
+const integrityAlertTypes = computed(() => {
+  const alerts = props.integrityAlerts?.alertas ?? [];
+  const unique = [];
+  const seen = new Set();
+
+  alerts.forEach((alert) => {
+    if (seen.has(alert.tipo)) return;
+    seen.add(alert.tipo);
+    unique.push(alert);
+  });
+
+  return unique.slice(0, 3);
+});
+
+const remainingIntegrityAlerts = computed(() =>
+  Math.max(0, (props.integrityAlerts?.total ?? 0) - integrityAlertTypes.value.length),
+);
+
+const integrityStatus = computed(() => {
+  if (props.integrityAlertsLoading) return "loading";
+  if (props.integrityAlertsError) return "error";
+  if ((props.integrityAlerts?.total ?? 0) > 0) return "alerts";
+  return "clear";
+});
+
+const openIntegrityDialog = () => {
+  if ((props.integrityAlerts?.total ?? 0) > 0) {
+    showIntegrityDialog.value = true;
+  }
+};
 </script>
 
 <template>
@@ -384,6 +420,77 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
       </div>
     </div>
 
+    <button
+      v-if="cnpjData"
+      class="integrity-strip"
+      :class="[
+        `integrity-strip--${integrityStatus}`,
+        { 'integrity-strip--clickable': integrityStatus === 'alerts' },
+      ]"
+      type="button"
+      :disabled="integrityStatus !== 'alerts'"
+      @click="openIntegrityDialog"
+    >
+      <span class="integrity-strip-title">
+        <i
+          :class="integrityAlertsLoading
+            ? 'pi pi-spin pi-spinner'
+            : integrityStatus === 'clear'
+              ? 'pi pi-check-circle'
+              : integrityStatus === 'error'
+                ? 'pi pi-times-circle'
+                : 'pi pi-shield'"
+        />
+        Alertas de integridade
+      </span>
+
+      <template v-if="integrityStatus === 'loading'">
+        <span class="integrity-strip-message">Verificando bases de integridade</span>
+      </template>
+
+      <template v-else-if="integrityStatus === 'error'">
+        <span class="integrity-strip-message">Informações indisponíveis</span>
+      </template>
+
+      <template v-else-if="integrityStatus === 'clear'">
+        <span class="integrity-strip-message">Nenhum alerta identificado</span>
+      </template>
+
+      <template v-else>
+        <span class="integrity-count integrity-count--total">
+          {{ integrityAlerts.total }} ocorrências
+        </span>
+        <span
+          v-if="integrityAlerts.total_criticos"
+          class="integrity-count integrity-count--critical"
+        >
+          {{ integrityAlerts.total_criticos }} críticas
+        </span>
+        <span
+          v-if="integrityAlerts.total_atencao"
+          class="integrity-count integrity-count--attention"
+        >
+          {{ integrityAlerts.total_atencao }} atenção
+        </span>
+        <span class="integrity-strip-divider" />
+        <span
+          v-for="alert in integrityAlertTypes"
+          :key="alert.tipo"
+          class="integrity-preview"
+          :class="`integrity-preview--${alert.severidade}`"
+        >
+          {{ alert.titulo }}
+        </span>
+        <span v-if="remainingIntegrityAlerts" class="integrity-preview integrity-preview--more">
+          +{{ remainingIntegrityAlerts }}
+        </span>
+        <span class="integrity-strip-action">
+          Ver detalhes
+          <i class="pi pi-arrow-right" />
+        </span>
+      </template>
+    </button>
+
     <!-- Painel de Rankings e Estatísticas -->
     <div class="header-ranking-panel" v-if="cnpjData">
       <div class="ranking-grid-new">
@@ -525,6 +632,11 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
       :cnpj="cnpj"
       :entity-name="tituloDisplay"
     />
+    <IntegrityAlertsDialog
+      v-model:visible="showIntegrityDialog"
+      :data="integrityAlerts"
+      @navigate="emit('navigate-section', $event)"
+    />
   </div>
 </template>
 
@@ -555,6 +667,107 @@ const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
   height: 2px;
   background: linear-gradient(90deg, var(--primary-color), transparent);
   opacity: 0.3;
+}
+
+.integrity-strip {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-muted) 4%, transparent);
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.integrity-strip:disabled {
+  opacity: 1;
+}
+
+.integrity-strip--clickable {
+  cursor: pointer;
+}
+
+.integrity-strip--clickable:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 35%, var(--card-border));
+  background: color-mix(in srgb, var(--primary-color) 5%, transparent);
+}
+
+.integrity-strip--clear {
+  color: var(--risk-low);
+}
+
+.integrity-strip--error {
+  color: var(--risk-critical);
+}
+
+.integrity-strip-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.integrity-strip-message {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.integrity-count,
+.integrity-preview {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0.15rem 0.42rem;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.integrity-count--critical,
+.integrity-preview--critico {
+  color: var(--risk-critical);
+  border-color: color-mix(in srgb, var(--risk-critical) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-critical) 9%, transparent);
+}
+
+.integrity-count--attention,
+.integrity-preview--atencao {
+  color: var(--risk-medium);
+  border-color: color-mix(in srgb, var(--risk-medium) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-medium) 9%, transparent);
+}
+
+.integrity-count--total,
+.integrity-preview--more {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+}
+
+.integrity-strip-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--card-border);
+}
+
+.integrity-strip-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  color: var(--primary-color);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .header-right-col {

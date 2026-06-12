@@ -13,7 +13,7 @@ from ..schemas.analytics import (
     PercentilesAnimationResponse, CrmTimelineDatasetResponse,
     CrmMedicoAlertasResponse, CrmRaioXResponse,
     EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
-    SociosResponse, NetworkResponse,
+    SociosResponse, IntegrityAlertsResponse, NetworkResponse,
     CnpjBootstrapResponse,
     GeograficoOrigemUfResponse,
     ClinicoIncompatibilidadeResponse,
@@ -85,6 +85,11 @@ def get_dados_farmacia(cnpj: str):
 def get_socios_farmacia(cnpj: str):
     """Retorna o quadro societário de um estabelecimento."""
     return AnalyticsService.get_socios_farmacia(cnpj)
+
+@router.get("/cnpj/{cnpj}/alertas-integridade", response_model=IntegrityAlertsResponse)
+def get_integrity_alerts(cnpj: str):
+    """Retorna alertas de integridade do estabelecimento e de seus vinculos diretos."""
+    return AnalyticsService.get_integrity_alerts(cnpj)
 
 @router.get("/cnpj/{cnpj}/network", response_model=NetworkResponse)
 def get_teia_grafo_nivel2(

@@ -75,6 +75,20 @@ function assertIntegrityAlerts(data) {
   });
 }
 
+function assertSocios(data) {
+  if (!data || !Array.isArray(data.socios)) {
+    throw new Error('Contrato invalido em socios: campo socios obrigatorio.');
+  }
+
+  data.socios.forEach((socio, index) => {
+    ['cnpj', 'cpf_cnpj_socio', 'indicador_socio', 'is_cadunico', 'is_esocial', 'is_falecido'].forEach((field) => {
+      if (socio?.[field] === undefined || socio?.[field] === null) {
+        throw new Error(`Contrato invalido em socios: socios[${index}].${field} obrigatorio.`);
+      }
+    });
+  });
+}
+
 function assertCrmDataLight(data) {
   if (!data || !Array.isArray(data.crms_interesse) || !data.summary) {
     throw new Error('Contrato invalido em crm-data: summary e crms_interesse obrigatorios.');
@@ -463,7 +477,6 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],
         ['falecidos', () => this.fetchFalecidos(clean, inicio, fim)],
         ['socios', () => this.fetchSocios(clean)],
-        ['alertas-integridade', () => this.fetchIntegrityAlerts(clean)],
         ['teia-n2', () => this.fetchNetwork(clean, inicio, fim)],
       ];
 
@@ -730,6 +743,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.sociosError   = null;
       try {
         const { data } = await axios.get(API_ENDPOINTS.analyticsSocios(clean));
+        assertSocios(data);
         if (this.sociosRequestKey !== clean) return;
         this.sociosData   = data;
         this.sociosLoaded = clean;

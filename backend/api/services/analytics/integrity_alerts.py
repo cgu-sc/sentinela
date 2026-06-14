@@ -7,12 +7,13 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
     alertas: list[IntegrityAlertSchema] = []
 
     for socio in socios_response.socios:
-        if socio.indicador_socio != "PF" or socio.data_exclusao_sociedade is not None:
+        if socio.indicador_socio != "PF":
             continue
 
         entidade_nome = socio.nome_socio or socio.cpf_cnpj_socio
+        vinculo_ativo = socio.data_exclusao_sociedade is None
 
-        if socio.is_falecido:
+        if socio.is_falecido and vinculo_ativo:
             alertas.append(
                 IntegrityAlertSchema(
                     tipo="socio_falecido",
@@ -20,14 +21,14 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
                     entidade_id=socio.cpf_cnpj_socio,
                     entidade_nome=entidade_nome,
                     severidade="critico",
-                    titulo="Socio falecido",
-                    fonte="Base unificada de obitos",
+                    titulo="Sócio falecido",
+                    fonte="Base unificada de óbitos",
                     data_referencia=socios_response.data_processamento,
                     aba_destino="socios",
                 )
             )
 
-        if socio.is_cadunico:
+        if socio.is_cadunico and vinculo_ativo:
             alertas.append(
                 IntegrityAlertSchema(
                     tipo="socio_cadunico",
@@ -35,8 +36,23 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
                     entidade_id=socio.cpf_cnpj_socio,
                     entidade_nome=entidade_nome,
                     severidade="atencao",
-                    titulo="Socio inscrito no CadUnico",
-                    fonte="Cadastro Unico",
+                    titulo="Sócio inscrito no CadÚnico",
+                    fonte="CadÚnico",
+                    data_referencia=socios_response.data_processamento,
+                    aba_destino="socios",
+                )
+            )
+
+        if socio.is_esocial:
+            alertas.append(
+                IntegrityAlertSchema(
+                    tipo="socio_esocial",
+                    escopo="socio",
+                    entidade_id=socio.cpf_cnpj_socio,
+                    entidade_nome=entidade_nome,
+                    severidade="atencao",
+                    titulo="Sócio com vínculo trabalhista em outro CNPJ",
+                    fonte="eSocial",
                     data_referencia=socios_response.data_processamento,
                     aba_destino="socios",
                 )

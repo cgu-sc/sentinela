@@ -32,7 +32,7 @@ def load_socios(cnpj: str, engine=None) -> CacheLoadResult:
         if not pdf.empty:
             return CacheLoadResult(pl.from_pandas(pdf), from_cache=False)
 
-        return CacheLoadResult(
+            return CacheLoadResult(
             pl.DataFrame(schema={
                 "cnpj": pl.Utf8,
                 "cpf_cnpj_socio": pl.Utf8,
@@ -42,6 +42,7 @@ def load_socios(cnpj: str, engine=None) -> CacheLoadResult:
                 "data_processamento": pl.Date,
                 "is_falecido": pl.Boolean,
                 "is_cadunico": pl.Boolean,
+                "is_esocial": pl.Boolean,
             }),
             from_cache=False,
         )

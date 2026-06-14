@@ -577,6 +577,7 @@ class SocioSchema(BaseModel):
     data_nascimento_representante: Optional[date] = None
     is_falecido: Optional[bool] = False
     is_cadunico: bool
+    is_esocial: bool
 
 class SociosResponse(BaseModel):
     cnpj: str

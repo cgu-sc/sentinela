@@ -750,32 +750,158 @@ GO
 CREATE CLUSTERED INDEX ix_cpfs_vivos ON #cpfs_vivos(cpf);
 GO
 
+IF OBJECT_ID('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.esocial_cnpj_trabalhador_ano nao encontrada para marcar socios do eSocial.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'id_cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'cpf_trabalhador') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'cbo') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'dt_rescisao') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.esocial_cnpj_trabalhador_ano sem colunas obrigatorias id_cnpj/cpf_trabalhador/cbo/dt_rescisao.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #cbo_esocial_permitido;
+GO
+SELECT
+    V.cbo,
+    V.motivo
+INTO #cbo_esocial_permitido
+FROM (VALUES
+    (411005, 'Auxiliar de escritorio'),
+    (411010, 'Assistente administrativo'),
+    (411030, 'Auxiliar de pessoal'),
+    (412205, 'Continuo'),
+    (413110, 'Auxiliar de contabilidade'),
+    (414110, 'Armazenista'),
+    (414125, 'Estoquista'),
+    (421105, 'Atendente comercial'),
+    (421110, 'Bilheteiro de transportes coletivos'),
+    (421125, 'Operador de caixa'),
+    (421205, 'Recebedor de apostas'),
+    (511110, 'Comissario de trem'),
+    (512105, 'Empregado domestico'),
+    (513435, 'Atendente de lanchonete'),
+    (514320, 'Faxineiro'),
+    (519110, 'Motofretista'),
+    (521110, 'Vendedor de comercio varejista'),
+    (521130, 'Atendente de farmacia balconista'),
+    (521140, 'Atendente de lojas e mercados'),
+    (784205, 'Alimentador de linha de producao')
+) AS V(cbo, motivo);
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_cbo_esocial_permitido
+ON #cbo_esocial_permitido(cbo);
+GO
+
+DROP TABLE IF EXISTS #esocial_vinculo_trabalhista;
+GO
+SELECT DISTINCT
+    CAST(E.cpf_trabalhador AS CHAR(11)) AS cpf,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj_esocial
+INTO #esocial_vinculo_trabalhista
+FROM temp_CGUSC.fp.esocial_cnpj_trabalhador_ano E
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.id = E.id_cnpj
+CROSS APPLY (
+    SELECT TRY_CONVERT(INT, E.cbo) AS cbo_int
+) CBO
+WHERE E.cpf_trabalhador IS NOT NULL
+  AND E.dt_rescisao IS NULL
+  AND CBO.cbo_int IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM #cbo_esocial_permitido X
+      WHERE X.cbo = CBO.cbo_int
+  );
+GO
+CREATE CLUSTERED INDEX ix_esocial_vinculo_trabalhista
+ON #esocial_vinculo_trabalhista(cpf, cnpj_esocial);
+GO
+
 GO
 DROP TABLE IF EXISTS #temp_metadata_cpfs;
 GO
-SELECT c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)) AS nome,
-    CAST(c.dataNascimento AS DATE) AS dataNascimento,
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
-INTO #temp_metadata_cpfs
-FROM #cpfs_vivos v
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = v.cpf
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN #cpfs_vivos v_cad ON v_cad.cpf = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE c.CPF IS NOT NULL;
+CREATE TABLE #temp_metadata_cpfs (
+    CPF CHAR(11) NOT NULL,
+    nome VARCHAR(100) NULL,
+    dataNascimento DATE NULL,
+    is_cadunico TINYINT NOT NULL,
+    CONSTRAINT PK_temp_metadata_cpfs PRIMARY KEY CLUSTERED (CPF)
+);
 GO
 
-WITH CTE AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) as rn
-    FROM #temp_metadata_cpfs
-)
-DELETE FROM CTE WHERE rn > 1;
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
 GO
-CREATE CLUSTERED INDEX ix_meta_cpfs ON #temp_metadata_cpfs(CPF);
+SELECT cpf
+INTO #cpfs_metadata_lote
+FROM #cpfs_vivos;
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
+INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
+SELECT
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 
@@ -806,6 +932,20 @@ SELECT DISTINCT
     CAST(cobi_rep.dataNascimento AS DATE)                     AS data_nascimento_representante,
     CAST(GETDATE() AS SMALLDATETIME)                          AS data_processamento,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CAST(
+        CASE
+            WHEN soc.indSocio = 'PF'
+             AND soc.dataExclusaoSociedade IS NULL
+             AND EXISTS (
+                 SELECT 1
+                 FROM #esocial_vinculo_trabalhista E
+                 WHERE E.cpf = soc.cpfcnpjSocio
+                   AND E.cnpj_esocial <> soc.cnpj
+             )
+                THEN 1
+            ELSE 0
+        END AS TINYINT
+    ) AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 INTO temp_CGUSC.fp.dados_socios
 FROM temp_CGUSC.fp.lista_cnpjs lst
@@ -837,7 +977,7 @@ GO
 INSERT INTO temp_CGUSC.fp.dados_socios (
     cpf_cnpj_socio, cnpj, indicador_socio, nome_socio, municipio, uf,
     data_entrada_sociedade, percentual_qualificacao, descricao_qualificacao,
-    data_nascimento_socio, data_processamento, is_cadunico, is_falecido
+    data_nascimento_socio, data_processamento, is_cadunico, is_esocial, is_falecido
 )
 SELECT 
     f.cpfResponsavel,
@@ -852,6 +992,18 @@ SELECT
     CAST(cobi.dataNascimento AS DATE)      AS data_nascimento_socio,
     CAST(GETDATE() AS SMALLDATETIME)       AS data_processamento,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CAST(
+        CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM #esocial_vinculo_trabalhista E
+                WHERE E.cpf = f.cpfResponsavel
+                  AND E.cnpj_esocial <> f.cnpj
+            )
+                THEN 1
+            ELSE 0
+        END AS TINYINT
+    ) AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 FROM temp_CGUSC.fp.dados_farmacia f
 LEFT JOIN #cnpjs_com_socios s ON s.cnpj = f.cnpj
@@ -963,25 +1115,80 @@ CREATE INDEX ix_t2_raw_cnpj ON #teia_fonte_nivel2_raw (cnpj_empresa);
 GO
 
 -- Enriquecer dicion�rio com representantes do N2
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
+GO
+SELECT DISTINCT
+    raw.cpf_representante AS cpf
+INTO #cpfs_metadata_lote
+FROM #teia_fonte_nivel2_raw raw
+WHERE raw.cpf_representante IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM #temp_metadata_cpfs M
+      WHERE M.CPF = raw.cpf_representante
+  );
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
 INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
 SELECT
-    c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)),
-    CAST(c.dataNascimento AS DATE),
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END
-FROM (SELECT DISTINCT cpf_representante FROM #teia_fonte_nivel2_raw WHERE cpf_representante IS NOT NULL) novos
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpf_representante
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN (SELECT DISTINCT cpf_representante FROM #teia_fonte_nivel2_raw WHERE cpf_representante IS NOT NULL) novos_cad
-        ON novos_cad.cpf_representante = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpf_representante);
-GO
-WITH CTE AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) AS rn FROM #temp_metadata_cpfs)
-DELETE FROM CTE WHERE rn > 1;
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 -- Dicion�rio de metadados das empresas do N2
@@ -1082,24 +1289,79 @@ GO
 CREATE CLUSTERED INDEX ix_novos_cpfs_n3 ON #novos_cpfs_n3 (cpf);
 GO
 
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
+GO
+SELECT DISTINCT
+    novos.cpf
+INTO #cpfs_metadata_lote
+FROM #novos_cpfs_n3 novos
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM #temp_metadata_cpfs M
+    WHERE M.CPF = novos.cpf
+);
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
 INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
 SELECT
-    c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)),
-    CAST(c.dataNascimento AS DATE),
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END
-FROM #novos_cpfs_n3 novos
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpf
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN #novos_cpfs_n3 novos_cad ON novos_cad.cpf = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpf);
-GO
-WITH CTE AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) AS rn FROM #temp_metadata_cpfs)
-DELETE FROM CTE WHERE rn > 1;
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 -- (a) S�cios formais das empresas do N2
@@ -1212,34 +1474,88 @@ CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empr
 --------------------------------------------------------------
 
 -- Enriquecer dicion�rio com representantes do N4
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
+GO
+SELECT DISTINCT
+    s.CpfRepresentante AS cpf
+INTO #cpfs_metadata_lote
+FROM (
+    SELECT DISTINCT cpf_cnpj_socio
+    FROM temp_CGUSC.fp.teia_fonte_nivel3
+    WHERE cpf_cnpj_socio IS NOT NULL
+      AND cpf_cnpj_socio <> '99999999999999'
+) n3
+INNER JOIN db_CNPJ.dbo.socios s
+    ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
+WHERE s.CpfRepresentante <> '00000000000'
+  AND s.CpfRepresentante IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM #temp_metadata_cpfs M
+      WHERE M.CPF = s.CpfRepresentante
+  );
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
 INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
 SELECT
-    c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)),
-    CAST(c.dataNascimento AS DATE),
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END
-FROM (
-    SELECT DISTINCT s.CpfRepresentante AS cpf
-    FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL AND cpf_cnpj_socio <> '99999999999999') n3
-    INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
-    WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
-) novos
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpf
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN (
-        SELECT DISTINCT s.CpfRepresentante AS cpf
-        FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL AND cpf_cnpj_socio <> '99999999999999') n3
-        INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
-        WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
-    ) novos_cad ON novos_cad.cpf = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpf);
-GO
-WITH CTE AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) AS rn FROM #temp_metadata_cpfs)
-DELETE FROM CTE WHERE rn > 1;
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 -- (a) V�nculos formais do N4

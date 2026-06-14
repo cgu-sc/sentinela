@@ -222,10 +222,6 @@ const integrityAlertTypes = computed(() => {
   return unique.slice(0, 3);
 });
 
-const remainingIntegrityAlerts = computed(() =>
-  Math.max(0, (props.integrityAlerts?.total ?? 0) - integrityAlertTypes.value.length),
-);
-
 const integrityStatus = computed(() => {
   if (props.integrityAlertsLoading) return "loading";
   if (props.integrityAlertsError) return "error";
@@ -441,7 +437,7 @@ const openIntegrityDialog = () => {
                 ? 'pi pi-times-circle'
                 : 'pi pi-shield'"
         />
-        Alertas de integridade
+        Alertas
       </span>
 
       <template v-if="integrityStatus === 'loading'">
@@ -457,22 +453,6 @@ const openIntegrityDialog = () => {
       </template>
 
       <template v-else>
-        <span class="integrity-count integrity-count--total">
-          {{ integrityAlerts.total }} ocorrências
-        </span>
-        <span
-          v-if="integrityAlerts.total_criticos"
-          class="integrity-count integrity-count--critical"
-        >
-          {{ integrityAlerts.total_criticos }} críticas
-        </span>
-        <span
-          v-if="integrityAlerts.total_atencao"
-          class="integrity-count integrity-count--attention"
-        >
-          {{ integrityAlerts.total_atencao }} atenção
-        </span>
-        <span class="integrity-strip-divider" />
         <span
           v-for="alert in integrityAlertTypes"
           :key="alert.tipo"
@@ -480,9 +460,6 @@ const openIntegrityDialog = () => {
           :class="`integrity-preview--${alert.severidade}`"
         >
           {{ alert.titulo }}
-        </span>
-        <span v-if="remainingIntegrityAlerts" class="integrity-preview integrity-preview--more">
-          +{{ remainingIntegrityAlerts }}
         </span>
         <span class="integrity-strip-action">
           Ver detalhes
@@ -720,7 +697,6 @@ const openIntegrityDialog = () => {
   color: var(--text-muted);
 }
 
-.integrity-count,
 .integrity-preview {
   display: inline-flex;
   align-items: center;
@@ -733,30 +709,16 @@ const openIntegrityDialog = () => {
   white-space: nowrap;
 }
 
-.integrity-count--critical,
 .integrity-preview--critico {
   color: var(--risk-critical);
   border-color: color-mix(in srgb, var(--risk-critical) 30%, transparent);
   background: color-mix(in srgb, var(--risk-critical) 9%, transparent);
 }
 
-.integrity-count--attention,
 .integrity-preview--atencao {
   color: var(--risk-medium);
   border-color: color-mix(in srgb, var(--risk-medium) 30%, transparent);
   background: color-mix(in srgb, var(--risk-medium) 9%, transparent);
-}
-
-.integrity-count--total,
-.integrity-preview--more {
-  color: var(--text-color);
-  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
-}
-
-.integrity-strip-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--card-border);
 }
 
 .integrity-strip-action {

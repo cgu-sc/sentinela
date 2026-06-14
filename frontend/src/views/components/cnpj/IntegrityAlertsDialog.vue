@@ -47,25 +47,10 @@ const navigate = (alert) => {
   <Dialog
     v-model:visible="dialogVisible"
     modal
-    header="Alertas de integridade"
+    header="Alertas"
     :style="{ width: '720px' }"
     class="integrity-alerts-dialog"
   >
-    <div class="integrity-summary">
-      <div class="integrity-summary-item">
-        <span>Total</span>
-        <strong>{{ data?.total ?? 0 }}</strong>
-      </div>
-      <div class="integrity-summary-item integrity-summary-item--critical">
-        <span>Críticos</span>
-        <strong>{{ data?.total_criticos ?? 0 }}</strong>
-      </div>
-      <div class="integrity-summary-item integrity-summary-item--attention">
-        <span>Atenção</span>
-        <strong>{{ data?.total_atencao ?? 0 }}</strong>
-      </div>
-    </div>
-
     <div class="integrity-list">
       <article
         v-for="alert in alerts"
@@ -113,42 +98,6 @@ const navigate = (alert) => {
 </template>
 
 <style scoped>
-.integrity-summary {
-  display: flex;
-  gap: 0.75rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--card-border);
-}
-
-.integrity-summary-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
-  min-width: 110px;
-  color: var(--text-muted);
-}
-
-.integrity-summary-item span {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.integrity-summary-item strong {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-color);
-  font-variant-numeric: tabular-nums;
-}
-
-.integrity-summary-item--critical strong {
-  color: var(--risk-critical);
-}
-
-.integrity-summary-item--attention strong {
-  color: var(--risk-medium);
-}
-
 .integrity-list {
   display: flex;
   flex-direction: column;

@@ -426,7 +426,10 @@ watch(
     if (access?.status !== "valid") return;
 
     if (newCnpj) {
-      await loadActiveTabData(perfSession, "initial");
+      await Promise.all([
+        cnpjDetailStore.fetchIntegrityAlerts(newCnpj),
+        loadActiveTabData(perfSession, "initial"),
+      ]);
     }
   },
   { immediate: true },

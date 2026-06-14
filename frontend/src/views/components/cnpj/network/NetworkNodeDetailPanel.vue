@@ -208,6 +208,15 @@ function openEstablishmentDetail() {
         </div>
 
         <div
+          v-if="node.type === 'PF' && node.is_esocial"
+          class="panel-field esocial-field"
+        >
+          <i class="pi pi-briefcase" />
+          <span>eSocial</span>
+          <span class="esocial-badge">Vinculo em outro CNPJ</span>
+        </div>
+
+        <div
           v-if="node.type !== 'PF' && node.is_cnae_farmacia_ausente"
           class="panel-field cnae-alert-field"
         >
@@ -597,6 +606,7 @@ function openEstablishmentDetail() {
 }
 
 .cadunico-badge,
+.esocial-badge,
 .cnae-alert-badge,
 .par-alert-badge,
 .deceased-badge {
@@ -613,6 +623,20 @@ function openEstablishmentDetail() {
   border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
   background: color-mix(in srgb, #f59e0b 16%, transparent);
   color: color-mix(in srgb, #f59e0b 82%, var(--text-color));
+}
+
+.esocial-field {
+  color: color-mix(in srgb, var(--status-success) 78%, var(--text-color));
+}
+
+.esocial-field i {
+  color: var(--status-success);
+}
+
+.esocial-badge {
+  border: 1px solid color-mix(in srgb, var(--status-success) 44%, transparent);
+  background: color-mix(in srgb, var(--status-success) 14%, transparent);
+  color: color-mix(in srgb, var(--status-success) 86%, var(--text-color));
 }
 
 .cnae-alert-field {

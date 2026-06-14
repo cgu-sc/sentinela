@@ -108,6 +108,21 @@ export function buildNetworkStylesheet() {
   });
 
   styles.push({
+    selector: "node.esocial-pf",
+    style: {
+      "border-width": 4,
+      "border-color": "#22c55e",
+      "border-style": "solid",
+      "shadow-blur": 10,
+      "shadow-color": "rgba(34, 197, 94, 0.42)",
+      "shadow-opacity": 0.85,
+      "shadow-offset-x": 0,
+      "shadow-offset-y": 0,
+      "z-index": 11,
+    },
+  });
+
+  styles.push({
     selector: "node.deceased-pf",
     style: {
       opacity: 0.68,

@@ -121,6 +121,7 @@ const readAlertNodes = () => {
         label: node.data("label"),
         is_falecido: node.data("is_falecido"),
         is_cadunico: node.data("is_cadunico"),
+        is_esocial: node.data("is_esocial"),
         is_cnae_farmacia_ausente: node.data("is_cnae_farmacia_ausente"),
         is_par: node.data("is_par"),
         qtd_processos_par: node.data("qtd_processos_par"),
@@ -143,6 +144,7 @@ const networkAlertGroups = computed(() => {
       name: getPersonAlertName(node),
       is_falecido: isTruthyFlag(node.is_falecido),
       is_cadunico: isTruthyFlag(node.is_cadunico),
+      is_esocial: isTruthyFlag(node.is_esocial),
     }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
   const companies = alertNodes
@@ -180,6 +182,12 @@ const networkAlertGroups = computed(() => {
       label: "CadÚnico",
       icon: "legend-cadunico-ring",
       items: people.filter((node) => node.is_cadunico),
+    },
+    {
+      key: "esocial",
+      label: "eSocial",
+      icon: "legend-esocial-ring",
+      items: people.filter((node) => node.is_esocial),
     },
   ].filter((group) => group.items.length > 0);
 });
@@ -1424,6 +1432,7 @@ async function buildGraph(data, { presentationState = null } = {}) {
           cnae_secundario: n.cnae_secundario,
           is_falecido: isTruthyFlag(n.is_falecido),
           is_cadunico: isTruthyFlag(n.is_cadunico),
+          is_esocial: isTruthyFlag(n.is_esocial),
           is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
           is_par: isTruthyFlag(n.is_par),
           qtd_processos_par: n.qtd_processos_par || 0,
@@ -1582,6 +1591,7 @@ async function expandNode(nodeId) {
             situacao_rf: n.situacao_rf,
             is_falecido: isTruthyFlag(n.is_falecido),
             is_cadunico: isTruthyFlag(n.is_cadunico),
+            is_esocial: isTruthyFlag(n.is_esocial),
             is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
             is_par: isTruthyFlag(n.is_par),
             qtd_processos_par: n.qtd_processos_par || 0,

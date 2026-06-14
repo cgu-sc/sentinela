@@ -100,6 +100,16 @@ const emit = defineEmits(["preview", "clear-preview", "select"]);
   flex-shrink: 0;
 }
 
+.legend-esocial-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 3px solid var(--status-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--status-success) 18%, transparent);
+  background: color-mix(in srgb, var(--status-success) 20%, transparent);
+  flex-shrink: 0;
+}
+
 .legend-cnae-alert {
   width: 14px;
   height: 14px;

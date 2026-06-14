@@ -27,6 +27,10 @@ defineProps({
     <span class="legend-label">PAR</span>
   </div>
   <div class="legend-item">
+    <span class="legend-esocial-ring"></span>
+    <span class="legend-label">eSocial</span>
+  </div>
+  <div class="legend-item">
     <span class="legend-deceased-cross"></span>
     <span class="legend-label">Falecido</span>
   </div>
@@ -69,6 +73,16 @@ defineProps({
   border-radius: 50%;
   border: 4px double #f59e0b;
   background: #0ea5e9;
+  flex-shrink: 0;
+}
+
+.legend-esocial-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 3px solid var(--status-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--status-success) 18%, transparent);
+  background: color-mix(in srgb, var(--status-success) 20%, transparent);
   flex-shrink: 0;
 }
 

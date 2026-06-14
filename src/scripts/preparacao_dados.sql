@@ -904,6 +904,25 @@ LEFT JOIN #cpf_cadunico_lote CAD
     ON CAD.CPF = B.CPF;
 GO
 
+DROP TABLE IF EXISTS #dados_socios_esocial;
+GO
+SELECT DISTINCT
+    CAST(soc.cpfcnpjSocio AS VARCHAR(14)) AS cpf_cnpj_socio,
+    CAST(soc.cnpj AS VARCHAR(14)) AS cnpj
+INTO #dados_socios_esocial
+FROM temp_CGUSC.fp.lista_cnpjs lst
+INNER JOIN db_CNPJ.dbo.socios soc
+    ON soc.cnpj = lst.cnpj
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = soc.cpfcnpjSocio
+   AND ESO.cnpj_esocial <> soc.cnpj
+WHERE soc.indSocio = 'PF'
+  AND soc.dataExclusaoSociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_dados_socios_esocial
+ON #dados_socios_esocial(cpf_cnpj_socio, cnpj);
+GO
+
 
 --------------------------------------------------------------
 -- ETAPA 3: Sócios formais das farmácias (N1)
@@ -932,20 +951,7 @@ SELECT DISTINCT
     CAST(cobi_rep.dataNascimento AS DATE)                     AS data_nascimento_representante,
     CAST(GETDATE() AS SMALLDATETIME)                          AS data_processamento,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
-    CAST(
-        CASE
-            WHEN soc.indSocio = 'PF'
-             AND soc.dataExclusaoSociedade IS NULL
-             AND EXISTS (
-                 SELECT 1
-                 FROM #esocial_vinculo_trabalhista E
-                 WHERE E.cpf = soc.cpfcnpjSocio
-                   AND E.cnpj_esocial <> soc.cnpj
-             )
-                THEN 1
-            ELSE 0
-        END AS TINYINT
-    ) AS is_esocial,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 INTO temp_CGUSC.fp.dados_socios
 FROM temp_CGUSC.fp.lista_cnpjs lst
@@ -956,6 +962,9 @@ LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = soc.cpfcnpjSocio AND soc.indSocio = 'PF'
 LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = soc.CpfRepresentante AND soc.CpfRepresentante <> '00000000000'
 LEFT JOIN db_CNPJ.dbo.Qualificacao AS qua_rep ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
+LEFT JOIN #dados_socios_esocial ESO
+    ON ESO.cpf_cnpj_socio = soc.cpfcnpjSocio
+   AND ESO.cnpj = soc.cnpj
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = soc.cpfcnpjSocio;
 GO
 
@@ -972,6 +981,25 @@ GO
 SELECT DISTINCT cnpj INTO #cnpjs_com_socios FROM temp_CGUSC.fp.dados_socios;
 GO
 CREATE CLUSTERED INDEX ix_cnpjs_com_socios ON #cnpjs_com_socios (cnpj);
+GO
+
+DROP TABLE IF EXISTS #responsaveis_individuais_esocial;
+GO
+SELECT DISTINCT
+    CAST(f.cpfResponsavel AS VARCHAR(14)) AS cpf_cnpj_socio,
+    CAST(f.cnpj AS VARCHAR(14)) AS cnpj
+INTO #responsaveis_individuais_esocial
+FROM temp_CGUSC.fp.dados_farmacia f
+LEFT JOIN #cnpjs_com_socios s
+    ON s.cnpj = f.cnpj
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = f.cpfResponsavel
+   AND ESO.cnpj_esocial <> f.cnpj
+WHERE s.cnpj IS NULL
+  AND f.cpfResponsavel IS NOT NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_responsaveis_individuais_esocial
+ON #responsaveis_individuais_esocial(cpf_cnpj_socio, cnpj);
 GO
 
 INSERT INTO temp_CGUSC.fp.dados_socios (
@@ -992,22 +1020,14 @@ SELECT
     CAST(cobi.dataNascimento AS DATE)      AS data_nascimento_socio,
     CAST(GETDATE() AS SMALLDATETIME)       AS data_processamento,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
-    CAST(
-        CASE
-            WHEN EXISTS (
-                SELECT 1
-                FROM #esocial_vinculo_trabalhista E
-                WHERE E.cpf = f.cpfResponsavel
-                  AND E.cnpj_esocial <> f.cnpj
-            )
-                THEN 1
-            ELSE 0
-        END AS TINYINT
-    ) AS is_esocial,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 FROM temp_CGUSC.fp.dados_farmacia f
 LEFT JOIN #cnpjs_com_socios s ON s.cnpj = f.cnpj
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = f.cpfResponsavel
+LEFT JOIN #responsaveis_individuais_esocial ESO
+    ON ESO.cpf_cnpj_socio = f.cpfResponsavel
+   AND ESO.cnpj = f.cnpj
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = f.cpfResponsavel
 WHERE s.cnpj IS NULL
   AND f.cpfResponsavel IS NOT NULL;
@@ -1112,6 +1132,23 @@ GO
 CREATE CLUSTERED INDEX ix_t2_raw ON #teia_fonte_nivel2_raw (cpf_cnpj_socio, cnpj_empresa);
 GO
 CREATE INDEX ix_t2_raw_cnpj ON #teia_fonte_nivel2_raw (cnpj_empresa);
+GO
+
+DROP TABLE IF EXISTS #teia_nivel2_esocial;
+GO
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa
+INTO #teia_nivel2_esocial
+FROM #teia_fonte_nivel2_raw raw
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = raw.cpf_cnpj_socio
+   AND ESO.cnpj_esocial <> raw.cnpj_empresa
+WHERE raw.indicador_socio = 'PF'
+  AND raw.data_exclusao_sociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_teia_nivel2_esocial
+ON #teia_nivel2_esocial(cpf_cnpj_socio, cnpj_empresa);
 GO
 
 -- Enriquecer dicion�rio com representantes do N2
@@ -1242,12 +1279,16 @@ SELECT DISTINCT
     m.uf,
     CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_farmacia_fp,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 INTO temp_CGUSC.fp.teia_fonte_nivel2
 FROM #teia_fonte_nivel2_raw raw
 INNER JOIN #metadata_empresas m ON m.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = raw.cpf_cnpj_socio
+LEFT JOIN #teia_nivel2_esocial ESO
+    ON ESO.cpf_cnpj_socio = raw.cpf_cnpj_socio
+   AND ESO.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = raw.cpf_cnpj_socio;
 GO
 CREATE CLUSTERED INDEX cx_t2_final ON temp_CGUSC.fp.teia_fonte_nivel2 (cpf_cnpj_socio, cnpj_empresa);
@@ -1437,6 +1478,23 @@ GO
 CREATE CLUSTERED INDEX ix_t3_raw ON #teia_fonte_nivel3_raw (cnpj_empresa, cpf_cnpj_socio);
 GO
 
+DROP TABLE IF EXISTS #teia_nivel3_esocial;
+GO
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa
+INTO #teia_nivel3_esocial
+FROM #teia_fonte_nivel3_raw raw
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = raw.cpf_cnpj_socio
+   AND ESO.cnpj_esocial <> raw.cnpj_empresa
+WHERE raw.indicador_socio = 'PF'
+  AND raw.data_exclusao_sociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_teia_nivel3_esocial
+ON #teia_nivel3_esocial(cpf_cnpj_socio, cnpj_empresa);
+GO
+
 -- Teia N�vel 3 Final
 GO
 DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
@@ -1454,6 +1512,7 @@ SELECT
     COALESCE(CAST(ibge.no_municipio AS VARCHAR(60)), raw.municipio_direto) AS municipio,
     COALESCE(CAST(ibge.sg_uf AS CHAR(2)), raw.uf_direto)                  AS uf,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 INTO temp_CGUSC.fp.teia_fonte_nivel3
 FROM #teia_fonte_nivel3_raw raw
@@ -1462,6 +1521,9 @@ LEFT JOIN db_CNPJ.dbo.CNPJ pj_socio ON pj_socio.cnpj = raw.cpf_cnpj_socio AND ra
 LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.cpf_representante
 LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = raw.CodMunicipio
 LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
+LEFT JOIN #teia_nivel3_esocial ESO
+    ON ESO.cpf_cnpj_socio = raw.cpf_cnpj_socio
+   AND ESO.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = raw.cpf_cnpj_socio;
 GO
 CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
@@ -1623,6 +1685,25 @@ FROM (
 LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.cpf_representante
 WHERE raw.rn = 1;
 GO
+CREATE CLUSTERED INDEX ix_t4_raw ON #teia_fonte_nivel4_raw (cpf_cnpj_socio, cnpj_empresa);
+GO
+
+DROP TABLE IF EXISTS #teia_nivel4_esocial;
+GO
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa
+INTO #teia_nivel4_esocial
+FROM #teia_fonte_nivel4_raw raw
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = raw.cpf_cnpj_socio
+   AND ESO.cnpj_esocial <> raw.cnpj_empresa
+WHERE raw.indicador_socio = 'PF'
+  AND raw.data_exclusao_sociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_teia_nivel4_esocial
+ON #teia_nivel4_esocial(cpf_cnpj_socio, cnpj_empresa);
+GO
 
 -- Enriquecer metadados das NOVAS empresas do N4
 GO
@@ -1669,12 +1750,16 @@ SELECT DISTINCT
     m.uf,
     CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_farmacia_fp,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 INTO temp_CGUSC.fp.teia_fonte_nivel4
 FROM #teia_fonte_nivel4_raw raw
 INNER JOIN #metadata_empresas m ON m.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = raw.cpf_cnpj_socio
+LEFT JOIN #teia_nivel4_esocial ESO
+    ON ESO.cpf_cnpj_socio = raw.cpf_cnpj_socio
+   AND ESO.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = raw.cpf_cnpj_socio;
 GO
 CREATE CLUSTERED INDEX cx_t4_final ON temp_CGUSC.fp.teia_fonte_nivel4 (cpf_cnpj_socio, cnpj_empresa);

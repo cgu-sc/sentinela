@@ -211,6 +211,7 @@ def _n2_n4_node_schema() -> dict:
         "classification_version": pl.Int16,
         "is_falecido": pl.Boolean,
         "is_cadunico": pl.Boolean,
+        "is_esocial": pl.Boolean,
         "is_cnae_farmacia_ausente": pl.Boolean,
         **_par_fields(),
     }
@@ -227,6 +228,7 @@ def _n3_node_schema() -> dict:
         "uf": pl.Utf8,
         "is_falecido": pl.Boolean,
         "is_cadunico": pl.Boolean,
+        "is_esocial": pl.Boolean,
         "is_cnae_farmacia_ausente": pl.Boolean,
         **_par_fields(),
     }

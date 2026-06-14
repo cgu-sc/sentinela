@@ -627,6 +627,7 @@ class NetworkNodeSchema(BaseModel):
     situacao_rf: Optional[str] = None
     is_falecido: Optional[bool] = False
     is_cadunico: bool
+    is_esocial: bool
     is_cnae_farmacia_ausente: bool
     is_par: Optional[bool] = False
     qtd_processos_par: Optional[int] = 0

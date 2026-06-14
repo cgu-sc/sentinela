@@ -229,6 +229,7 @@ def _build_network_node(row: dict, default_type: Optional[str] = None) -> Networ
         situacao_rf=row.get("situacao_rf"),
         is_falecido=row.get("is_falecido", False),
         is_cadunico=row["is_cadunico"],
+        is_esocial=row["is_esocial"],
         is_cnae_farmacia_ausente=row["is_cnae_farmacia_ausente"],
         is_par=False if is_pf else row.get("is_par", False),
         qtd_processos_par=0 if is_pf else row.get("qtd_processos_par", 0),

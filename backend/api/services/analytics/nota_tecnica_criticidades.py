@@ -48,7 +48,7 @@ _SECAO5_MAP = [
     ('incompatibilidade_patologica', '5.6',  'Vendas de medicamentos com incompatibilidade patológica'),
     ('teto',                         '5.7',  'Vendas no “teto máximo” para clientes da Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('polimedicamento',              '5.8',  'Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('ticket_medio',                 '5.10', 'Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
+    ('ticket_medio',                 '5.10', 'Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {farmacia} muito superior ao dos estabelecimentos de sua região'),
     ('receita_paciente',             '5.11', 'Faturamento médio mensal por cliente, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('per_capita',                   '5.12', 'Faturamento mensal per capita, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('alto_custo',                   '5.13', 'Vendas de medicamentos de alto custo realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
@@ -56,7 +56,7 @@ _SECAO5_MAP = [
     ('recorrencia_sistemica',        '5.15', 'Vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('dias_pico',                    '5.16', 'Vendas de medicamentos em dias de pico realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('dispersao_geografica',         '5.17', 'Vendas para pessoas residentes em outros Estados realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('hhi_crm',                      '5.19', 'Concentração atípica de registros de CRMs nas autorizações'),
+    ('hhi_crm',                      '5.19', 'Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB'),
     ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
 ]
 _SECAO5_ORDER = {key: idx for idx, (key, _, _) in enumerate(_SECAO5_MAP)}
@@ -89,6 +89,7 @@ _INDICADOR_QUADRO_META = {
 }
 
 _VOLUME_ATIPICO_VALOR_AUMENTO_COL = "volume_atipico_valor_aumento_atipico"
+_PARKINSON_BENSERAZIDA_LEVODOPA_GTIN = "7896226506371"
 
 _CLINICA_PATOLOGIA_META = {
     ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
@@ -641,7 +642,7 @@ def _format_risco_regional(value: Any) -> str:
     risco_float = _optional_float(value)
     if risco_float is None:
         return "—"
-    return f'{_format_decimal_pt(risco_float, 1)}x'
+    return f'{_format_decimal_pt(risco_float, 2)}x'
 
 
 def _indicador_valor_farmacia_header(formato: str) -> str:
@@ -859,7 +860,11 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
 
     headers = [
         "Indicador",
-        _indicador_valor_farmacia_header(context["formato"]),
+        (
+            "Percentual do valor"
+            if context["indicador_key"] == "dispersao_geografica"
+            else _indicador_valor_farmacia_header(context["formato"])
+        ),
         "Mediana região",
         "Risco vs. região",
         "Posição região",
@@ -1424,6 +1429,79 @@ def _count_incompatibilidade_patologica_tables(clinico_comp: dict[str, Any]) -> 
     return total
 
 
+def _add_parkinson_gtin_sem_comprovacao_text(
+    doc,
+    clinico_comp: dict[str, Any],
+    gtin_comp: dict[str, Any],
+    tabela_gtins_num: int,
+) -> None:
+    """Relaciona o achado clinico de Parkinson ao GTIN correspondente da Tabela 1."""
+    has_parkinson_menor_50 = any(
+        _is_parkinson_menor_50_item(item)
+        for item in clinico_comp["ranking_patologias"]
+    )
+    if not has_parkinson_menor_50:
+        return
+
+    medicamento = next(
+        (
+            row for row in gtin_comp["rows"]
+            if str(row["gtin"]) == _PARKINSON_BENSERAZIDA_LEVODOPA_GTIN
+        ),
+        None,
+    )
+    if medicamento is None:
+        raise RuntimeError(
+            f"GTIN {_PARKINSON_BENSERAZIDA_LEVODOPA_GTIN} obrigatorio para relacionar "
+            "o achado de Parkinson a Tabela 1 da Nota Tecnica."
+        )
+
+    valor_vendas = float(medicamento["valor_vendas"])
+    if valor_vendas <= 0:
+        raise RuntimeError(
+            f"GTIN {_PARKINSON_BENSERAZIDA_LEVODOPA_GTIN} sem valor total de vendas "
+            "valido para calcular o percentual sem comprovacao."
+        )
+    percentual_sem_comprovacao = (
+        float(medicamento["valor_sem_comprovacao"]) / valor_vendas
+    ) * 100.0
+
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(6)
+    _run(
+        paragraph,
+        f'Por fim, cabe destacar que, conforme a Tabela {tabela_gtins_num}, foi apurado para o medicamento “{medicamento["descricao"]}” (GTIN {medicamento["gtin"]}), destinado ao tratamento da doença de Parkinson, um total de ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        paragraph,
+        _format_brl_pt(medicamento["valor_sem_comprovacao"]),
+        color='334155',
+        size=10,
+        bold=True,
+    )
+    _run(
+        paragraph,
+        ' em “vendas sem comprovação”. Dessa forma, ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        paragraph,
+        f'{_format_decimal_pt(percentual_sem_comprovacao, 2)}%',
+        color='334155',
+        size=10,
+        bold=True,
+    )
+    _run(
+        paragraph,
+        ' das vendas do medicamento não tiveram comprovação.',
+        color='0F172A',
+        size=10,
+    )
+
+
 def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num: int) -> None:
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1966,7 +2044,7 @@ def _add_ticket_medio_text(doc, num: str, razao_social: str, ticket_comp: dict[s
     multiplicador_br_fmt = _format_decimal_pt(ticket_comp["multiplicador_brasil"], 2)
 
     heading = doc.add_heading(
-        f'{num} Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {razao_social}, muito superior ao dos estabelecimentos de sua região',
+        f'{num} Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {razao_social} muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:
@@ -2781,3 +2859,65 @@ def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_c
 
     _add_dispersao_geografica_origem_uf_table(doc, razao_social, dispersao_comp, tabela_num)
     _add_mapa_geografico_origem_uf(doc, razao_social, dispersao_comp)
+
+
+def _add_dispersao_geografica_regional_text(
+    doc,
+    razao_social: str,
+    dispersao_comp: dict[str, Any],
+) -> None:
+    """Explica o enquadramento regional do indicador de dispersao interestadual."""
+    percentual_fmt = _format_decimal_pt(dispersao_comp["percentual"], 2)
+    multiplicador_reg_fmt = _format_decimal_pt(dispersao_comp["multiplicador_regiao"], 2)
+    multiplicador_uf_fmt = _format_decimal_pt(dispersao_comp["multiplicador_uf"], 2)
+    multiplicador_br_fmt = _format_decimal_pt(dispersao_comp["multiplicador_brasil"], 2)
+
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(6)
+    _run(
+        paragraph,
+        f'Em relação à Farmácia {razao_social}, verificou-se que, {dispersao_comp["periodo_desc"]}, ',
+        color='0F172A',
+        size=10,
+    )
+    _run(paragraph, f'{percentual_fmt}%', color='334155', size=10, bold=True)
+    _run(
+        paragraph,
+        ' do valor autorizado em vendas de medicamentos do estabelecimento no âmbito do PFPB esteve associado a pessoas residentes em outros Estados. Tal percentual corresponde a ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        paragraph,
+        f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}',
+        color='334155',
+        size=10,
+        bold=True,
+    )
+    _run(
+        paragraph,
+        ' o percentual mediano do valor autorizado associado a pessoas residentes em outros Estados nas farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        paragraph,
+        f'{multiplicador_uf_fmt} {_vez_ou_vezes(multiplicador_uf_fmt)}',
+        color='334155',
+        size=10,
+        bold=True,
+    )
+    _run(
+        paragraph,
+        ' o percentual mediano das farmácias de seu Estado e ',
+        color='0F172A',
+        size=10,
+    )
+    _run(
+        paragraph,
+        f'{multiplicador_br_fmt} {_vez_ou_vezes(multiplicador_br_fmt)}',
+        color='334155',
+        size=10,
+        bold=True,
+    )
+    _run(paragraph, ' o das farmácias de todo o Brasil.', color='0F172A', size=10)

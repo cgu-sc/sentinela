@@ -6,10 +6,10 @@ const STORAGE_KEY = 'sentinela_indicadores_selected';
 let summaryAbortController = null;
 let cnpjsAbortController = null;
 
-export const useIndicadoresStore = defineStore('indicadores', {
+export const useRiskIndicatorsStore = defineStore('riskIndicators', {
   state: () => ({
-    /** Chave do indicador selecionado. Restaurado do storage para manter o foco do auditor. */
-    selectedIndicador: localStorage.getItem(STORAGE_KEY) || null,
+    /** Chave do indicador de risco selecionado. Restaurado do storage para manter o foco do auditor. */
+    selectedRiskIndicator: localStorage.getItem(STORAGE_KEY) || null,
     /** KPIs de resumo: total_critico, total_atencao, total_normal, total_sem_dados, mediana_reg, pct_acima_limiar */
     kpis: null,
     /** KPIs do escopo da tabela, util para filtro municipal sem perder o mapa da UF/regiao. */
@@ -21,7 +21,7 @@ export const useIndicadoresStore = defineStore('indicadores', {
     cnpjsTotal: 0,
     cnpjsPage: 1,
     cnpjsRows: 20,
-    cnpjsSortField: 'risco_reg',
+    cnpjsSortField: 'val_sem_comp',
     cnpjsSortOrder: -1,
     isLoading: false,
     isTableLoading: false,
@@ -29,15 +29,15 @@ export const useIndicadoresStore = defineStore('indicadores', {
   }),
 
   actions: {
-    setSelectedIndicador(indicador) {
+    setSelectedRiskIndicator(indicador) {
       if (!indicador) return;
-      this.selectedIndicador = indicador;
+      this.selectedRiskIndicator = indicador;
       localStorage.setItem(STORAGE_KEY, indicador);
     },
 
-    async fetchIndicadorAnalise(indicador, params = {}) {
+    async fetchRiskIndicatorSummary(indicador, params = {}) {
       if (!indicador) return;
-      this.setSelectedIndicador(indicador);
+      this.setSelectedRiskIndicator(indicador);
       this.isLoading = true;
       this.error = null;
 
@@ -65,9 +65,9 @@ export const useIndicadoresStore = defineStore('indicadores', {
       }
     },
 
-    async fetchIndicadorCnpjs(indicador, params = {}, tableState = {}) {
+    async fetchRiskIndicatorEstablishments(indicador, params = {}, tableState = {}) {
       if (!indicador) return;
-      this.setSelectedIndicador(indicador);
+      this.setSelectedRiskIndicator(indicador);
 
       const page = tableState.page ?? this.cnpjsPage;
       const pageSize = tableState.pageSize ?? this.cnpjsRows;
@@ -114,7 +114,7 @@ export const useIndicadoresStore = defineStore('indicadores', {
     },
 
     reset() {
-      this.selectedIndicador = null;
+      this.selectedRiskIndicator = null;
       localStorage.removeItem(STORAGE_KEY);
       this.kpis = null;
       this.cnpjKpis = null;
@@ -123,7 +123,7 @@ export const useIndicadoresStore = defineStore('indicadores', {
       this.cnpjsTotal = 0;
       this.cnpjsPage = 1;
       this.cnpjsRows = 20;
-      this.cnpjsSortField = 'risco_reg';
+      this.cnpjsSortField = 'val_sem_comp';
       this.cnpjsSortOrder = -1;
       this.error = null;
     },

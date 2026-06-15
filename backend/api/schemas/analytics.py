@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import date, datetime
 
 class AnalyticsKPISchema(BaseModel):
@@ -135,15 +135,15 @@ class RegionalResponse(BaseModel):
 
 
 class RegionalAnimationQuarterSchema(BaseModel):
-    """Dados de um trimestre para animação do scatter de posicionamento regional."""
-    trimestre: str          # ex: "2015-Q3"
+    """Dados de uma janela móvel trimestral para animação do scatter regional."""
+    trimestre: str          # mantido por compatibilidade; representa o mês inicial da janela
     inicio: date
     fim: date
     farmacias: List[RegionalFarmaciaSchema]
 
 
 class RegionalAnimationResponse(BaseModel):
-    """Payload completo para animação trimestral — todos os trimestres em uma única chamada."""
+    """Payload completo para animação — todas as janelas móveis em uma única chamada."""
     nome_regiao: str
     quarters: List[RegionalAnimationQuarterSchema]
 
@@ -153,7 +153,7 @@ class PercentilesPointSchema(BaseModel):
     score: float
 
 class PercentilesQuarterSchema(BaseModel):
-    """Dados de percentis de uma janela de 2 meses para animação da curva de risco."""
+    """Dados de percentis de uma janela móvel trimestral para animação da curva de risco."""
     inicio: date
     fim: date
     percentiles: List[PercentilesPointSchema]
@@ -315,11 +315,10 @@ class ClinicoMunicipalRankingRowSchema(BaseModel):
     cnpj: str
     razao_social: str
     is_alvo: bool
-    qtd_cpfs_distintos: int
-    qtd_cpfs_incompativeis: int
+    qtd_autorizacoes: int
     qtd_autorizacoes_incompativeis: int
+    valor_total_pago: float
     valor_incompativel_pago: float
-    percentual_cpfs_incompativeis: Optional[float] = None
     participacao_municipal: Optional[float] = None
 
 
@@ -577,6 +576,9 @@ class SocioSchema(BaseModel):
     data_nascimento_socio: Optional[date] = None
     data_nascimento_representante: Optional[date] = None
     is_falecido: Optional[bool] = False
+    is_cadunico: bool
+    is_esocial: bool
+    is_seguro_defeso: bool
 
 class SociosResponse(BaseModel):
     cnpj: str
@@ -584,12 +586,36 @@ class SociosResponse(BaseModel):
     data_processamento: Optional[date] = None
     from_cache: bool = False
 
+
+class IntegrityAlertSchema(BaseModel):
+    tipo: str
+    escopo: Literal["cnpj", "socio", "representante"]
+    entidade_id: str
+    entidade_nome: str
+    severidade: Literal["critico", "atencao"]
+    titulo: str
+    fonte: str
+    data_referencia: Optional[date] = None
+    aba_destino: str
+
+
+class IntegrityAlertsResponse(BaseModel):
+    cnpj: str
+    total: int
+    total_criticos: int
+    total_atencao: int
+    alertas: List[IntegrityAlertSchema]
+    data_processamento: Optional[date] = None
+
 # ── Teia Societária (Grafos) ───────────────────────────
 class NetworkNodeSchema(BaseModel):
     id: str
     label: str
     type: str                 # 'PF' | 'PJ_ALVO' | 'PJ_FARMACIA_POPULAR' | 'PJ_OUTRAS_FARMACIAS' | 'PJ_DEMAIS_EMPRESAS'
     network_level: Optional[str] = None
+    percentual_nao_comprovacao: Optional[float] = None
+    criticidade_nao_comprovacao: Optional[str] = None
+    conexao_ms: Optional[str] = None
     razao_social: Optional[str] = None
     nome_socio: Optional[str] = None
     nome_fantasia: Optional[str] = None
@@ -602,6 +628,8 @@ class NetworkNodeSchema(BaseModel):
     situacao_rf: Optional[str] = None
     is_falecido: Optional[bool] = False
     is_cadunico: bool
+    is_esocial: bool
+    is_seguro_defeso: bool
     is_cnae_farmacia_ausente: bool
     is_par: Optional[bool] = False
     qtd_processos_par: Optional[int] = 0
@@ -755,7 +783,7 @@ class IndicadorCnpjPageResponse(BaseModel):
     total: int = 0
     page: int = 1
     page_size: int = 20
-    sort_field: str = "risco_reg"
+    sort_field: str = "val_sem_comp"
     sort_order: str = "desc"
 
 

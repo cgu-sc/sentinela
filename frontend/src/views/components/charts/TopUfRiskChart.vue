@@ -164,8 +164,8 @@ function onClick(params) {
     <div class="chart-header">
       <i class="pi pi-sort-amount-down-alt"></i>
       <div>
-        <h3>TOP 10 UFs POR SINAL DE AUDITORIA</h3>
-        <span>% de valor sem comprovação no escopo nacional</span>
+        <h3>TOP 10 UFs</h3>
+        <span>% de valor sem comprovação</span>
       </div>
     </div>
 

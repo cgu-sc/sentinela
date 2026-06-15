@@ -68,6 +68,8 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "municipio",
         "uf",
         "is_cadunico",
+        "is_esocial",
+        "is_seguro_defeso",
         "is_falecido",
     },
     "teia_fonte_nivel4": {
@@ -1556,10 +1558,31 @@ def _sync_dados_socios(engine, progress_callback=None):
     """Tarefa: Sincroniza dados societários das farmácias."""
     global _df_dados_socios
     print("Sincronizando Dados Societários...")
+    required = {
+        "cnpj",
+        "cpf_cnpj_socio",
+        "nome_socio",
+        "indicador_socio",
+        "municipio",
+        "uf",
+        "data_entrada_sociedade",
+        "data_exclusao_sociedade",
+        "percentual_qualificacao",
+        "descricao_qualificacao",
+        "cpf_representante",
+        "id_qualificacao_representante",
+        "nome_representante",
+        "descricao_qualificacao_representante",
+        "data_nascimento_socio",
+        "data_nascimento_representante",
+        "data_processamento",
+        "is_cadunico",
+        "is_esocial",
+        "is_seguro_defeso",
+        "is_falecido",
+    }
+    total_rows = _assert_fp_source_table(engine, "dados_socios", required)
     sql = "SELECT * FROM [temp_CGUSC].[fp].[dados_socios]"
-
-    with engine.connect() as conn:
-        total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[dados_socios]")).scalar()
 
     print(f"   -> Registros Societários: {total_rows:,}")
     chunk_list = []
@@ -1570,12 +1593,10 @@ def _sync_dados_socios(engine, progress_callback=None):
         chunk_list.append(pl.from_pandas(chunk))
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
-        if progress_callback: progress_callback(p)
+        if progress_callback:
+            progress_callback(p)
 
     df_full = pl.concat(chunk_list)
-    
-    # Debug: Mostrar colunas reais antes do cast
-    # print(f"DEBUG: Colunas encontradas: {df_full.columns}")
 
     _df_dados_socios = df_full.with_columns([
         pl.col("cnpj").cast(pl.String),
@@ -1596,6 +1617,8 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("percentual_qualificacao").cast(pl.Float32),
         pl.col("data_processamento").cast(pl.Date),
         pl.col("is_cadunico").cast(pl.Int8),
+        pl.col("is_esocial").cast(pl.Int8),
+        pl.col("is_seguro_defeso").cast(pl.Int8),
         pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cnpj")
 
@@ -1699,7 +1722,8 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
             "nome_representante": pl.String,
             "data_entrada_sociedade": pl.Date, "data_exclusao_sociedade": pl.Date,
             "municipio": pl.String, "uf": pl.String,
-            "is_cadunico": pl.Int8, "is_falecido": pl.Int8,
+            "is_cadunico": pl.Int8, "is_esocial": pl.Int8,
+            "is_seguro_defeso": pl.Int8, "is_falecido": pl.Int8,
         })
         df_teia_fonte_nivel3.write_parquet(_TEIA_FONTE_NIVEL3_PARQUET_PATH, compression="zstd")
         _df_teia_fonte_nivel3 = None
@@ -1735,6 +1759,8 @@ def _sync_teia_fonte_nivel3(engine, progress_callback=None):
         pl.col("municipio").cast(pl.String),
         pl.col("uf").cast(pl.String),
         pl.col("is_cadunico").cast(pl.Int8),
+        pl.col("is_esocial").cast(pl.Int8),
+        pl.col("is_seguro_defeso").cast(pl.Int8),
         pl.col("is_falecido").cast(pl.Int8),
     ]).sort(["cnpj_empresa", "cpf_cnpj_socio"])
 
@@ -2481,9 +2507,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "cnae_secundario",
                 "is_cnae_farmacia_ausente",
             },
-            "dados_socios": {"is_cadunico", "is_falecido"},
+            "dados_socios": {"is_cadunico", "is_esocial", "is_seguro_defeso", "is_falecido"},
             "teia_fonte_nivel2": {"is_cadunico", "is_falecido"},
-            "teia_fonte_nivel3": {"is_cadunico", "is_falecido"},
+            "teia_fonte_nivel3": {"is_cadunico", "is_esocial", "is_seguro_defeso", "is_falecido"},
             "teia_fonte_nivel4": {"is_cadunico", "is_falecido"},
             "analise_gtin_inconsistencia_clinica": {
                 "id_cnpj",

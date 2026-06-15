@@ -4,7 +4,6 @@ import autoTable from 'jspdf-autotable';
 import { INDICATOR_GROUPS, RISK_COLORS_RGB } from '@/config/riskConfig';
 import { MAP_VISUAL_SCALE } from '@/config/colors.js';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── PrimeIcons codepoints ──────────────────────────────────
 const PI = {
@@ -273,19 +272,117 @@ function drawMunicipalityPolygon(pdf, geoJson, targetIbge7, x, y, w, h, fillRgb,
   }
 }
 
+function assertReportData(reportData) {
+  if (!reportData || typeof reportData !== 'object') {
+    throw new Error('Payload do relatorio PDF ausente.');
+  }
+  if (!Array.isArray(reportData.evolucao?.semestres)) {
+    throw new Error('Payload do relatorio PDF sem evolucao.semestres.');
+  }
+  if (!reportData.indicadores?.indicadores || typeof reportData.indicadores.indicadores !== 'object') {
+    throw new Error('Payload do relatorio PDF sem indicadores.indicadores.');
+  }
+  if (!reportData.crm?.summary || !Array.isArray(reportData.crm?.crmsInteresse) || !reportData.crm?.kpis) {
+    throw new Error('Payload do relatorio PDF sem dados de CRM.');
+  }
+  if (!reportData.falecidos?.summary || !Array.isArray(reportData.falecidos?.agrupados)) {
+    throw new Error('Payload do relatorio PDF sem dados de falecidos.');
+  }
+}
+
+function drawFinancialChart(pdf, semestres, x, y, w, h, F) {
+  pdf.setFillColor(248, 250, 252);
+  pdf.setDrawColor(226, 232, 240);
+  pdf.setLineWidth(0.25);
+  pdf.roundedRect(x, y, w, h, 2, 2, 'FD');
+
+  const plotX = x + 11;
+  const plotY = y + 13;
+  const plotW = w - 20;
+  const plotH = h - 25;
+  const maxTotal = Math.max(...semestres.map((s) => Number(s.total || 0)), 1);
+  const maxPct = Math.max(...semestres.map((s) => Number(s.pct_irregular || 0)), 10);
+  const step = plotW / Math.max(semestres.length, 1);
+  const barW = Math.max(2.8, Math.min(7.5, step * 0.42));
+
+  pdf.setFont(F, 'bold');
+  pdf.setFontSize(7);
+  pdf.setTextColor(30, 41, 59);
+  pdf.text('Evolucao semestral: valor comprovado, sem comprovacao e percentual', x + 5, y + 7);
+
+  const legends = [
+    { label: 'Comprovado', color: [16, 185, 129] },
+    { label: 'Sem comprovacao', color: [239, 68, 68] },
+    { label: '% sem comp.', color: [99, 102, 241] },
+  ];
+  let legendX = x + w - 64;
+  pdf.setFont(F, 'normal');
+  pdf.setFontSize(5.8);
+  for (const item of legends) {
+    pdf.setFillColor(...item.color);
+    pdf.roundedRect(legendX, y + 4, 2.5, 2.5, 0.5, 0.5, 'F');
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(item.label, legendX + 3.5, y + 6.2);
+    legendX += pdf.getTextWidth(item.label) + 8;
+  }
+
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.2);
+  pdf.line(plotX, plotY + plotH, plotX + plotW, plotY + plotH);
+  pdf.line(plotX, plotY, plotX, plotY + plotH);
+
+  const linePoints = [];
+  semestres.forEach((s, i) => {
+    const centerX = plotX + step * i + step / 2;
+    const total = Number(s.total || 0);
+    const regular = Number(s.regular || 0);
+    const irregular = Number(s.irregular || 0);
+    const totalH = (total / maxTotal) * plotH;
+    const regularH = total > 0 ? totalH * (regular / total) : 0;
+    const irregularH = total > 0 ? totalH * (irregular / total) : 0;
+    const baseY = plotY + plotH;
+
+    pdf.setFillColor(16, 185, 129);
+    pdf.rect(centerX - barW / 2, baseY - regularH, barW, regularH, 'F');
+    pdf.setFillColor(239, 68, 68);
+    pdf.rect(centerX - barW / 2, baseY - regularH - irregularH, barW, irregularH, 'F');
+
+    const pctY = plotY + plotH - (Number(s.pct_irregular || 0) / maxPct) * plotH;
+    linePoints.push([centerX, pctY]);
+
+    pdf.setFontSize(5.3);
+    pdf.setFont(F, 'normal');
+    pdf.setTextColor(100, 116, 139);
+    const label = String(s.semestre ?? '').replace(/^20/, '');
+    pdf.text(label, centerX, baseY + 4.2, { align: 'center' });
+  });
+
+  if (linePoints.length > 1) {
+    pdf.setDrawColor(99, 102, 241);
+    pdf.setLineWidth(0.65);
+    for (let i = 1; i < linePoints.length; i++) {
+      pdf.line(linePoints[i - 1][0], linePoints[i - 1][1], linePoints[i][0], linePoints[i][1]);
+    }
+  }
+
+  pdf.setFillColor(99, 102, 241);
+  for (const [px, py] of linePoints) {
+    pdf.circle(px, py, 0.85, 'F');
+  }
+}
+
 // ── Composable ─────────────────────────────────────────────
 export function usePdfExport() {
   const isExporting = ref(false);
 
   async function exportCnpjPdf({
     cnpjData, geoData, cadastro, cnpj, qtdMunicipiosRegiao,
-    financialMovementTabRef, indicatorsTabRef, authTabRef, falecidosTabRef,
-    cnpjNavStore, geoStore, resultadoMunicipios, formatCurrencyFull, formatNumberFull, formatarData,
+    reportData, geoStore, resultadoMunicipios, formatCurrencyFull, formatNumberFull, formatarData,
   }) {
     isExporting.value = true;
-    const originalTab = cnpjNavStore.activeTabIndex;
 
     try {
+      assertReportData(reportData);
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
       const margin = 14;
@@ -701,23 +798,16 @@ export function usePdfExport() {
       }
 
       // ── PÁGINA 2 — Movimentação Financeira ───────────────────
-      cnpjNavStore.activeTabIndex = 0;
-      await sleep(900);
-
       pdf.addPage();
       pageHeader('Movimentação Financeira', cnpjData.razao_social, PI.CHART_LINE);
 
-      const semestres = financialMovementTabRef.value?.getSemestresData() ?? [];
-      const chartImg  = financialMovementTabRef.value?.getChartImage(4) ?? null;
+      const semestres = reportData.evolucao.semestres;
 
       let y2 = 26;
 
-      // Gráfico em alta resolução
-      if (chartImg) {
-        const chartH = 70;
-        pdf.addImage(chartImg, 'JPEG', margin, y2, contentW, chartH);
-        y2 += chartH + 6;
-      }
+      const chartH = 70;
+      drawFinancialChart(pdf, semestres, margin, y2, contentW, chartH, F);
+      y2 += chartH + 6;
 
       y2 += 5;
       y2 = sectionTitle('DETALHAMENTO SEMESTRAL', y2, [30, 41, 59], PI.TABLE);
@@ -780,11 +870,8 @@ export function usePdfExport() {
       });
 
       // ── PÁGINA 3 — Indicadores ────────────────────────────
-      cnpjNavStore.activeTabIndex = 3;
-      await sleep(500);
-
-      const indicadores    = indicatorsTabRef.value?.getIndicadoresData() ?? {};
-      const pontosCriticos = indicatorsTabRef.value?.getPontosCriticos() ?? [];
+      const indicadores    = reportData.indicadores.indicadores;
+      const pontosCriticos = reportData.indicadores.pontosCriticos;
 
       pdf.addPage();
       pageHeader('Indicadores de Risco', cnpjData.razao_social, PI.SHIELD);
@@ -801,7 +888,7 @@ export function usePdfExport() {
           head: [['Indicador', 'Risco Regional', 'Valor Farmácia', 'Mediana Regional']],
           body: pontosCriticos.map((p) => [
             p.label,
-            p.riscoReg.toFixed(1) + 'x acima',
+            p.riscoReg != null ? p.riscoReg.toFixed(1) + 'x acima' : '—',
             fmtVal(p.valor, p.formato, formatCurrencyFull),
             fmtVal(p.medReg, p.formato, formatCurrencyFull),
           ]),
@@ -904,15 +991,12 @@ export function usePdfExport() {
       });
 
       // ── PÁGINA 4 — Prescritores ────────────────────────────
-      if (authTabRef?.value) {
-        cnpjNavStore.activeTabIndex = 4;
-        await sleep(500);
+      const crmPayload = reportData.crm;
+      const summary = crmPayload.summary || {};
+      const top20 = (crmPayload.crmsInteresse || []).slice(0, 20);
+      const kpis = crmPayload.kpis || {};
 
-        const summary = authTabRef.value.getSummary() || {};
-        const top20 = (authTabRef.value.getCrmsInteresse?.() || []).slice(0, 20);
-        const kpis = authTabRef.value.getKpis?.() || {};
-
-        if (top20.length > 0) {
+      if (top20.length > 0) {
           pdf.addPage();
           pageHeader('Análise de CRMs e Prescritores', cnpjData.razao_social, PI.USERS);
 
@@ -926,7 +1010,7 @@ export function usePdfExport() {
           const red    = [239, 68,  68 ];
           const orange = [249, 115, 22 ];
           const green  = [16,  185, 129];
-          const summary2 = authTabRef.value.getSummary() || {};
+          const summary2 = summary;
           const crmCards = [
             { label: 'TOP 1 CRM - VOLUME R$',         val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop1        > 40 ? red : kpis.concentracaoTop1 > 20 ? red : green,    subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
             { label: 'TOP 5 CRMs - VOLUME R$',         val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop5        > 70 ? red : kpis.concentracaoTop5 > 50 ? red : green,    subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },
@@ -1025,16 +1109,15 @@ export function usePdfExport() {
               }
             }
           });
-        }
       }
 
       // ── PÁGINA 5 — Falecidos ─────────────────────────────
-      if (falecidosTabRef?.value?.hasData()) {
-        cnpjNavStore.activeTabIndex = 5;
-        await sleep(500);
+      const falecidosPayload = reportData.falecidos;
+      const falecidosSummary = falecidosPayload.summary || {};
+      const agrupados = falecidosPayload.agrupados || [];
 
-        const summary    = falecidosTabRef.value.getSummary();
-        const agrupados  = falecidosTabRef.value.getAgrupados();
+      if (agrupados.length > 0) {
+        const summary = falecidosSummary;
 
         pdf.addPage();
         pageHeader('Vendas para Pacientes Falecidos', cnpjData.razao_social, PI.EXCLAMATION_TRIANGLE);
@@ -1124,8 +1207,8 @@ export function usePdfExport() {
 
     } catch (err) {
       console.error('[usePdfExport] Critical failure during PDF generation:', err);
+      throw err;
     } finally {
-      cnpjNavStore.activeTabIndex = originalTab;
       isExporting.value = false;
     }
   }

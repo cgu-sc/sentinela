@@ -1,4 +1,6 @@
 <script setup>
+import { NETWORK_RISK_BORDER_COLORS } from "@/utils/network/networkConstants";
+
 defineProps({
   typeLabels: {
     type: Object,
@@ -25,12 +27,33 @@ defineProps({
     <span class="legend-label">PAR</span>
   </div>
   <div class="legend-item">
+    <span class="legend-esocial-ring"></span>
+    <span class="legend-label">eSocial</span>
+  </div>
+  <div class="legend-item">
+    <span class="legend-seguro-defeso-ring"></span>
+    <span class="legend-label">Seguro Defeso</span>
+  </div>
+  <div class="legend-item">
     <span class="legend-deceased-cross"></span>
     <span class="legend-label">Falecido</span>
   </div>
-  <div class="legend-item">
-    <span class="legend-line inactive"></span>
-    <span class="legend-label">Vínculo Inativo</span>
+  <div class="legend-item risk-legend">
+    <span
+      class="legend-risk-box"
+      :style="{ borderColor: NETWORK_RISK_BORDER_COLORS.NORMAL }"
+    ></span>
+    <span class="legend-label">Normal</span>
+    <span
+      class="legend-risk-box"
+      :style="{ borderColor: NETWORK_RISK_BORDER_COLORS.ATTENTION }"
+    ></span>
+    <span class="legend-label">Atenção</span>
+    <span
+      class="legend-risk-box"
+      :style="{ borderColor: NETWORK_RISK_BORDER_COLORS.CRITICAL }"
+    ></span>
+    <span class="legend-label">Crítico</span>
   </div>
 </template>
 
@@ -54,6 +77,26 @@ defineProps({
   border-radius: 50%;
   border: 4px double #f59e0b;
   background: #0ea5e9;
+  flex-shrink: 0;
+}
+
+.legend-esocial-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 3px solid var(--status-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--status-success) 18%, transparent);
+  background: color-mix(in srgb, var(--status-success) 20%, transparent);
+  flex-shrink: 0;
+}
+
+.legend-seguro-defeso-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 3px solid var(--status-info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-info) 30%, transparent);
+  background: color-mix(in srgb, var(--status-info) 18%, transparent);
   flex-shrink: 0;
 }
 
@@ -119,13 +162,26 @@ defineProps({
   border-top: 2px dotted #f59e0b;
 }
 
-.legend-line.inactive {
-  border-top: 2px dotted #ef4444;
-}
-
 .legend-label {
   font-size: 0.68rem;
   color: var(--text-secondary);
   font-weight: 600;
 }
+.risk-legend {
+  gap: 0.25rem;
+}
+
+.legend-risk-box {
+  width: 10px;
+  height: 10px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: var(--card-bg);
+  flex-shrink: 0;
+}
+
+.risk-legend .legend-label {
+  margin-right: 0.25rem;
+}
+
 </style>

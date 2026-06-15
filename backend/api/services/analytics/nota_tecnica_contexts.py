@@ -18,6 +18,7 @@ from data_cache import (
 )
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
+from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
 from .nota_tecnica_formatters import (
     _format_date_pt,
     _format_date_month_year_long_pt,
@@ -266,17 +267,17 @@ def _normalize_gtin(value: Any) -> str:
     return text.split(".")[0] if "." in text else text
 
 
-def _build_medicamentos_lookup() -> dict[str, str]:
-    """Monta lookup GTIN -> descricao obrigatoria do medicamento."""
+def _build_medicamentos_lookup() -> dict[str, dict[str, str | None]]:
+    """Monta lookup GTIN -> descricao e patologia do medicamento."""
     df_med = get_medicamentos_df()
-    required_cols = {"codigo_barra"}
+    required_cols = {"codigo_barra", "patologia"}
     missing_cols = required_cols - set(df_med.columns)
     if missing_cols:
         raise RuntimeError(
             f"Cache de medicamentos sem colunas obrigatorias para Nota Tecnica: {', '.join(sorted(missing_cols))}."
         )
 
-    lookup: dict[str, str] = {}
+    lookup: dict[str, dict[str, str | None]] = {}
     for row in df_med.iter_rows(named=True):
         codigo = row.get("codigo_barra")
         if codigo in (None, "", "None"):
@@ -285,7 +286,15 @@ def _build_medicamentos_lookup() -> dict[str, str]:
         if descricao in (None, "", "None"):
             continue
         gtin = _normalize_gtin(codigo)
-        lookup[gtin] = str(descricao)
+        patologia = row.get("patologia")
+        lookup[gtin] = {
+            "descricao": str(descricao),
+            "patologia": (
+                str(patologia).strip()
+                if patologia not in (None, "", "None")
+                else None
+            ),
+        }
 
     if not lookup:
         raise RuntimeError("Cache de medicamentos sem descricoes validas para Nota Tecnica.")
@@ -310,6 +319,7 @@ def _build_gtin_sem_comprovacao_context(
         "codigo_barra",
         "periodo",
         "qnt_caixas_sem_comprovacao",
+        "valor_vendas",
         "valor_sem_comprovacao",
     }
     missing_cols = required_cols - set(df.columns)
@@ -322,6 +332,7 @@ def _build_gtin_sem_comprovacao_context(
         pl.col("codigo_barra").cast(pl.String),
         pl.col("periodo").cast(pl.Date),
         pl.col("qnt_caixas_sem_comprovacao").cast(pl.Int64, strict=False).fill_null(0),
+        pl.col("valor_vendas").cast(pl.Float64, strict=False).fill_null(0.0),
         pl.col("valor_sem_comprovacao").cast(pl.Float64, strict=False).fill_null(0.0),
     ])
     if data_inicio:
@@ -336,6 +347,7 @@ def _build_gtin_sem_comprovacao_context(
         df.group_by("codigo_barra")
         .agg([
             pl.sum("qnt_caixas_sem_comprovacao").alias("qtd_sem_comprovacao"),
+            pl.sum("valor_vendas").alias("valor_vendas"),
             pl.sum("valor_sem_comprovacao").alias("valor_sem_comprovacao"),
         ])
         .filter(pl.col("valor_sem_comprovacao") > 0)
@@ -349,14 +361,21 @@ def _build_gtin_sem_comprovacao_context(
     missing_descriptions: list[str] = []
     for r in agg.iter_rows(named=True):
         gtin = _normalize_gtin(r["codigo_barra"])
-        descricao = medicamentos_lookup.get(gtin)
-        if not descricao:
+        medicamento = medicamentos_lookup.get(gtin)
+        if not medicamento:
             missing_descriptions.append(gtin)
             continue
+        patologia = medicamento["patologia"]
+        if patologia is None:
+            raise RuntimeError(
+                f"Patologia obrigatoria ausente para o GTIN {gtin} exibido na Tabela 1 da Nota Tecnica."
+            )
         rows.append({
             "gtin": gtin,
-            "descricao": descricao,
+            "descricao": medicamento["descricao"],
+            "patologia": patologia,
             "qtd_sem_comprovacao": int(r["qtd_sem_comprovacao"] or 0),
+            "valor_vendas": round(float(r["valor_vendas"] or 0.0), 2),
             "valor_sem_comprovacao": round(float(r["valor_sem_comprovacao"] or 0.0), 2),
         })
 
@@ -487,10 +506,7 @@ def _build_medicamentos_aumento_atipico_context(
             "valor_sem_comprovacao": float(row["valor_sem_comprovacao"] or 0.0),
         }
 
-    try:
-        medicamentos_lookup = _build_medicamentos_lookup()
-    except RuntimeError:
-        medicamentos_lookup = {}
+    medicamentos_lookup = _build_medicamentos_lookup()
     resultado: list[dict[str, Any]] = []
 
     for semestre in semestres_atipicos:
@@ -516,12 +532,17 @@ def _build_medicamentos_aumento_atipico_context(
             aumento = valor_atual - valor_anterior
             if aumento <= 0:
                 continue
+            medicamento = medicamentos_lookup.get(gtin)
+            if medicamento is None:
+                raise RuntimeError(
+                    f"Descricao obrigatoria ausente para o GTIN {gtin} na tabela de aumento atipico da Nota Tecnica."
+                )
             candidatos.append({
                 "semestre": semestre.get("semestre"),
                 "semestre_fmt": semestre.get("semestre_fmt") or _semestre_fmt_from_key(chave),
                 "semestre_anterior_fmt": _semestre_fmt_from_key(chave_anterior),
                 "gtin": gtin,
-                "descricao": medicamentos_lookup.get(gtin) or "Descricao nao identificada",
+                "descricao": medicamento["descricao"],
                 "valor_anterior": round(valor_anterior, 2),
                 "valor_atual": round(valor_atual, 2),
                 "aumento_valor": round(aumento, 2),
@@ -1025,6 +1046,7 @@ def _build_evolucao_financeira_context(
         pct_irregular = float(item["pct_irregular"] or 0.0)
         semestre = str(item["semestre"])
         taxa_crescimento_raw = item.get("taxa_crescimento_pct")
+        aumento_valor_raw = item.get("aumento_valor_semestre")
         limite_volume_atipico_raw = item.get("limite_volume_atipico_pct")
         chave_semestre = item.get("chave_semestre") or _semester_key_from_label(semestre)
         rows.append({
@@ -1039,6 +1061,7 @@ def _build_evolucao_financeira_context(
             "pct_irregular": round(pct_irregular, 2),
             "volume_atipico": bool(item.get("volume_atipico")),
             "taxa_crescimento_pct": round(float(taxa_crescimento_raw), 2) if taxa_crescimento_raw is not None else None,
+            "aumento_valor_semestre": round(float(aumento_valor_raw), 2) if aumento_valor_raw is not None else None,
             "chave_semestre_anterior": item.get("chave_semestre_anterior"),
             "limite_volume_atipico_pct": float(limite_volume_atipico_raw) if limite_volume_atipico_raw is not None else None,
         })
@@ -1067,9 +1090,9 @@ def _build_evolucao_financeira_context(
 
     semestres_irregulares = [
         row for row in rows
-        if row["irregular"] > 0
+        if row["irregular"] >= VOLUME_ATIPICO_AUMENTO_MINIMO
     ]
-    top_irregulares = sorted(semestres_irregulares, key=lambda row: row["irregular"], reverse=True)[:3]
+    top_irregulares = sorted(semestres_irregulares, key=lambda row: row["irregular"], reverse=True)
     primeiro_mes = rows[0].get("mes_inicio")
     ultimo_mes = rows[-1].get("mes_fim")
     periodo_meses = (

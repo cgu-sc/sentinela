@@ -7,14 +7,14 @@
  *                          Para 'loading', pode omitir (usa spinner automaticamente).
  *  title       (String)  — Título principal (obrigatório).
  *  description (String)  — Subtítulo explicativo (opcional).
- *  variant     (String)  — 'default' | 'error' | 'success' | 'loading'
+ *  variant     (String)  — 'default' | 'info' | 'error' | 'success' | 'loading'
  */
 const props = defineProps({
   icon:        { type: String,  default: 'pi-inbox' },
   title:       { type: String,  required: true },
   description: { type: String,  default: '' },
   variant:     { type: String,  default: 'default',
-                 validator: (v) => ['default', 'error', 'success', 'loading'].includes(v) },
+                 validator: (v) => ['default', 'info', 'error', 'success', 'loading'].includes(v) },
 });
 </script>
 
@@ -99,6 +99,17 @@ const props = defineProps({
 }
 .tab-ph--success .tab-ph__icon {
   color: var(--green-500, #22c55e);
+  opacity: 0.8;
+}
+
+.tab-ph--info .tab-ph__icon-wrap {
+  background: color-mix(in srgb, var(--info-color, var(--primary-color)) 10%, transparent);
+  border-color: color-mix(in srgb, var(--info-color, var(--primary-color)) 18%, transparent);
+  box-shadow: 0 8px 20px -4px color-mix(in srgb, var(--info-color, var(--primary-color)) 12%, transparent),
+              inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+}
+.tab-ph--info .tab-ph__icon {
+  color: var(--info-color, var(--primary-color));
   opacity: 0.8;
 }
 

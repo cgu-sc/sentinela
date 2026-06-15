@@ -1,72 +1,73 @@
 <script setup>
 import { computed } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useIndicadoresStore } from '@/stores/indicadores';
-import { INDICATOR_GROUPS } from '@/config/riskConfig';
+import { TARGET_GROUPS } from '@/config/targetConfig';
 
 const props = defineProps({
-  /** Metadados do indicador ativo { label, metodologia } */
-  activeIndicadorMeta: { type: Object, default: null },
+  selectedTarget: { type: String, required: true },
 });
 
 const emit = defineEmits(['select']);
 
-const indicadoresStore = useIndicadoresStore();
-const { selectedIndicador, kpis, isLoading } = storeToRefs(indicadoresStore);
+const activeTargetMeta = computed(() => {
+  for (const group of TARGET_GROUPS) {
+    const target = group.targets.find(item => item.key === props.selectedTarget);
+    if (target) return target;
+  }
+  throw new Error(`Alvo selecionado sem configuração: ${props.selectedTarget}`);
+});
 
-
-
-function selectIndicador(key) {
-  emit('select', key);
+function selectTarget(target) {
+  if (!target.enabled) return;
+  emit('select', target.key);
 }
 </script>
 
 <template>
-  <aside class="indicator-selector">
+  <aside class="target-selector">
     <div class="selector-header">
-      <i class="pi pi-shield selector-header-icon" />
-      <span class="selector-header-label">Indicadores</span>
+      <i class="pi pi-bullseye selector-header-icon" />
+      <span class="selector-header-label">Alvos</span>
     </div>
 
     <div class="selector-groups">
       <div
-        v-for="grupo in INDICATOR_GROUPS"
-        :key="grupo.id"
+        v-for="group in TARGET_GROUPS"
+        :key="group.id"
         class="selector-group"
       >
-        <div class="group-title">{{ grupo.label }}</div>
+        <div class="group-title">{{ group.label }}</div>
 
         <button
-          v-for="ind in grupo.indicators"
-          :key="ind.key"
-          class="ind-btn"
-          :class="{ 'ind-btn--active': selectedIndicador === ind.key }"
-          @click="selectIndicador(ind.key)"
-          :title="ind.metodologia"
+          v-for="target in group.targets"
+          :key="target.key"
+          type="button"
+          class="target-btn"
+          :class="{
+            'target-btn--active': selectedTarget === target.key,
+            'target-btn--disabled': !target.enabled,
+          }"
+          :disabled="!target.enabled"
+          v-tooltip.left="{ value: target.description, class: 'target-tooltip' }"
+          @click="selectTarget(target)"
         >
-          <span class="ind-btn-label">{{ ind.label }}</span>
-
-          <i
-            v-if="isLoading && selectedIndicador === ind.key"
-            class="pi pi-spin pi-spinner ind-loading-icon"
-          />
+          <span class="target-btn-label">{{ target.label }}</span>
+          <span v-if="!target.enabled" class="target-btn-badge">Em breve</span>
         </button>
       </div>
     </div>
 
-    <!-- Info do indicador ativo -->
-    <Transition name="ind-info">
-      <div v-if="activeIndicadorMeta" class="ind-info-box">
-        <div class="ind-info-label">{{ activeIndicadorMeta.label }}</div>
-        <p class="ind-info-metodologia">{{ activeIndicadorMeta.metodologia }}</p>
+    <Transition name="target-info">
+      <div class="target-info-box">
+        <div class="target-info-label">{{ activeTargetMeta.label }}</div>
+        <p class="target-info-description">{{ activeTargetMeta.description }}</p>
       </div>
     </Transition>
   </aside>
 </template>
 
 <style scoped>
-.indicator-selector {
-  width: var(--indicator-selector-width, 260px);
+.target-selector {
+  width: var(--target-selector-width, 220px);
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -133,7 +134,7 @@ function selectIndicador(key) {
   margin-top: 0;
 }
 
-.ind-btn {
+.target-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -144,30 +145,35 @@ function selectIndicador(key) {
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
   color: var(--text-color-85);
   opacity: 0.8;
   min-width: 0;
 }
 
-.ind-btn:hover {
+.target-btn:hover:not(:disabled) {
   background: var(--table-hover);
   opacity: 1;
 }
 
-.ind-btn--active {
+.target-btn--active {
   background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
   opacity: 1;
   border-left: 3px solid var(--primary-color);
   padding-left: calc(1rem - 3px);
 }
 
-.ind-btn--active .ind-btn-label {
+.target-btn--active .target-btn-label {
   color: var(--primary-color);
   font-weight: 600;
 }
 
-.ind-btn-label {
+.target-btn--disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.target-btn-label {
   font-size: 0.78rem;
   font-weight: 500;
   line-height: 1.2;
@@ -178,17 +184,16 @@ function selectIndicador(key) {
   text-overflow: ellipsis;
 }
 
-
-
-.ind-loading-icon {
+.target-btn-badge {
   flex-shrink: 0;
-  font-size: 0.7rem;
-  color: var(--primary-color);
-  opacity: 0.7;
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
-/* ── Info do indicador ativo ── */
-.ind-info-box {
+.target-info-box {
   margin: 0.5rem 0.75rem 0.75rem;
   padding: 0.7rem 0.85rem;
   background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
@@ -199,27 +204,27 @@ function selectIndicador(key) {
   gap: 0.35rem;
 }
 
-.ind-info-label {
+.target-info-label {
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--primary-color);
   line-height: 1.3;
 }
 
-.ind-info-metodologia {
+.target-info-description {
   margin: 0;
   font-size: 0.68rem;
   color: var(--text-muted);
   line-height: 1.5;
 }
 
-/* Transição suave ao aparecer/desaparecer */
-.ind-info-enter-active,
-.ind-info-leave-active {
+.target-info-enter-active,
+.target-info-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.ind-info-enter-from,
-.ind-info-leave-to {
+
+.target-info-enter-from,
+.target-info-leave-to {
   opacity: 0;
   transform: translateY(4px);
 }

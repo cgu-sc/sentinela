@@ -482,10 +482,11 @@ def get_metric_percentiles_animation(
     data_fim: Optional[date] = None,
 ) -> dict:
     """
-    Retorna os percentis de métrica para cada janela de 2 meses no período.
+    Retorna os percentis de métrica para cada janela de 3 meses no período, com passo de 1 mês.
 
     Usado pela animação da curva de risco — evita N round-trips HTTP.
-    A janela de 2 meses coincide com PLAY_STEP=2 do slider de animação no frontend.
+    A janela de 3 meses (PLAY_WINDOW_MONTHS=3) e o passo de 1 mês coincidem exatamente
+    com o player de animação do frontend, garantindo 100% de hits no cache de frames.
 
     Args:
         scope: Escopo geográfico ('brasil', 'uf', 'regiao').
@@ -513,19 +514,76 @@ def get_metric_percentiles_animation(
 
     quarters = []
     cursor = inicio
-    while cursor <= fim:
-        window_start = cursor
-        window_end   = min(_end_of_month(_add_months(cursor, 1)), fim)
 
-        percentiles = get_metric_percentiles(
-            scope, uf, regiao_id, metric, window_start, window_end
-        )
-        quarters.append({
-            "inicio":      window_start,
-            "fim":         window_end,
-            "percentiles": percentiles,
-        })
-        cursor = _add_months(cursor, 2)
+    if metric == "percentual_sem_comprovacao":
+        # 1. Faz o join e filtra geográficamente uma única vez antes de entrar no loop
+        df_base = get_df().join(get_df_perfil_estabelecimento(), on="id_cnpj", how="left")
+        
+        if scope == 'uf' and uf:
+            df_base_scoped = df_base.filter(pl.col("uf") == uf)
+        elif scope == 'regiao' and regiao_id:
+            df_base_scoped = df_base.filter(pl.col("id_regiao_saude").cast(pl.Utf8) == str(regiao_id))
+        else:
+            df_base_scoped = df_base
+            
+        percentis_list = [i / 100.0 for i in range(1, 101)]
+        
+        while cursor <= fim:
+            window_start = cursor
+            window_end   = min(_end_of_month(_add_months(cursor, 2)), fim)
+            
+            # Filtra o período e faz a agregação rápida sobre a base de escopo reduzida
+            df_win = (
+                df_base_scoped.filter(pl.col("periodo").is_between(window_start, window_end))
+                .group_by("id_cnpj")
+                .agg([
+                    pl.sum("total_vendas").alias("tv"),
+                    pl.sum("total_sem_comprovacao").alias("tsc")
+                ])
+                .with_columns([
+                    (pl.col("tsc") / pl.when(pl.col("tv") > 0).then(pl.col("tv")).otherwise(pl.lit(1.0)) * 100).alias("pct_sem_comprovacao")
+                ])
+            )
+            
+            if df_win.is_empty():
+                percentiles = []
+            else:
+                series_target = df_win.select(
+                    pl.when(pl.col("pct_sem_comprovacao") > 100)
+                    .then(100)
+                    .otherwise(pl.col("pct_sem_comprovacao"))
+                    .alias("val")
+                ).to_series().sort()
+                
+                percentiles = []
+                for p in percentis_list:
+                    val = series_target.quantile(p)
+                    percentiles.append({
+                        "percentile": int(p * 100),
+                        "score": float(val or 0.0)
+                    })
+            
+            quarters.append({
+                "inicio":      window_start,
+                "fim":         window_end,
+                "percentiles": percentiles,
+            })
+            cursor = _add_months(cursor, 1)
+    else:
+        # Fallback para score que se beneficia do cache de matriz_risco_dinamica
+        while cursor <= fim:
+            window_start = cursor
+            window_end   = min(_end_of_month(_add_months(cursor, 2)), fim)
+
+            percentiles = get_metric_percentiles(
+                scope, uf, regiao_id, metric, window_start, window_end
+            )
+            quarters.append({
+                "inicio":      window_start,
+                "fim":         window_end,
+                "percentiles": percentiles,
+            })
+            cursor = _add_months(cursor, 1)
 
     return {"quarters": quarters}
 

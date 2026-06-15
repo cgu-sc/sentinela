@@ -1,4 +1,4 @@
-import { NETWORK_NODE_STYLES } from "./networkConstants";
+import { NETWORK_ALERT_COLORS, NETWORK_NODE_STYLES } from "./networkConstants";
 
 export function buildNetworkStylesheet() {
   const styles = [];
@@ -50,6 +50,23 @@ export function buildNetworkStylesheet() {
   });
 
   styles.push({
+    selector: 'node[type="PJ_FARMACIA_POPULAR"]',
+    style: {
+      "border-color": "data(risk_border_color)",
+      "border-width": 4,
+      label: "data(label)",
+      "text-valign": "bottom",
+      "text-halign": "center",
+      "text-wrap": "wrap",
+      "text-max-width": 116,
+      "font-size": "10px",
+      "line-height": 1.25,
+      "text-margin-y": 5,
+      "text-outline-width": 1.5,
+    },
+  });
+
+  styles.push({
     selector: "edge",
     style: {
       "curve-style": "bezier",
@@ -86,6 +103,31 @@ export function buildNetworkStylesheet() {
       "border-width": 4,
       "border-color": "#f59e0b",
       "border-style": "double",
+      "z-index": 11,
+    },
+  });
+
+  styles.push({
+    selector: "node.esocial-pf",
+    style: {
+      "border-width": 4,
+      "border-color": "#22c55e",
+      "border-style": "solid",
+      "shadow-blur": 10,
+      "shadow-color": "rgba(34, 197, 94, 0.42)",
+      "shadow-opacity": 0.85,
+      "shadow-offset-x": 0,
+      "shadow-offset-y": 0,
+      "z-index": 11,
+    },
+  });
+
+  styles.push({
+    selector: "node.seguro-defeso-pf",
+    style: {
+      "underlay-color": NETWORK_ALERT_COLORS.SEGURO_DEFESO,
+      "underlay-padding": 5,
+      "underlay-opacity": 0.62,
       "z-index": 11,
     },
   });

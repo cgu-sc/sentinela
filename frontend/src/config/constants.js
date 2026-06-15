@@ -4,14 +4,6 @@
  */
 
 // ─────────────────────────────────────────────────────────────
-// MÓDULOS DO SISTEMA
-// ─────────────────────────────────────────────────────────────
-export const SYSTEM_MODULES = [
-    { name: 'Sentinela', value: 'consolidado', icon: 'pi pi-chart-bar' },
-    { name: 'Alvos',     value: 'alvos',       icon: 'pi pi-compass'   }
-];
-
-// ─────────────────────────────────────────────────────────────
 // PERÍODO DE AUDITORIA
 // Alterar aqui reflete em: slider, filtros, geração de meses e defaults.
 // ─────────────────────────────────────────────────────────────

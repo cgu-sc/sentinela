@@ -92,6 +92,9 @@ const {
   bootstrapLoading,
   bootstrapGeoData,
   bootstrapPeriodSummary,
+  integrityAlertsData,
+  integrityAlertsLoading,
+  integrityAlertsError,
 } =
   storeToRefs(cnpjDetailStore);
 
@@ -116,10 +119,11 @@ const resetVisitedTabs = (activeIndex = cnpjNav.activeTabIndex) => {
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
-const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
+const { formatCurrencyFull, formatNumberFull, formatarData, formatTitleCase } = useFormatting();
 const toast = useToast();
 
 import { usePdfExport } from "@/composables/usePdfExport";
+import { loadCnpjPdfReportData } from "@/composables/useCnpjPdfReportData";
 const { isExporting, exportCnpjPdf } = usePdfExport();
 
 const financialMovementTabRef = ref(null);
@@ -140,35 +144,34 @@ const qtdMunicipiosRegiao = computed(
 );
 
 const handleExport = async () => {
-  // Garante que temos os dados de risco de todos os municípios da região
-  const geo = geoData.value;
-  if (geo?.sg_uf && geo?.id_regiao_saude) {
-    const p = getApiParams();
-    await cnpjDetailStore.fetchMunicipiosRegiao(
-      geo.sg_uf,
-      geo.id_regiao_saude,
-      p.inicio,
-      p.fim,
-    );
-  }
+  try {
+    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
+    const payload = await loadCnpjPdfReportData({
+      cnpj: cnpj.value,
+      inicio,
+      fim,
+      volumeAtipicoPercentual,
+      geoStore,
+      formatTitleCase,
+      formatarData,
+    });
 
-  exportCnpjPdf({
-    cnpjData: cnpjData.value,
-    geoData: geoData.value,
-    cadastro: dadosCadastro.value,
-    cnpj: cnpj.value,
-    qtdMunicipiosRegiao: qtdMunicipiosRegiao.value,
-    financialMovementTabRef,
-    indicatorsTabRef,
-    authTabRef,
-    falecidosTabRef,
-    cnpjNavStore: cnpjNav,
-    geoStore,
-    resultadoMunicipios: cnpjDetailStore.municipiosRegiao,
-    formatCurrencyFull,
-    formatNumberFull,
-    formatarData,
-  });
+    await exportCnpjPdf({
+      ...payload,
+      geoStore,
+      formatCurrencyFull,
+      formatNumberFull,
+      formatarData,
+    });
+  } catch (error) {
+    console.error("Erro ao gerar Relatório PDF:", error);
+    toast.add({
+      severity: "error",
+      summary: "Erro ao gerar Relatório PDF",
+      detail: error?.message || "Não foi possível gerar o arquivo.",
+      life: 8000,
+    });
+  }
 };
 const isGeneratingNote = ref(false);
 const regionalDialogVisible = ref(false);
@@ -260,6 +263,14 @@ const setActiveTab = (index, { syncUrl = true } = {}) => {
     params: route.params,
     query: { ...query, s: tabSlug },
   });
+};
+
+const navigateToSection = (slug) => {
+  const tabIndex = TAB_INDEX_BY_SLUG[slug];
+  if (!Number.isInteger(tabIndex)) {
+    throw new Error(`Aba de destino invalida para alerta de integridade: ${slug}`);
+  }
+  setActiveTab(tabIndex);
 };
 
 watch(
@@ -415,7 +426,10 @@ watch(
     if (access?.status !== "valid") return;
 
     if (newCnpj) {
-      await loadActiveTabData(perfSession, "initial");
+      await Promise.all([
+        cnpjDetailStore.fetchIntegrityAlerts(newCnpj),
+        loadActiveTabData(perfSession, "initial"),
+      ]);
     }
   },
   { immediate: true },
@@ -587,8 +601,12 @@ watch(
       :is-generating-note="isGeneratingNote"
       :period-summary="periodSummary"
       :period-loading="isPeriodSummaryLoading"
+      :integrity-alerts="integrityAlertsData"
+      :integrity-alerts-loading="integrityAlertsLoading"
+      :integrity-alerts-error="integrityAlertsError"
       @export="handleExport"
       @generate-note="handleGenerateNote"
+      @navigate-section="navigateToSection"
     />
 
     <NotaTecnicaRegionalDialog

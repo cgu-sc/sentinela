@@ -9,6 +9,7 @@ import VChart from 'vue-echarts';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
+import { PALETTE } from '@/config/colors';
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, AxisPointerComponent]);
 
@@ -23,7 +24,7 @@ const chartRows = computed(() =>
   ),
 );
 
-const totalProducao = computed(() =>
+const totalSemComprovacao = computed(() =>
   chartRows.value.reduce((sum, row) => sum + Number(row.valor_sem_comprovacao ?? 0), 0),
 );
 
@@ -43,13 +44,23 @@ function formatSemestreLabel(semStr) {
 const C = computed(() => ({
   ...chartTheme.value,
   ...chartDataColors.value,
+  percentual: PALETTE.amber[500],
 }));
+
+function formatPercentual(value) {
+  return `${Number(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
 
 const chartOption = computed(() => {
   const c = C.value;
   const labels = chartRows.value.map((row) => row.semestre);
   const irregular = chartRows.value.map((row) => Number((row.valor_sem_comprovacao ?? 0).toFixed(2)));
-  const producaoTotal = chartRows.value.map((row) => Number((row.valor_producao ?? 0).toFixed(2)));
+  const percentualNaoComprovacao = chartRows.value.map((row) =>
+    Number(Number(row.pct_sem_comprovacao).toFixed(2)),
+  );
 
   return {
     backgroundColor: c.bg,
@@ -90,21 +101,20 @@ const chartOption = computed(() => {
 
         return `
           <div style="color:${c.tooltipText}">
-            <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${formatSemestreLabel(row.semestre)}</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:10px;">${formatSemestreLabel(row.semestre)}</div>
             <div style="display:flex;flex-direction:column;gap:6px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="width:10px;height:10px;border-radius:2px;background:${c.red};display:inline-block;"></span>
                 <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Valor sem comprovação</span>
               </div>
-              <div style="font-weight:700;font-size:13px;color:${c.red};margin-bottom:2px;">
+              <div style="font-weight:600;font-size:13px;color:${c.red};margin-bottom:2px;">
                 ${formatCurrencyFull(row.valor_sem_comprovacao ?? 0)}
               </div>
               <div style="display:flex;align-items:center;gap:8px;">
-                <span style="width:10px;height:10px;border-radius:999px;background:#f59e0b;display:inline-block;"></span>
-                <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">Produção total</span>
+                <span style="width:10px;height:10px;border-radius:999px;background:${c.percentual};display:inline-block;"></span>
+                <span style="font-size:10px;opacity:.6;letter-spacing:.04em;text-transform:uppercase;">% não comprovação</span>
               </div>
-              <div style="font-weight:700;font-size:13px;color:#f59e0b;margin-bottom:2px;">${formatCurrencyFull(row.valor_producao ?? 0)}</div>
-              <div style="border-top:1px solid ${c.tooltipBorder};padding-top:6px;margin-top:2px;font-weight:700;font-size:13px;">% sem comprovação: ${Number(row.pct_sem_comprovacao ?? 0).toFixed(2)}%</div>
+              <div style="font-weight:600;font-size:13px;color:${c.percentual};margin-bottom:2px;">${formatPercentual(row.pct_sem_comprovacao)}</div>
               <div style="font-size:11px;opacity:.65;">CNPJs com produção: ${(row.cnpjs ?? 0).toLocaleString('pt-BR')}</div>
             </div>
           </div>`;
@@ -134,7 +144,7 @@ const chartOption = computed(() => {
         axisLabel: {
           color: c.muted,
           fontSize: 11,
-          fontWeight: 700,
+          fontWeight: 600,
           fontFamily: 'Inter, sans-serif',
           rotate: labels.length > 10 ? 30 : 0,
         },
@@ -146,7 +156,7 @@ const chartOption = computed(() => {
         gridIndex: 0,
         type: 'value',
         name: 'Valor',
-        nameTextStyle: { color: c.muted, fontSize: 10, fontWeight: 700 },
+        nameTextStyle: { color: c.muted, fontSize: 10, fontWeight: 600 },
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
@@ -155,13 +165,13 @@ const chartOption = computed(() => {
       {
         gridIndex: 1,
         type: 'value',
-        name: 'Total',
+        name: '% não comp.',
         min: 0,
-        nameTextStyle: { color: c.muted, fontSize: 10, fontWeight: 700 },
+        nameTextStyle: { color: c.muted, fontSize: 10, fontWeight: 600 },
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
-        axisLabel: { color: c.muted, fontSize: 10, formatter: (value) => formatBRL(value) },
+        axisLabel: { color: c.muted, fontSize: 10, formatter: (value) => formatPercentual(value) },
       },
     ],
 
@@ -189,16 +199,16 @@ const chartOption = computed(() => {
         },
       },
       {
-        name: 'Produção total',
+        name: '% não comprovação',
         type: 'line',
         xAxisIndex: 1,
         yAxisIndex: 1,
         smooth: true,
         symbol: 'circle',
         symbolSize: 7,
-        data: producaoTotal,
-        lineStyle: { color: '#f59e0b', width: 3 },
-        itemStyle: { color: '#f59e0b' },
+        data: percentualNaoComprovacao,
+        lineStyle: { color: c.percentual, width: 3 },
+        itemStyle: { color: c.percentual },
         areaStyle: {
           color: {
             type: 'linear',
@@ -207,8 +217,8 @@ const chartOption = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(245, 158, 11, 0.34)' },
-              { offset: 1, color: 'rgba(245, 158, 11, 0.06)' },
+              { offset: 0, color: `${c.percentual}55` },
+              { offset: 1, color: `${c.percentual}0f` },
             ],
           },
         },
@@ -226,13 +236,13 @@ const chartOption = computed(() => {
       <div class="header-left">
         <i class="pi pi-chart-bar"></i>
         <div>
-          <h3>SEM COMPROVAÇÃO E PRODUÇÃO TOTAL POR SEMESTRE</h3>
-          <span>Painel superior mostra valor sem comprovação; painel inferior compara a produção total</span>
+          <h3>SEM COMPROVAÇÃO E % NÃO COMPROVAÇÃO POR SEMESTRE</h3>
+          <span>Painel superior mostra valor sem comprovação; painel inferior mostra o percentual de não comprovação</span>
         </div>
       </div>
       <div class="header-total">
         <span>Total sem comprovação</span>
-        <strong>{{ formatBRL(totalProducao) }}</strong>
+        <strong>{{ formatBRL(totalSemComprovacao) }}</strong>
       </div>
     </div>
 
@@ -240,7 +250,7 @@ const chartOption = computed(() => {
       <VChart v-if="chartRows.length" class="echart" :option="chartOption" autoresize />
       <div v-else class="empty-state">
         <i class="pi pi-chart-bar"></i>
-        <span>Sem dados de produção para o escopo atual</span>
+        <span>Sem dados semestrais para o escopo atual</span>
       </div>
     </div>
   </div>

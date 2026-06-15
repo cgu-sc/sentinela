@@ -1,25 +1,13 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { SYSTEM_MODULES as modules } from '@/config/constants';
 import { useRecentCnpjStore } from '@/stores/recentCnpj';
 import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
 import { useSyncManager } from '@/composables/useSyncManager';
 import ThemeSelector from '@/components/ThemeSelector.vue';
 import Button from 'primevue/button';
-import SelectButton from 'primevue/selectbutton';
 import AutoComplete from 'primevue/autocomplete';
 import { useGeoStore } from '@/stores/geo';
-
-const props = defineProps({
-  modelValue: { type: String, required: true },
-});
-const emit = defineEmits(['update:modelValue']);
-
-const activeModule = computed({
-  get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val),
-});
 
 const route = useRoute();
 const router = useRouter();
@@ -30,44 +18,12 @@ const totalListas = computed(() => farmaciaLists.interesse.length);
 const { showConfirmSync } = useSyncManager();
 const geoStore = useGeoStore();
 
-// Abas dinâmicas baseadas no módulo selecionado
-const tabs = computed(() => {
-  if (activeModule.value === 'consolidado') {
-    return [
-      { label: 'Home',                 path: '/' },
-      { label: 'Nacional',             path: '/nacional' },
-      { label: 'Municípios',           path: '/municipios' },
-      { label: 'Estabelecimentos',     path: '/estabelecimentos' },
-
-    ];
-  } else {
-    return [
-      { label: 'Mapa-Cluster',      path: '/alvos/cluster' },
-      { label: 'Situação CNPJ',     path: '/alvos/situacao' },
-      { label: 'Variação Produção', path: '/alvos/variacao' },
-      { label: 'Rede de Sócios',    path: '/alvos/rede' },
-    ];
-  }
-});
-
-// Sincroniza activeModule com a rota ao carregar
-onMounted(() => {
-  if (route.path.startsWith('/alvos')) {
-    activeModule.value = 'alvos';
-  }
-});
-
-// Muda a rota padrão ao trocar de módulo
-watch(activeModule, (newVal) => {
-  if (
-    newVal === 'consolidado' &&
-    !route.path.match(/^\/(?:nacional|municipios|empresa|estabelecimentos|regional|listas|$)/)
-  ) {
-    router.push('/');
-  } else if (newVal === 'alvos' && !route.path.startsWith('/alvos')) {
-    router.push('/alvos/cluster');
-  }
-});
+const tabs = [
+  { label: 'Home', path: '/' },
+  { label: 'Municípios', path: '/municipios' },
+  { label: 'Estabelecimentos', path: '/estabelecimentos' },
+  { label: 'Alvos', path: '/alvos' },
+];
 
 // Busca rápida por CNPJ ou Razão Social
 const navCnpjInput = ref('');
@@ -113,23 +69,6 @@ function onNavSelect(event) {
           <span class="nav-brand-sub">Auditoria no Farmácia Popular</span>
         </div>
       </div>
-
-      <div class="nav-divider"></div>
-
-      <SelectButton
-        v-model="activeModule"
-        :options="modules"
-        optionLabel="name"
-        optionValue="value"
-        class="module-select-button"
-      >
-        <template #option="slotProps">
-          <i :class="slotProps.option.icon" style="margin-right: 0.5rem; font-size: 0.9rem"></i>
-          <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">
-            {{ slotProps.option.name }}
-          </span>
-        </template>
-      </SelectButton>
 
       <div class="nav-divider"></div>
 
@@ -298,34 +237,6 @@ function onNavSelect(event) {
   height: 20px;
   background: color-mix(in srgb, var(--text-muted) 30%, transparent);
   flex-shrink: 0;
-}
-
-:deep(.module-select-button) {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-:deep(.module-select-button .p-button) {
-  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
-  border-color: color-mix(in srgb, var(--text-muted) 20%, transparent);
-  color: var(--text-secondary);
-  padding: 0.35rem 0.7rem;
-  font-size: 0.72rem;
-  transition: all 0.2s;
-}
-
-:deep(.module-select-button .p-button:not(.p-highlight):hover) {
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
-  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
-  color: var(--primary-color) !important;
-}
-
-:deep(.module-select-button .p-button.p-highlight) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
-  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent) !important;
-  color: var(--primary-color) !important;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--primary-color) 20%, transparent);
-  font-weight: 700;
 }
 
 .nav-tabs {

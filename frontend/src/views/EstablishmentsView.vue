@@ -2,32 +2,32 @@
 import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFilterStore } from '@/stores/filters';
-import { useIndicadoresStore } from '@/stores/indicadores';
+import { useRiskIndicatorsStore } from '@/stores/riskIndicators';
 import { useGeoStore } from '@/stores/geo';
 import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
-import { useFetchIndicadores } from '@/composables/useFetchIndicadores';
+import { useRiskIndicatorAnalysis } from '@/composables/useRiskIndicatorAnalysis';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 
-import IndicatorSelector from './components/indicadores/IndicatorSelector.vue';
-import IndicadorMap from './components/indicadores/IndicadorMap.vue';
-import IndicadorCnpjTable from './components/indicadores/IndicadorCnpjTable.vue';
+import RiskIndicatorSelector from './components/risk-indicators/RiskIndicatorSelector.vue';
+import EstablishmentRiskMap from './components/establishments/EstablishmentRiskMap.vue';
+import EstablishmentRiskTable from './components/establishments/EstablishmentRiskTable.vue';
 import KpiSection from './components/KpiSection.vue';
 
 const filterStore = useFilterStore();
-const indicadoresStore = useIndicadoresStore();
+const riskIndicatorsStore = useRiskIndicatorsStore();
 const geoStore = useGeoStore();
 const {
-  selectedIndicador, kpis, cnpjKpis, municipios, cnpjs, cnpjsTotal, cnpjsPage, cnpjsRows,
+  selectedRiskIndicator, kpis, cnpjKpis, municipios, cnpjs, cnpjsTotal, cnpjsPage, cnpjsRows,
   cnpjsSortField, cnpjsSortOrder, isLoading, isTableLoading, error
-} = storeToRefs(indicadoresStore);
-const { fetchForIndicador, fetchCnpjsForIndicador } = useFetchIndicadores();
+} = storeToRefs(riskIndicatorsStore);
+const { fetchRiskIndicator, fetchRiskIndicatorEstablishmentsPage } = useRiskIndicatorAnalysis();
 useFetchAnalytics({ includeFatorRisco: false, includeNationalContext: false });
 
 // Metadados do indicador ativo (label, formato, metodologia)
-const activeIndicadorMeta = computed(() => {
-  if (!selectedIndicador.value) return null;
+const activeRiskIndicatorMeta = computed(() => {
+  if (!selectedRiskIndicator.value) return null;
   for (const grupo of INDICATOR_GROUPS) {
-    const ind = grupo.indicators.find(i => i.key === selectedIndicador.value);
+    const ind = grupo.indicators.find(i => i.key === selectedRiskIndicator.value);
     if (ind) return ind;
   }
   return null;
@@ -66,6 +66,17 @@ function onSelectUf(uf) {
   filterStore.selectedMunicipio = 'Todos';
   filterStore.selectedRegiaoSaude = 'Todos';
   filterStore.selectedUF = uf;
+}
+
+function returnMapToUf() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+}
+
+function clearMapGeography() {
+  filterStore.selectedMunicipio = 'Todos';
+  filterStore.selectedRegiaoSaude = 'Todos';
+  filterStore.selectedUF = 'Todos';
 }
 
 // Em indicadores, o fetch traz a UF/Região inteira (para o mapa ficar colorido).
@@ -131,15 +142,15 @@ const selectedRegiaoNome = computed(() => {
   return geoStore.getRegiaoNomeById(code) ?? code;
 });
 
-function onIndicadorSelect(key) {
-  fetchForIndicador(key);
+function onRiskIndicatorSelect(key) {
+  fetchRiskIndicator(key);
 }
 
 function onCnpjTableLazy(event) {
-  if (!selectedIndicador.value) return;
+  if (!selectedRiskIndicator.value) return;
   const rows = event.rows ?? cnpjsRows.value;
   const first = event.first ?? 0;
-  fetchCnpjsForIndicador(selectedIndicador.value, {
+  fetchRiskIndicatorEstablishmentsPage(selectedRiskIndicator.value, {
     page: Math.floor(first / rows) + 1,
     pageSize: rows,
     sortField: event.sortField ?? cnpjsSortField.value,
@@ -147,7 +158,7 @@ function onCnpjTableLazy(event) {
   });
 }
 
-// O fetch automático inicial agora é tratado pelo watch(immediate: true) no useFetchIndicadores.js
+// O fetch automático inicial agora é tratado pelo watch(immediate: true) no useRiskIndicatorAnalysis.js
 </script>
 
 <template>
@@ -161,7 +172,7 @@ function onCnpjTableLazy(event) {
     <div class="analysis-panel">
 
       <!-- Estado vazio: nenhum indicador selecionado -->
-      <div v-if="!selectedIndicador && !isLoading" class="empty-state">
+      <div v-if="!selectedRiskIndicator && !isLoading" class="empty-state">
         <div class="empty-icon-wrap">
           <i class="pi pi-shield empty-icon" />
         </div>
@@ -187,25 +198,27 @@ function onCnpjTableLazy(event) {
       <template v-else>
 
         <!-- Mapa -->
-        <IndicadorMap
+        <EstablishmentRiskMap
           :map-data="municipios"
           :active-uf="activeUf"
           :is-loading="isLoading"
           :kpis="displayedKpis"
-          :formato="activeIndicadorMeta?.formato ?? 'dec'"
-          :indicador-label="activeIndicadorMeta?.label ?? ''"
+          :formato="activeRiskIndicatorMeta?.formato ?? 'dec'"
+          :indicador-label="activeRiskIndicatorMeta?.label ?? ''"
           :selected-ibge7="selectedMunicipioIbge7"
           :selected-regiao="filterStore.selectedRegiaoSaude"
           @select-municipio="onSelectMunicipio"
           @select-uf="onSelectUf"
+          @back-to-uf="returnMapToUf"
+          @clear-geography="clearMapGeography"
         />
 
         <!-- Tabela ranqueada de CNPJs -->
-        <IndicadorCnpjTable
+        <EstablishmentRiskTable
           :cnpjs="displayedCnpjs"
-          :formato="activeIndicadorMeta?.formato ?? 'dec'"
-          :indicador-key="selectedIndicador"
-          :indicador-label="activeIndicadorMeta?.label ?? ''"
+          :formato="activeRiskIndicatorMeta?.formato ?? 'dec'"
+          :indicador-key="selectedRiskIndicator"
+          :indicador-label="activeRiskIndicatorMeta?.label ?? ''"
           :is-loading="isTableLoading"
           :total-records="cnpjsTotal"
           :first="(cnpjsPage - 1) * cnpjsRows"
@@ -224,7 +237,7 @@ function onCnpjTableLazy(event) {
     </div>
 
     <!-- Painel lateral de seleção de indicadores (direita) -->
-    <IndicatorSelector :active-indicador-meta="activeIndicadorMeta" @select="onIndicadorSelect" />
+    <RiskIndicatorSelector :active-risk-indicator-meta="activeRiskIndicatorMeta" @select="onRiskIndicatorSelect" />
     </div>
     </div>
   </div>
@@ -232,7 +245,7 @@ function onCnpjTableLazy(event) {
 
 <style scoped>
 .indicadores-page {
-  --indicator-selector-width: 210px;
+  --indicator-selector-width: 220px;
   display: flex;
   flex-direction: column;
   gap: 1rem;

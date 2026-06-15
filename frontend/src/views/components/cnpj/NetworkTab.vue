@@ -11,6 +11,7 @@ import {
 } from "vue";
 import { storeToRefs } from "pinia";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
+import { useFilterParameters } from "@/composables/useFilterParameters";
 import { useRoute } from "vue-router";
 import cytoscape from "cytoscape";
 import TabPlaceholder from "./TabPlaceholder.vue";
@@ -33,6 +34,7 @@ import {
 } from "@/utils/network/networkLayouts";
 import { computeAnchoredFanPosition } from "@/utils/network/networkLayoutEngine";
 import {
+  buildNetworkNodeVisualData,
   getNodeClasses,
   isTruthyFlag,
   normalizeSearchText,
@@ -44,8 +46,29 @@ import { createCnpjPerfSession, logCnpjPerf } from "@/utils/cnpjPerfLogger";
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
 const cnpjDetailStore = useCnpjDetailStore();
+const { getApiParams } = useFilterParameters();
 const { networkData, networkLoading, networkError } =
   storeToRefs(cnpjDetailStore);
+
+function getNetworkPeriod() {
+  const { inicio, fim } = getApiParams();
+  return { inicio, fim };
+}
+
+function fetchPeriodNetworkLevel(level) {
+  const { inicio, fim } = getNetworkPeriod();
+  return cnpjDetailStore.fetchNetworkLevel(cnpj.value, level, inicio, fim);
+}
+
+function fetchPeriodNetworkExpansion(nodeId) {
+  const { inicio, fim } = getNetworkPeriod();
+  return cnpjDetailStore.expandNetworkNode(
+    cnpj.value,
+    nodeId,
+    inicio,
+    fim,
+  );
+}
 
 // ── Cytoscape instance & container ─────────────────────────────────────────
 const cyContainer = ref(null);
@@ -98,6 +121,8 @@ const readAlertNodes = () => {
         label: node.data("label"),
         is_falecido: node.data("is_falecido"),
         is_cadunico: node.data("is_cadunico"),
+        is_esocial: node.data("is_esocial"),
+        is_seguro_defeso: node.data("is_seguro_defeso"),
         is_cnae_farmacia_ausente: node.data("is_cnae_farmacia_ausente"),
         is_par: node.data("is_par"),
         qtd_processos_par: node.data("qtd_processos_par"),
@@ -120,6 +145,8 @@ const networkAlertGroups = computed(() => {
       name: getPersonAlertName(node),
       is_falecido: isTruthyFlag(node.is_falecido),
       is_cadunico: isTruthyFlag(node.is_cadunico),
+      is_esocial: isTruthyFlag(node.is_esocial),
+      is_seguro_defeso: isTruthyFlag(node.is_seguro_defeso),
     }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
   const companies = alertNodes
@@ -157,6 +184,18 @@ const networkAlertGroups = computed(() => {
       label: "CadÚnico",
       icon: "legend-cadunico-ring",
       items: people.filter((node) => node.is_cadunico),
+    },
+    {
+      key: "esocial",
+      label: "eSocial",
+      icon: "legend-esocial-ring",
+      items: people.filter((node) => node.is_esocial),
+    },
+    {
+      key: "seguro-defeso",
+      label: "Seguro Defeso",
+      icon: "legend-seguro-defeso-ring",
+      items: people.filter((node) => node.is_seguro_defeso),
     },
   ].filter((group) => group.items.length > 0);
 });
@@ -306,13 +345,13 @@ function restorePresentationUiState(state) {
 async function getGraphDataForPresentationState(state) {
   if (!networkData.value) return null;
   if (state?.level === "N3") {
-    const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+    const dataN3 = await fetchPeriodNetworkLevel(3);
     return mergeNetworkPayloads(networkData.value, dataN3);
   }
   if (state?.level === "N4") {
     const [dataN3, dataN4] = await Promise.all([
-      cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3),
-      cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4),
+      fetchPeriodNetworkLevel(3),
+      fetchPeriodNetworkLevel(4),
     ]);
     return mergeNetworkPayloads(networkData.value, dataN3, dataN4);
   }
@@ -578,8 +617,7 @@ const mergeNetworkData = (newData, options = {}) => {
         .join(" "),
       data: {
         ...n,
-        label: truncateLabel(n.label, 20),
-        fullLabel: n.label,
+        ...buildNetworkNodeVisualData(n, 20),
         situacao_rf: n.situacao_rf,
         is_expanded_node: true,
         expansion_level: expansionLevel,
@@ -658,13 +696,13 @@ async function getGraphIdsForLevel(level) {
 
   if (level === "N2") return ids;
 
-  const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+  const dataN3 = await fetchPeriodNetworkLevel(3);
   (dataN3?.nodes || []).forEach((node) => ids.nodeIds.add(node.id));
   (dataN3?.edges || []).forEach((edge) => ids.edgeIds.add(edge.id));
 
   if (level === "N3") return ids;
 
-  const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
+  const dataN4 = await fetchPeriodNetworkLevel(4);
   (dataN4?.nodes || []).forEach((node) => ids.nodeIds.add(node.id));
   (dataN4?.edges || []).forEach((edge) => ids.edgeIds.add(edge.id));
 
@@ -833,7 +871,7 @@ const expandBatch = async (mode) => {
     loadingLevel.value = mode;
     showLevelHelpMenu.value = false;
     if (mode === "N3") {
-      const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+      const dataN3 = await fetchPeriodNetworkLevel(3);
 
       if (currentLevel.value === "N4" && cy) {
         const allowedIds = addDataToGraphIds(getBaseGraphIds(), dataN3);
@@ -872,7 +910,7 @@ const expandBatch = async (mode) => {
 
       if (shouldMergeN3First) {
         expandedNodes.value = new Set();
-        const dataN3 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 3);
+        const dataN3 = await fetchPeriodNetworkLevel(3);
         const mergedN3 = mergeNetworkData(dataN3, {
           layoutPreset: "anchored",
           hideDuringLayout: false,
@@ -886,7 +924,7 @@ const expandBatch = async (mode) => {
         if (mergedN3) await wait(1180);
       }
 
-      const dataN4 = await cnpjDetailStore.fetchNetworkLevel(cnpj.value, 4);
+      const dataN4 = await fetchPeriodNetworkLevel(4);
       if (dataN4)
         mergeNetworkData(dataN4, {
           layoutPreset: "anchored",
@@ -1388,8 +1426,7 @@ async function buildGraph(data, { presentationState = null } = {}) {
         classes: getNodeClasses(n),
         data: {
           id: n.id,
-          label: truncateLabel(n.label, 22),
-          fullLabel: n.label,
+          ...buildNetworkNodeVisualData(n, 22),
           type: n.type,
           municipio: n.municipio,
           uf: n.uf,
@@ -1403,6 +1440,8 @@ async function buildGraph(data, { presentationState = null } = {}) {
           cnae_secundario: n.cnae_secundario,
           is_falecido: isTruthyFlag(n.is_falecido),
           is_cadunico: isTruthyFlag(n.is_cadunico),
+          is_esocial: isTruthyFlag(n.is_esocial),
+          is_seguro_defeso: isTruthyFlag(n.is_seguro_defeso),
           is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
           is_par: isTruthyFlag(n.is_par),
           qtd_processos_par: n.qtd_processos_par || 0,
@@ -1524,10 +1563,7 @@ async function expandNode(nodeId) {
 
   isExpanding.value = true;
   try {
-    const expansionData = await cnpjDetailStore.expandNetworkNode(
-      cnpj.value,
-      nodeId,
-    );
+    const expansionData = await fetchPeriodNetworkExpansion(nodeId);
 
     if (
       !expansionData ||
@@ -1548,8 +1584,7 @@ async function expandNode(nodeId) {
           classes: getNodeClasses(n),
           data: {
             id: n.id,
-            label: truncateLabel(n.label, 20),
-            fullLabel: n.label,
+            ...buildNetworkNodeVisualData(n, 20),
             type: n.type || "PF",
             is_expanded_node: true,
             expansion_level: expansionLevel,
@@ -1565,6 +1600,8 @@ async function expandNode(nodeId) {
             situacao_rf: n.situacao_rf,
             is_falecido: isTruthyFlag(n.is_falecido),
             is_cadunico: isTruthyFlag(n.is_cadunico),
+            is_esocial: isTruthyFlag(n.is_esocial),
+            is_seguro_defeso: isTruthyFlag(n.is_seguro_defeso),
             is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
             is_par: isTruthyFlag(n.is_par),
             qtd_processos_par: n.qtd_processos_par || 0,
@@ -1820,7 +1857,8 @@ onMounted(async () => {
   document.addEventListener("click", handleFiltersMenuOutsideClick);
 
   if (!networkData.value) {
-    cnpjDetailStore.fetchNetwork(cnpj.value);
+    const { inicio, fim } = getNetworkPeriod();
+    cnpjDetailStore.fetchNetwork(cnpj.value, inicio, fim);
   } else {
     await nextTick();
     observeGraphContainer();

@@ -1,7 +1,9 @@
 import os
 import time
+from datetime import date
 from typing import Optional
 import polars as pl
+from data_cache import get_df, get_df_perfil_estabelecimento
 from cache_files import (
     TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
     TEIA_GRAFO_NIVEL2_NODES_PARQUET,
@@ -12,6 +14,10 @@ from cache_files import (
 )
 from ...schemas.analytics import NetworkNodeSchema, NetworkEdgeSchema, NetworkResponse, NetworkSummarySchema, NetworkLevelSummarySchema
 from ._cache import _get_cnpj_cache_dir, sync_network
+from .indicator_rules import (
+    NAO_COMPROVACAO_PCT_ATENCAO,
+    NAO_COMPROVACAO_PCT_CRITICO,
+)
 
 NETWORK_LEVEL_LABELS = {
     "root": "CNPJ analisado",
@@ -21,20 +27,196 @@ NETWORK_LEVEL_LABELS = {
     "n4": "Empresas dos sócios N3",
 }
 
+NETWORK_REQUIRED_MOVEMENT_COLUMNS = {
+    "id_cnpj",
+    "periodo",
+    "total_vendas",
+    "total_sem_comprovacao",
+}
+NETWORK_REQUIRED_PROFILE_COLUMNS = {"id_cnpj", "cnpj", "is_conexao_ativa"}
+
 
 def _is_pf_node(node_type: Optional[str]) -> bool:
     return str(node_type or "").upper() == "PF"
 
 
+def _normalize_document(value: object) -> str:
+    return "".join(char for char in str(value or "") if char.isdigit()).zfill(14)
+
+
+def _require_columns(df: pl.DataFrame, required: set[str], source: str) -> None:
+    missing = sorted(required.difference(df.columns))
+    if missing:
+        raise RuntimeError(
+            f"Cache {source} sem colunas obrigatorias para a teia: {', '.join(missing)}"
+        )
+
+
+def _classify_nao_comprovacao(percentual: float) -> str:
+    if percentual >= NAO_COMPROVACAO_PCT_CRITICO:
+        return "CRÍTICO"
+    if percentual >= NAO_COMPROVACAO_PCT_ATENCAO:
+        return "ATENÇÃO"
+    return "NORMAL"
+
+
+def _get_fp_audit_context_by_cnpj(
+    rows: list[dict],
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, dict]:
+    fp_cnpjs = {
+        _normalize_document(row.get("id"))
+        for row in rows
+        if (row.get("type") or "").upper() == "PJ_FARMACIA_POPULAR"
+    }
+    if not fp_cnpjs:
+        return {}
+
+    profile = get_df_perfil_estabelecimento()
+    movement = get_df()
+    _require_columns(profile, NETWORK_REQUIRED_PROFILE_COLUMNS, "perfil_estabelecimento")
+    _require_columns(movement, NETWORK_REQUIRED_MOVEMENT_COLUMNS, "movimentacao")
+
+    fp_profile = (
+        profile
+        .with_columns(
+            pl.col("cnpj")
+            .cast(pl.String)
+            .str.replace_all(r"\D", "")
+            .str.zfill(14)
+            .alias("_network_cnpj")
+        )
+        .filter(pl.col("_network_cnpj").is_in(sorted(fp_cnpjs)))
+        .select("id_cnpj", "_network_cnpj", "is_conexao_ativa")
+        .unique(subset=["_network_cnpj"])
+    )
+
+    found_cnpjs = set(fp_profile["_network_cnpj"].to_list())
+    missing_cnpjs = sorted(fp_cnpjs.difference(found_cnpjs))
+    if missing_cnpjs:
+        raise RuntimeError(
+            "Farmacias Populares da teia ausentes no perfil_estabelecimento: "
+            + ", ".join(missing_cnpjs)
+        )
+
+    invalid_connections = (
+        fp_profile
+        .filter(pl.col("is_conexao_ativa").is_null())
+        .select("_network_cnpj", "is_conexao_ativa")
+    )
+    if not invalid_connections.is_empty():
+        values = ", ".join(
+            f"{row['_network_cnpj']}={row['is_conexao_ativa']}"
+            for row in invalid_connections.iter_rows(named=True)
+        )
+        raise RuntimeError(
+            "Farmacias Populares da teia com is_conexao_ativa invalida: " + values
+        )
+
+    period_expr = pl.col("periodo").cast(pl.Date)
+    filtered_movement = movement
+    if data_inicio is not None:
+        filtered_movement = filtered_movement.filter(period_expr >= pl.lit(data_inicio))
+    if data_fim is not None:
+        filtered_movement = filtered_movement.filter(period_expr <= pl.lit(data_fim))
+
+    aggregated = (
+        filtered_movement
+        .join(fp_profile, on="id_cnpj", how="inner")
+        .group_by("_network_cnpj")
+        .agg(
+            pl.sum("total_vendas").alias("_total_vendas"),
+            pl.sum("total_sem_comprovacao").alias("_total_sem_comprovacao"),
+        )
+    )
+
+    result = (
+        fp_profile
+        .join(aggregated, on="_network_cnpj", how="left")
+        .with_columns(
+            pl.col("_total_vendas").fill_null(0),
+            pl.col("_total_sem_comprovacao").fill_null(0),
+        )
+        .with_columns(
+            pl.when(pl.col("_total_vendas") > 0)
+            .then(
+                pl.col("_total_sem_comprovacao")
+                / pl.col("_total_vendas")
+                * 100
+            )
+            .otherwise(0.0)
+            .cast(pl.Float64)
+            .alias("_percentual_nao_comprovacao")
+        )
+    )
+
+    return {
+        row["_network_cnpj"]: {
+            "percentual_nao_comprovacao": float(
+                row["_percentual_nao_comprovacao"]
+            ),
+            "conexao_ms": "Ativa" if row["is_conexao_ativa"] else "Inativa",
+        }
+        for row in result.iter_rows(named=True)
+    }
+
+
+def _build_network_nodes(
+    df_nodes: pl.DataFrame,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+    default_type: Optional[str] = None,
+) -> list[NetworkNodeSchema]:
+    rows = list(df_nodes.iter_rows(named=True))
+    audit_context = _get_fp_audit_context_by_cnpj(rows, data_inicio, data_fim)
+
+    for row in rows:
+        node_type = (row.get("type") or default_type or "").upper()
+        if node_type == "PJ_FARMACIA_POPULAR":
+            cnpj = _normalize_document(row.get("id"))
+            if cnpj not in audit_context:
+                raise RuntimeError(
+                    f"Contexto de auditoria nao calculado para a farmacia {cnpj}"
+                )
+            context = audit_context[cnpj]
+            percentual = context["percentual_nao_comprovacao"]
+            row["percentual_nao_comprovacao"] = percentual
+            row["criticidade_nao_comprovacao"] = _classify_nao_comprovacao(
+                percentual
+            )
+            row["conexao_ms"] = context["conexao_ms"]
+
+    return [_build_network_node(row, default_type=default_type) for row in rows]
+
+
 def _build_network_node(row: dict, default_type: Optional[str] = None) -> NetworkNodeSchema:
     node_type = row.get("type") or default_type or "PF"
     is_pf = _is_pf_node(node_type)
+    percentual_nao_comprovacao = row.get("percentual_nao_comprovacao")
+    criticidade_nao_comprovacao = row.get("criticidade_nao_comprovacao")
+    conexao_ms = row.get("conexao_ms")
+    if node_type == "PJ_FARMACIA_POPULAR" and percentual_nao_comprovacao is None:
+        raise RuntimeError(
+            f"No de Farmacia Popular {row.get('id')} sem percentual de nao comprovacao"
+        )
+    if node_type == "PJ_FARMACIA_POPULAR" and criticidade_nao_comprovacao is None:
+        raise RuntimeError(
+            f"No de Farmacia Popular {row.get('id')} sem criticidade de nao comprovacao"
+        )
+    if node_type == "PJ_FARMACIA_POPULAR" and conexao_ms not in {"Ativa", "Inativa"}:
+        raise RuntimeError(
+            f"No de Farmacia Popular {row.get('id')} sem conexao_ms valida"
+        )
 
     return NetworkNodeSchema(
         id=row["id"],
         label=row["label"] or "",
         type=node_type,
         network_level=row.get("network_level"),
+        percentual_nao_comprovacao=percentual_nao_comprovacao,
+        criticidade_nao_comprovacao=criticidade_nao_comprovacao,
+        conexao_ms=conexao_ms,
         razao_social=None if is_pf else row.get("razao_social"),
         nome_socio=row.get("nome_socio") if is_pf else None,
         nome_fantasia=row.get("nome_fantasia"),
@@ -47,6 +229,8 @@ def _build_network_node(row: dict, default_type: Optional[str] = None) -> Networ
         situacao_rf=row.get("situacao_rf"),
         is_falecido=row.get("is_falecido", False),
         is_cadunico=row["is_cadunico"],
+        is_esocial=row["is_esocial"],
+        is_seguro_defeso=row["is_seguro_defeso"],
         is_cnae_farmacia_ausente=row["is_cnae_farmacia_ausente"],
         is_par=False if is_pf else row.get("is_par", False),
         qtd_processos_par=0 if is_pf else row.get("qtd_processos_par", 0),
@@ -125,7 +309,12 @@ def _build_network_summary(cnpj: str) -> NetworkSummarySchema:
     )
 
 
-def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
+def get_teia_grafo_nivel2(
+    cnpj: str,
+    engine,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> NetworkResponse:
     """
     Retorna a rede de relacionamentos societários de um CNPJ.
 
@@ -150,11 +339,10 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH) if os.path.exists(EDGES_PATH) else pl.DataFrame()
     except Exception as e:
-        print(f"⚠️ Erro ao ler Parquet de teia para {cnpj}: {e}")
-        return NetworkResponse(cnpj=cnpj, nodes=[], edges=[])
+        raise RuntimeError(f"Erro ao ler Parquet de teia para {cnpj}: {e}") from e
 
     # ── Reconstrói os schemas a partir dos DataFrames ─────────────────────────
-    nodes = [_build_network_node(row) for row in df_nodes.iter_rows(named=True)]
+    nodes = _build_network_nodes(df_nodes, data_inicio, data_fim)
 
     edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)] if not df_edges.is_empty() else []
 
@@ -167,7 +355,12 @@ def get_teia_grafo_nivel2(cnpj: str, engine) -> NetworkResponse:
     )
 
 
-def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> NetworkResponse:
+def get_teia_grafo_nivel3_expansao(
+    cnpj_alvo: str,
+    cnpj_para_expandir: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> NetworkResponse:
     """
     Carrega os dados de expansão (Nível 3) para um nó específico que já está na teia.
     Lê os arquivos de expansão pré-gerados na pasta de cache do CNPJ alvo.
@@ -201,7 +394,12 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
         node_ids.discard(cnpj_para_expandir)
         df_exp_nodes = pl.read_parquet(EXP_NODES_PATH).filter(pl.col("id").is_in(list(node_ids)))
 
-        nodes = [_build_network_node(row, default_type="PF") for row in df_exp_nodes.iter_rows(named=True)]
+        nodes = _build_network_nodes(
+            df_exp_nodes,
+            data_inicio,
+            data_fim,
+            default_type="PF",
+        )
 
         edges = [_build_network_edge(row) for row in df_exp_edges.iter_rows(named=True)]
 
@@ -214,11 +412,17 @@ def get_teia_grafo_nivel3_expansao(cnpj_alvo: str, cnpj_para_expandir: str) -> N
         )
 
     except Exception as e:
-        print(f"⚠️ Erro ao expandir nó {cnpj_para_expandir} na teia {cnpj_alvo}: {e}")
-        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+        raise RuntimeError(
+            f"Erro ao expandir no {cnpj_para_expandir} na teia {cnpj_alvo}: {e}"
+        ) from e
 
 
-def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> NetworkResponse:
+def get_teia_grafo_nivel4_expansao(
+    cnpj_alvo: str,
+    cpf_para_expandir: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> NetworkResponse:
     """
     Carrega os dados de expansão (Nível 4) para um SÓCIO específico.
     Lê os arquivos de expansão N4 pré-gerados na pasta de cache do CNPJ alvo.
@@ -251,7 +455,12 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
         # Busca detalhes das empresas
         df_n4_nodes = pl.read_parquet(N4_NODES_PATH).filter(pl.col("id").is_in(list(node_ids)))
 
-        nodes = [_build_network_node(row, default_type="PJ") for row in df_n4_nodes.iter_rows(named=True)]
+        nodes = _build_network_nodes(
+            df_n4_nodes,
+            data_inicio,
+            data_fim,
+            default_type="PJ",
+        )
 
         edges = [_build_network_edge(row) for row in df_n4_edges.iter_rows(named=True)]
 
@@ -264,10 +473,15 @@ def get_teia_grafo_nivel4_expansao(cnpj_alvo: str, cpf_para_expandir: str) -> Ne
         )
 
     except Exception as e:
-        print(f"⚠️ Erro ao expandir sócio {cpf_para_expandir} na teia {cnpj_alvo}: {e}")
-        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+        raise RuntimeError(
+            f"Erro ao expandir socio {cpf_para_expandir} na teia {cnpj_alvo}: {e}"
+        ) from e
 
-def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
+def get_teia_grafo_nivel3_full(
+    cnpj_alvo: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> NetworkResponse:
     """Retorna TODOS os sócios de nível 3 (Sócios de N2) em lote."""
     CACHE_DIR = _get_cnpj_cache_dir(cnpj_alvo)
     NODES_PATH = os.path.join(CACHE_DIR, TEIA_GRAFO_NIVEL3_NODES_PARQUET)
@@ -281,16 +495,24 @@ def get_teia_grafo_nivel3_full(cnpj_alvo: str) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH)
 
-        nodes = [_build_network_node(row, default_type="PF") for row in df_nodes.iter_rows(named=True)]
+        nodes = _build_network_nodes(
+            df_nodes,
+            data_inicio,
+            data_fim,
+            default_type="PF",
+        )
         
         edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)]
 
         return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges, summary=_build_network_summary(cnpj_alvo))
     except Exception as e:
-        print(f"[ NETWORK ] ERRO BATCH N3 EM {cnpj_alvo}: {e}")
-        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+        raise RuntimeError(f"Erro batch N3 na teia {cnpj_alvo}: {e}") from e
 
-def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
+def get_teia_grafo_nivel4_full(
+    cnpj_alvo: str,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> NetworkResponse:
     """Retorna TODAS as empresas de nível 4 (Participações de N3) em lote."""
     CACHE_DIR = _get_cnpj_cache_dir(cnpj_alvo)
     NODES_PATH = os.path.join(CACHE_DIR, TEIA_GRAFO_NIVEL4_NODES_PARQUET)
@@ -304,11 +526,15 @@ def get_teia_grafo_nivel4_full(cnpj_alvo: str) -> NetworkResponse:
         df_nodes = pl.read_parquet(NODES_PATH)
         df_edges = pl.read_parquet(EDGES_PATH)
 
-        nodes = [_build_network_node(row, default_type="PJ") for row in df_nodes.iter_rows(named=True)]
+        nodes = _build_network_nodes(
+            df_nodes,
+            data_inicio,
+            data_fim,
+            default_type="PJ",
+        )
         
         edges = [_build_network_edge(row) for row in df_edges.iter_rows(named=True)]
 
         return NetworkResponse(cnpj=cnpj_alvo, nodes=nodes, edges=edges, summary=_build_network_summary(cnpj_alvo))
     except Exception as e:
-        print(f"[ NETWORK ] ERRO BATCH N4 EM {cnpj_alvo}: {e}")
-        return NetworkResponse(cnpj=cnpj_alvo, nodes=[], edges=[])
+        raise RuntimeError(f"Erro batch N4 na teia {cnpj_alvo}: {e}") from e

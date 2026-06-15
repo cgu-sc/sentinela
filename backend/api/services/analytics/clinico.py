@@ -175,7 +175,9 @@ def _build_municipal_context(
         .agg(
             pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
             pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
+            pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
             pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
+            pl.sum("valor_total_pago").alias("valor_total_pago"),
             pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
         )
         .with_columns(pl.col("id_cnpj").cast(pl.Int64))
@@ -248,7 +250,7 @@ def _build_municipal_context(
     ranking_base = (
         agregado
         .sort(
-            ["valor_incompativel_pago", "qtd_cpfs_incompativeis", "qtd_cpfs_distintos"],
+            ["valor_incompativel_pago", "qtd_autorizacoes_incompativeis", "valor_total_pago"],
             descending=[True, True, True],
         )
     )
@@ -271,11 +273,10 @@ def _build_municipal_context(
             cnpj=str(row["cnpj"]),
             razao_social=str(row["razao_social"]),
             is_alvo=int(row["id_cnpj"]) == id_cnpj_alvo,
-            qtd_cpfs_distintos=int(row["qtd_cpfs_distintos"] or 0),
-            qtd_cpfs_incompativeis=int(row["qtd_cpfs_incompativeis"] or 0),
+            qtd_autorizacoes=int(row["qtd_autorizacoes"] or 0),
             qtd_autorizacoes_incompativeis=int(row["qtd_autorizacoes_incompativeis"] or 0),
+            valor_total_pago=float(row["valor_total_pago"] or 0),
             valor_incompativel_pago=float(row["valor_incompativel_pago"] or 0),
-            percentual_cpfs_incompativeis=_ratio(row["qtd_cpfs_incompativeis"], row["qtd_cpfs_distintos"]),
             participacao_municipal=_ratio(row["valor_incompativel_pago"], total_valor),
         )
         for row in top.to_dicts()

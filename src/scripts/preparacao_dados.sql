@@ -736,7 +736,12 @@ ON
 -- ETAPA 2: Dicionário de CPFs
 --------------------------------------------------------------
 
+USE [temp_CGUSC];
 GO
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+GO
+
 DROP TABLE IF EXISTS #cpfs_vivos;
 GO
 SELECT DISTINCT cpf_cnpj_socio AS cpf INTO #cpfs_vivos 
@@ -750,32 +755,277 @@ GO
 CREATE CLUSTERED INDEX ix_cpfs_vivos ON #cpfs_vivos(cpf);
 GO
 
+IF OBJECT_ID('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.esocial_cnpj_trabalhador_ano nao encontrada para marcar socios do eSocial.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'id_cnpj') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'cpf_trabalhador') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'cbo') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.esocial_cnpj_trabalhador_ano', 'dt_rescisao') IS NULL
+BEGIN
+    RAISERROR('Tabela temp_CGUSC.fp.esocial_cnpj_trabalhador_ano sem colunas obrigatorias id_cnpj/cpf_trabalhador/cbo/dt_rescisao.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #cbo_esocial_permitido;
+GO
+SELECT
+    V.cbo,
+    V.motivo
+INTO #cbo_esocial_permitido
+FROM (VALUES
+    (411005, 'Auxiliar de escritorio'),
+    (411010, 'Assistente administrativo'),
+    (411030, 'Auxiliar de pessoal'),
+    (412205, 'Continuo'),
+    (413110, 'Auxiliar de contabilidade'),
+    (414110, 'Armazenista'),
+    (414125, 'Estoquista'),
+    (421105, 'Atendente comercial'),
+    (421110, 'Bilheteiro de transportes coletivos'),
+    (421125, 'Operador de caixa'),
+    (421205, 'Recebedor de apostas'),
+    (511110, 'Comissario de trem'),
+    (512105, 'Empregado domestico'),
+    (513435, 'Atendente de lanchonete'),
+    (514320, 'Faxineiro'),
+    (519110, 'Motofretista'),
+    (521110, 'Vendedor de comercio varejista'),
+    (521130, 'Atendente de farmacia balconista'),
+    (521140, 'Atendente de lojas e mercados'),
+    (784205, 'Alimentador de linha de producao')
+) AS V(cbo, motivo);
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_cbo_esocial_permitido
+ON #cbo_esocial_permitido(cbo);
+GO
+
+DROP TABLE IF EXISTS #esocial_vinculo_trabalhista;
+GO
+SELECT DISTINCT
+    CAST(E.cpf_trabalhador AS CHAR(11)) AS cpf,
+    CAST(F.cnpj AS VARCHAR(14)) AS cnpj_esocial
+INTO #esocial_vinculo_trabalhista
+FROM temp_CGUSC.fp.esocial_cnpj_trabalhador_ano E
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.id = E.id_cnpj
+CROSS APPLY (
+    SELECT TRY_CONVERT(INT, E.cbo) AS cbo_int
+) CBO
+WHERE E.cpf_trabalhador IS NOT NULL
+  AND E.dt_rescisao IS NULL
+  AND CBO.cbo_int IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM #cbo_esocial_permitido X
+      WHERE X.cbo = CBO.cbo_int
+  );
+GO
+CREATE CLUSTERED INDEX ix_esocial_vinculo_trabalhista
+ON #esocial_vinculo_trabalhista(cpf, cnpj_esocial);
+GO
+
+IF OBJECT_ID('db_seguro_defeso.dbo.Pescador_Requerimentos', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_seguro_defeso.dbo.Pescador_Requerimentos nao encontrada para marcar socios no Seguro Defeso.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_seguro_defeso.dbo.Pescador_Requerimentos', 'NumeroRequerimento') IS NULL
+   OR COL_LENGTH('db_seguro_defeso.dbo.Pescador_Requerimentos', 'CPFRequerente') IS NULL
+   OR COL_LENGTH('db_seguro_defeso.dbo.Pescador_Requerimentos', 'StatusRequerimento') IS NULL
+   OR COL_LENGTH('db_seguro_defeso.dbo.Pescador_Requerimentos', 'SituacaoRequerimento') IS NULL
+   OR COL_LENGTH('db_seguro_defeso.dbo.Pescador_Requerimentos', 'QtdParcelasPagas') IS NULL
+   OR COL_LENGTH('db_seguro_defeso.dbo.Pescador_Requerimentos', 'ValorParcelasPagas') IS NULL
+BEGIN
+    RAISERROR('Tabela db_seguro_defeso.dbo.Pescador_Requerimentos sem colunas obrigatorias para marcar socios no Seguro Defeso.', 16, 1);
+    RETURN;
+END;
+
+IF OBJECT_ID('db_seguro_defeso.dbo.Pescador_Parcelas', 'U') IS NULL
+BEGIN
+    RAISERROR('Tabela db_seguro_defeso.dbo.Pescador_Parcelas nao encontrada para marcar socios no Seguro Defeso.', 16, 1);
+    RETURN;
+END;
+
+IF COL_LENGTH('db_seguro_defeso.dbo.Pescador_Parcelas', 'NumeroRequerimento') IS NULL
+   OR COL_LENGTH('db_seguro_defeso.dbo.Pescador_Parcelas', 'SituacaoAtualParcela') IS NULL
+BEGIN
+    RAISERROR('Tabela db_seguro_defeso.dbo.Pescador_Parcelas sem colunas obrigatorias NumeroRequerimento/SituacaoAtualParcela.', 16, 1);
+    RETURN;
+END;
+
+DROP TABLE IF EXISTS #seguro_defeso_requerimentos_base;
+GO
+SELECT
+    R.NumeroRequerimento,
+    CAST(R.CPFRequerente AS CHAR(11)) AS cpf,
+    R.QtdParcelasPagas,
+    R.ValorParcelasPagas
+INTO #seguro_defeso_requerimentos_base
+FROM db_seguro_defeso.dbo.Pescador_Requerimentos R
+INNER JOIN #cpfs_vivos C
+    ON C.cpf = R.CPFRequerente
+WHERE R.CPFRequerente IS NOT NULL
+  AND R.StatusRequerimento IN ('Habilitado', 'Notificado')
+  AND R.SituacaoRequerimento IN ('Beneficiario', 'Segurado');
+GO
+CREATE CLUSTERED INDEX ix_seguro_defeso_requerimentos_base
+ON #seguro_defeso_requerimentos_base(NumeroRequerimento, cpf);
+GO
+CREATE INDEX ix_seguro_defeso_requerimentos_base_cpf
+ON #seguro_defeso_requerimentos_base(cpf);
+GO
+
+DROP TABLE IF EXISTS #seguro_defeso_cpfs;
+GO
+SELECT DISTINCT cpf
+INTO #seguro_defeso_cpfs
+FROM (
+    SELECT B.cpf
+    FROM #seguro_defeso_requerimentos_base B
+    WHERE ISNULL(B.QtdParcelasPagas, 0) > 0
+       OR ISNULL(B.ValorParcelasPagas, 0) > 0
+
+    UNION
+
+    SELECT B.cpf
+    FROM #seguro_defeso_requerimentos_base B
+    INNER JOIN db_seguro_defeso.dbo.Pescador_Parcelas P
+        ON P.NumeroRequerimento = B.NumeroRequerimento
+    WHERE P.SituacaoAtualParcela IN (
+        'Parcela Paga',
+        'Parcela Paga por Compensação',
+        'Parcela Emitida',
+        'Parcela Reemitida'
+    )
+) S;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_seguro_defeso_cpfs
+ON #seguro_defeso_cpfs(cpf);
+GO
+
 GO
 DROP TABLE IF EXISTS #temp_metadata_cpfs;
 GO
-SELECT c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)) AS nome,
-    CAST(c.dataNascimento AS DATE) AS dataNascimento,
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
-INTO #temp_metadata_cpfs
-FROM #cpfs_vivos v
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = v.cpf
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN #cpfs_vivos v_cad ON v_cad.cpf = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE c.CPF IS NOT NULL;
+CREATE TABLE #temp_metadata_cpfs (
+    CPF CHAR(11) NOT NULL,
+    nome VARCHAR(100) NULL,
+    dataNascimento DATE NULL,
+    is_cadunico TINYINT NOT NULL
+);
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_temp_metadata_cpfs
+ON #temp_metadata_cpfs(CPF);
 GO
 
-WITH CTE AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) as rn
-    FROM #temp_metadata_cpfs
-)
-DELETE FROM CTE WHERE rn > 1;
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
 GO
-CREATE CLUSTERED INDEX ix_meta_cpfs ON #temp_metadata_cpfs(CPF);
+SELECT cpf
+INTO #cpfs_metadata_lote
+FROM #cpfs_vivos;
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
+INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
+SELECT
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
+GO
+
+DROP TABLE IF EXISTS #dados_socios_esocial;
+GO
+SELECT DISTINCT
+    CAST(soc.cpfcnpjSocio AS VARCHAR(14)) AS cpf_cnpj_socio,
+    CAST(soc.cnpj AS VARCHAR(14)) AS cnpj
+INTO #dados_socios_esocial
+FROM temp_CGUSC.fp.lista_cnpjs lst
+INNER JOIN db_CNPJ.dbo.socios soc
+    ON soc.cnpj = lst.cnpj
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = soc.cpfcnpjSocio
+   AND ESO.cnpj_esocial <> soc.cnpj
+WHERE soc.indSocio = 'PF'
+  AND soc.dataExclusaoSociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_dados_socios_esocial
+ON #dados_socios_esocial(cpf_cnpj_socio, cnpj);
+GO
+
+DROP TABLE IF EXISTS #dados_socios_seguro_defeso;
+GO
+SELECT DISTINCT
+    CAST(soc.cpfcnpjSocio AS VARCHAR(14)) AS cpf_cnpj_socio,
+    CAST(soc.cnpj AS VARCHAR(14)) AS cnpj
+INTO #dados_socios_seguro_defeso
+FROM temp_CGUSC.fp.lista_cnpjs lst
+INNER JOIN db_CNPJ.dbo.socios soc
+    ON soc.cnpj = lst.cnpj
+INNER JOIN #seguro_defeso_cpfs DEF
+    ON DEF.cpf = soc.cpfcnpjSocio
+WHERE soc.indSocio = 'PF'
+  AND soc.dataExclusaoSociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_dados_socios_seguro_defeso
+ON #dados_socios_seguro_defeso(cpf_cnpj_socio, cnpj);
 GO
 
 
@@ -784,7 +1034,7 @@ GO
 --------------------------------------------------------------
 
 GO
-DROP TABLE IF EXISTS temp_CGUSC.fp.dados_socios;
+DROP TABLE IF EXISTS temp_CGUSC.fp.dados_socios_novo;
 GO
 
 SELECT DISTINCT
@@ -806,8 +1056,10 @@ SELECT DISTINCT
     CAST(cobi_rep.dataNascimento AS DATE)                     AS data_nascimento_representante,
     CAST(GETDATE() AS SMALLDATETIME)                          AS data_processamento,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
+    CASE WHEN DEF.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_seguro_defeso,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
-INTO temp_CGUSC.fp.dados_socios
+INTO temp_CGUSC.fp.dados_socios_novo
 FROM temp_CGUSC.fp.lista_cnpjs lst
 INNER JOIN db_CNPJ.dbo.socios soc ON soc.cnpj = lst.cnpj
 INNER JOIN db_CNPJ.dbo.CNPJ cnpj ON cnpj.cnpj = soc.cnpj
@@ -816,6 +1068,12 @@ LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = soc.cpfcnpjSocio AND soc.indSocio = 'PF'
 LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = soc.CpfRepresentante AND soc.CpfRepresentante <> '00000000000'
 LEFT JOIN db_CNPJ.dbo.Qualificacao AS qua_rep ON qua_rep.IdQualificacao = TRY_CAST(soc.IdQualificacaoRepresentante AS INT)
+LEFT JOIN #dados_socios_esocial ESO
+    ON ESO.cpf_cnpj_socio = soc.cpfcnpjSocio
+   AND ESO.cnpj = soc.cnpj
+LEFT JOIN #dados_socios_seguro_defeso DEF
+    ON DEF.cpf_cnpj_socio = soc.cpfcnpjSocio
+   AND DEF.cnpj = soc.cnpj
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = soc.cpfcnpjSocio;
 GO
 
@@ -829,15 +1087,53 @@ GO
 GO
 DROP TABLE IF EXISTS #cnpjs_com_socios;
 GO
-SELECT DISTINCT cnpj INTO #cnpjs_com_socios FROM temp_CGUSC.fp.dados_socios;
+SELECT DISTINCT cnpj INTO #cnpjs_com_socios FROM temp_CGUSC.fp.dados_socios_novo;
 GO
 CREATE CLUSTERED INDEX ix_cnpjs_com_socios ON #cnpjs_com_socios (cnpj);
 GO
 
-INSERT INTO temp_CGUSC.fp.dados_socios (
+DROP TABLE IF EXISTS #responsaveis_individuais_esocial;
+GO
+SELECT DISTINCT
+    CAST(f.cpfResponsavel AS VARCHAR(14)) AS cpf_cnpj_socio,
+    CAST(f.cnpj AS VARCHAR(14)) AS cnpj
+INTO #responsaveis_individuais_esocial
+FROM temp_CGUSC.fp.dados_farmacia f
+LEFT JOIN #cnpjs_com_socios s
+    ON s.cnpj = f.cnpj
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = f.cpfResponsavel
+   AND ESO.cnpj_esocial <> f.cnpj
+WHERE s.cnpj IS NULL
+  AND f.cpfResponsavel IS NOT NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_responsaveis_individuais_esocial
+ON #responsaveis_individuais_esocial(cpf_cnpj_socio, cnpj);
+GO
+
+DROP TABLE IF EXISTS #responsaveis_individuais_seguro_defeso;
+GO
+SELECT DISTINCT
+    CAST(f.cpfResponsavel AS VARCHAR(14)) AS cpf_cnpj_socio,
+    CAST(f.cnpj AS VARCHAR(14)) AS cnpj
+INTO #responsaveis_individuais_seguro_defeso
+FROM temp_CGUSC.fp.dados_farmacia f
+LEFT JOIN #cnpjs_com_socios s
+    ON s.cnpj = f.cnpj
+INNER JOIN #seguro_defeso_cpfs DEF
+    ON DEF.cpf = f.cpfResponsavel
+WHERE s.cnpj IS NULL
+  AND f.cpfResponsavel IS NOT NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_responsaveis_individuais_seguro_defeso
+ON #responsaveis_individuais_seguro_defeso(cpf_cnpj_socio, cnpj);
+GO
+
+INSERT INTO temp_CGUSC.fp.dados_socios_novo (
     cpf_cnpj_socio, cnpj, indicador_socio, nome_socio, municipio, uf,
     data_entrada_sociedade, percentual_qualificacao, descricao_qualificacao,
-    data_nascimento_socio, data_processamento, is_cadunico, is_falecido
+    data_nascimento_socio, data_processamento, is_cadunico, is_esocial,
+    is_seguro_defeso, is_falecido
 )
 SELECT 
     f.cpfResponsavel,
@@ -852,20 +1148,55 @@ SELECT
     CAST(cobi.dataNascimento AS DATE)      AS data_nascimento_socio,
     CAST(GETDATE() AS SMALLDATETIME)       AS data_processamento,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
+    CASE WHEN DEF.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_seguro_defeso,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
 FROM temp_CGUSC.fp.dados_farmacia f
 LEFT JOIN #cnpjs_com_socios s ON s.cnpj = f.cnpj
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = f.cpfResponsavel
+LEFT JOIN #responsaveis_individuais_esocial ESO
+    ON ESO.cpf_cnpj_socio = f.cpfResponsavel
+   AND ESO.cnpj = f.cnpj
+LEFT JOIN #responsaveis_individuais_seguro_defeso DEF
+    ON DEF.cpf_cnpj_socio = f.cpfResponsavel
+   AND DEF.cnpj = f.cnpj
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = f.cpfResponsavel
 WHERE s.cnpj IS NULL
   AND f.cpfResponsavel IS NOT NULL;
 GO
 
-CREATE CLUSTERED INDEX cx_sociosFP_cpf_cnpj_socio ON temp_CGUSC.fp.dados_socios (cpf_cnpj_socio, cnpj);
+CREATE CLUSTERED INDEX cx_sociosFP_cpf_cnpj_socio ON temp_CGUSC.fp.dados_socios_novo (cpf_cnpj_socio, cnpj);
 GO
-CREATE INDEX ix_sociosFP_cnpj ON temp_CGUSC.fp.dados_socios (cnpj);
+CREATE INDEX ix_sociosFP_cnpj ON temp_CGUSC.fp.dados_socios_novo (cnpj);
 GO
 
+IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.dados_socios_novo)
+BEGIN
+    THROW 50010, 'A nova tabela fp.dados_socios ficou vazia. A publicacao foi cancelada.', 1;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.dados_socios_novo', 'is_esocial') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.dados_socios_novo', 'is_seguro_defeso') IS NULL
+BEGIN
+    THROW 50011, 'A nova tabela fp.dados_socios nao possui as colunas obrigatorias de alertas.', 1;
+END;
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.dados_socios;
+    EXEC sys.sp_rename
+        N'fp.dados_socios_novo',
+        N'dados_socios',
+        N'OBJECT';
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+GO
 
 --------------------------------------------------------------
 -- ETAPA 4: Expans�o N�vel 2
@@ -963,25 +1294,80 @@ CREATE INDEX ix_t2_raw_cnpj ON #teia_fonte_nivel2_raw (cnpj_empresa);
 GO
 
 -- Enriquecer dicion�rio com representantes do N2
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
+GO
+SELECT DISTINCT
+    raw.cpf_representante AS cpf
+INTO #cpfs_metadata_lote
+FROM #teia_fonte_nivel2_raw raw
+WHERE raw.cpf_representante IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM #temp_metadata_cpfs M
+      WHERE M.CPF = raw.cpf_representante
+  );
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
 INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
 SELECT
-    c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)),
-    CAST(c.dataNascimento AS DATE),
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END
-FROM (SELECT DISTINCT cpf_representante FROM #teia_fonte_nivel2_raw WHERE cpf_representante IS NOT NULL) novos
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpf_representante
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN (SELECT DISTINCT cpf_representante FROM #teia_fonte_nivel2_raw WHERE cpf_representante IS NOT NULL) novos_cad
-        ON novos_cad.cpf_representante = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpf_representante);
-GO
-WITH CTE AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) AS rn FROM #temp_metadata_cpfs)
-DELETE FROM CTE WHERE rn > 1;
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 -- Dicion�rio de metadados das empresas do N2
@@ -1016,7 +1402,7 @@ GO
 
 -- Teia N�vel 2 Final
 GO
-DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel2;
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel2_novo;
 GO
 SELECT DISTINCT
     raw.cpf_cnpj_socio,
@@ -1036,14 +1422,37 @@ SELECT DISTINCT
     CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_farmacia_fp,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
-INTO temp_CGUSC.fp.teia_fonte_nivel2
+INTO temp_CGUSC.fp.teia_fonte_nivel2_novo
 FROM #teia_fonte_nivel2_raw raw
 INNER JOIN #metadata_empresas m ON m.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = raw.cpf_cnpj_socio
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = raw.cpf_cnpj_socio;
 GO
-CREATE CLUSTERED INDEX cx_t2_final ON temp_CGUSC.fp.teia_fonte_nivel2 (cpf_cnpj_socio, cnpj_empresa);
+CREATE CLUSTERED INDEX cx_t2_final ON temp_CGUSC.fp.teia_fonte_nivel2_novo (cpf_cnpj_socio, cnpj_empresa);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.teia_fonte_nivel2_novo)
+BEGIN
+    THROW 50012, 'A nova tabela fp.teia_fonte_nivel2 ficou vazia. A publicacao foi cancelada.', 1;
+END;
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel2;
+    EXEC sys.sp_rename
+        N'fp.teia_fonte_nivel2_novo',
+        N'teia_fonte_nivel2',
+        N'OBJECT';
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+GO
 
 
 --------------------------------------------------------------
@@ -1082,24 +1491,133 @@ GO
 CREATE CLUSTERED INDEX ix_novos_cpfs_n3 ON #novos_cpfs_n3 (cpf);
 GO
 
+-- Amplia o Seguro Defeso para os CPFs descobertos no N3.
+-- O primeiro lote cobre apenas socios/responsaveis diretos das farmacias (N1).
+DROP TABLE IF EXISTS #seguro_defeso_requerimentos_n3;
+GO
+SELECT
+    R.NumeroRequerimento,
+    CAST(R.CPFRequerente AS CHAR(11)) AS cpf,
+    R.QtdParcelasPagas,
+    R.ValorParcelasPagas
+INTO #seguro_defeso_requerimentos_n3
+FROM db_seguro_defeso.dbo.Pescador_Requerimentos R
+INNER JOIN #novos_cpfs_n3 N
+    ON N.cpf = R.CPFRequerente
+WHERE R.CPFRequerente IS NOT NULL
+  AND R.StatusRequerimento IN ('Habilitado', 'Notificado')
+  AND R.SituacaoRequerimento IN ('Beneficiario', 'Segurado')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM #seguro_defeso_cpfs D
+      WHERE D.cpf = R.CPFRequerente
+  );
+GO
+CREATE CLUSTERED INDEX ix_seguro_defeso_requerimentos_n3
+ON #seguro_defeso_requerimentos_n3(NumeroRequerimento, cpf);
+GO
+
+INSERT INTO #seguro_defeso_cpfs (cpf)
+SELECT DISTINCT S.cpf
+FROM (
+    SELECT B.cpf
+    FROM #seguro_defeso_requerimentos_n3 B
+    WHERE ISNULL(B.QtdParcelasPagas, 0) > 0
+       OR ISNULL(B.ValorParcelasPagas, 0) > 0
+
+    UNION
+
+    SELECT B.cpf
+    FROM #seguro_defeso_requerimentos_n3 B
+    INNER JOIN db_seguro_defeso.dbo.Pescador_Parcelas P
+        ON P.NumeroRequerimento = B.NumeroRequerimento
+    WHERE P.SituacaoAtualParcela IN (
+        'Parcela Paga',
+        'Parcela Paga por Compensação',
+        'Parcela Emitida',
+        'Parcela Reemitida'
+    )
+) S
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM #seguro_defeso_cpfs D
+    WHERE D.cpf = S.cpf
+);
+GO
+
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
+GO
+SELECT DISTINCT
+    novos.cpf
+INTO #cpfs_metadata_lote
+FROM #novos_cpfs_n3 novos
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM #temp_metadata_cpfs M
+    WHERE M.CPF = novos.cpf
+);
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
 INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
 SELECT
-    c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)),
-    CAST(c.dataNascimento AS DATE),
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END
-FROM #novos_cpfs_n3 novos
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpf
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN #novos_cpfs_n3 novos_cad ON novos_cad.cpf = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpf);
-GO
-WITH CTE AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) AS rn FROM #temp_metadata_cpfs)
-DELETE FROM CTE WHERE rn > 1;
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 -- (a) S�cios formais das empresas do N2
@@ -1175,9 +1693,42 @@ GO
 CREATE CLUSTERED INDEX ix_t3_raw ON #teia_fonte_nivel3_raw (cnpj_empresa, cpf_cnpj_socio);
 GO
 
+DROP TABLE IF EXISTS #teia_nivel3_esocial;
+GO
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa
+INTO #teia_nivel3_esocial
+FROM #teia_fonte_nivel3_raw raw
+INNER JOIN #esocial_vinculo_trabalhista ESO
+    ON ESO.cpf = raw.cpf_cnpj_socio
+   AND ESO.cnpj_esocial <> raw.cnpj_empresa
+WHERE raw.indicador_socio = 'PF'
+  AND raw.data_exclusao_sociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_teia_nivel3_esocial
+ON #teia_nivel3_esocial(cpf_cnpj_socio, cnpj_empresa);
+GO
+
+DROP TABLE IF EXISTS #teia_nivel3_seguro_defeso;
+GO
+SELECT DISTINCT
+    raw.cpf_cnpj_socio,
+    raw.cnpj_empresa
+INTO #teia_nivel3_seguro_defeso
+FROM #teia_fonte_nivel3_raw raw
+INNER JOIN #seguro_defeso_cpfs DEF
+    ON DEF.cpf = raw.cpf_cnpj_socio
+WHERE raw.indicador_socio = 'PF'
+  AND raw.data_exclusao_sociedade IS NULL;
+GO
+CREATE UNIQUE CLUSTERED INDEX ix_teia_nivel3_seguro_defeso
+ON #teia_nivel3_seguro_defeso(cpf_cnpj_socio, cnpj_empresa);
+GO
+
 -- Teia N�vel 3 Final
 GO
-DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3_novo;
 GO
 SELECT
     raw.cnpj_empresa,
@@ -1192,17 +1743,54 @@ SELECT
     COALESCE(CAST(ibge.no_municipio AS VARCHAR(60)), raw.municipio_direto) AS municipio,
     COALESCE(CAST(ibge.sg_uf AS CHAR(2)), raw.uf_direto)                  AS uf,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
+    CASE WHEN ESO.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_esocial,
+    CASE WHEN DEF.cpf_cnpj_socio IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_seguro_defeso,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
-INTO temp_CGUSC.fp.teia_fonte_nivel3
+INTO temp_CGUSC.fp.teia_fonte_nivel3_novo
 FROM #teia_fonte_nivel3_raw raw
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = raw.cpf_cnpj_socio AND raw.indicador_socio = 'PF'
 LEFT JOIN db_CNPJ.dbo.CNPJ pj_socio ON pj_socio.cnpj = raw.cpf_cnpj_socio AND raw.indicador_socio = 'PJ'
 LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.cpf_representante
 LEFT JOIN db_CNPJ.dbo.Municipio mun ON mun.SkMunicipio = raw.CodMunicipio
 LEFT JOIN temp_CGUSC.fp.dados_ibge ibge ON ibge.id_ibge7 = mun.CodIbge
+LEFT JOIN #teia_nivel3_esocial ESO
+    ON ESO.cpf_cnpj_socio = raw.cpf_cnpj_socio
+   AND ESO.cnpj_empresa = raw.cnpj_empresa
+LEFT JOIN #teia_nivel3_seguro_defeso DEF
+    ON DEF.cpf_cnpj_socio = raw.cpf_cnpj_socio
+   AND DEF.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = raw.cpf_cnpj_socio;
 GO
-CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empresa, cpf_cnpj_socio);
+CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3_novo (cnpj_empresa, cpf_cnpj_socio);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.teia_fonte_nivel3_novo)
+BEGIN
+    THROW 50013, 'A nova tabela fp.teia_fonte_nivel3 ficou vazia. A publicacao foi cancelada.', 1;
+END;
+
+IF COL_LENGTH('temp_CGUSC.fp.teia_fonte_nivel3_novo', 'is_esocial') IS NULL
+   OR COL_LENGTH('temp_CGUSC.fp.teia_fonte_nivel3_novo', 'is_seguro_defeso') IS NULL
+BEGIN
+    THROW 50014, 'A nova tabela fp.teia_fonte_nivel3 nao possui as colunas obrigatorias de alertas.', 1;
+END;
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel3;
+    EXEC sys.sp_rename
+        N'fp.teia_fonte_nivel3_novo',
+        N'teia_fonte_nivel3',
+        N'OBJECT';
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+GO
 
 
 --------------------------------------------------------------
@@ -1212,34 +1800,88 @@ CREATE CLUSTERED INDEX cx_t3_final ON temp_CGUSC.fp.teia_fonte_nivel3 (cnpj_empr
 --------------------------------------------------------------
 
 -- Enriquecer dicion�rio com representantes do N4
+DROP TABLE IF EXISTS #cpfs_metadata_lote;
+GO
+SELECT DISTINCT
+    s.CpfRepresentante AS cpf
+INTO #cpfs_metadata_lote
+FROM (
+    SELECT DISTINCT cpf_cnpj_socio
+    FROM temp_CGUSC.fp.teia_fonte_nivel3
+    WHERE cpf_cnpj_socio IS NOT NULL
+      AND cpf_cnpj_socio <> '99999999999999'
+) n3
+INNER JOIN db_CNPJ.dbo.socios s
+    ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
+WHERE s.CpfRepresentante <> '00000000000'
+  AND s.CpfRepresentante IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM #temp_metadata_cpfs M
+      WHERE M.CPF = s.CpfRepresentante
+  );
+GO
+CREATE CLUSTERED INDEX ix_cpfs_metadata_lote ON #cpfs_metadata_lote(cpf);
+GO
+
+DROP TABLE IF EXISTS #cpf_data_lote;
+GO
+SELECT
+    C.CPF,
+    MAX(CAST(C.dataNascimento AS DATE)) AS dataNascimento
+INTO #cpf_data_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = L.cpf
+WHERE C.CPF IS NOT NULL
+GROUP BY C.CPF;
+GO
+CREATE CLUSTERED INDEX ix_cpf_data_lote ON #cpf_data_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadastro_lote;
+GO
+SELECT
+    D.CPF,
+    CAST(temp_CGUSC.dbo.InitCapEachWord(LEFT(MAX(CAST(C.nome AS VARCHAR(100))), 100)) AS VARCHAR(100)) AS nome,
+    D.dataNascimento
+INTO #cpf_cadastro_lote
+FROM #cpf_data_lote D
+INNER JOIN db_CPF.dbo.CPF C
+    ON C.CPF = D.CPF
+   AND (
+          CAST(C.dataNascimento AS DATE) = D.dataNascimento
+       OR (C.dataNascimento IS NULL AND D.dataNascimento IS NULL)
+   )
+GROUP BY
+    D.CPF,
+    D.dataNascimento;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadastro_lote ON #cpf_cadastro_lote(CPF);
+GO
+
+DROP TABLE IF EXISTS #cpf_cadunico_lote;
+GO
+SELECT DISTINCT
+    L.cpf AS CPF
+INTO #cpf_cadunico_lote
+FROM #cpfs_metadata_lote L
+INNER JOIN db_CadUnico.dbo.tb_00_consolid CAD
+    ON CAD.CPF_CAD_UNICO = L.cpf
+WHERE CAD.CPF_CAD_UNICO IS NOT NULL;
+GO
+CREATE CLUSTERED INDEX ix_cpf_cadunico_lote ON #cpf_cadunico_lote(CPF);
+GO
+
 INSERT INTO #temp_metadata_cpfs (CPF, nome, dataNascimento, is_cadunico)
 SELECT
-    c.CPF,
-    temp_CGUSC.dbo.InitCapEachWord(LEFT(c.nome, 100)),
-    CAST(c.dataNascimento AS DATE),
-    CASE WHEN cad.CPF_CAD_UNICO IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END
-FROM (
-    SELECT DISTINCT s.CpfRepresentante AS cpf
-    FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL AND cpf_cnpj_socio <> '99999999999999') n3
-    INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
-    WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
-) novos
-INNER JOIN db_CPF.dbo.CPF c ON c.CPF = novos.cpf
-LEFT JOIN (
-    SELECT DISTINCT cad.CPF_CAD_UNICO
-    FROM db_CadUnico.dbo.tb_00_consolid cad
-    INNER JOIN (
-        SELECT DISTINCT s.CpfRepresentante AS cpf
-        FROM (SELECT DISTINCT cpf_cnpj_socio FROM temp_CGUSC.fp.teia_fonte_nivel3 WHERE cpf_cnpj_socio IS NOT NULL AND cpf_cnpj_socio <> '99999999999999') n3
-        INNER JOIN db_CNPJ.dbo.socios s ON s.cpfcnpjSocio = n3.cpf_cnpj_socio
-        WHERE s.CpfRepresentante <> '00000000000' AND s.CpfRepresentante IS NOT NULL
-    ) novos_cad ON novos_cad.cpf = cad.CPF_CAD_UNICO
-    WHERE cad.CPF_CAD_UNICO IS NOT NULL
-) cad ON cad.CPF_CAD_UNICO = c.CPF
-WHERE NOT EXISTS (SELECT 1 FROM #temp_metadata_cpfs m WHERE m.CPF = novos.cpf);
-GO
-WITH CTE AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CPF ORDER BY is_cadunico DESC, dataNascimento DESC) AS rn FROM #temp_metadata_cpfs)
-DELETE FROM CTE WHERE rn > 1;
+    B.CPF,
+    B.nome,
+    B.dataNascimento,
+    CASE WHEN CAD.CPF IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico
+FROM #cpf_cadastro_lote B
+LEFT JOIN #cpf_cadunico_lote CAD
+    ON CAD.CPF = B.CPF;
 GO
 
 -- (a) V�nculos formais do N4
@@ -1307,6 +1949,8 @@ FROM (
 LEFT JOIN #temp_metadata_cpfs cobi_rep ON cobi_rep.CPF = raw.cpf_representante
 WHERE raw.rn = 1;
 GO
+CREATE CLUSTERED INDEX ix_t4_raw ON #teia_fonte_nivel4_raw (cpf_cnpj_socio, cnpj_empresa);
+GO
 
 -- Enriquecer metadados das NOVAS empresas do N4
 GO
@@ -1334,7 +1978,7 @@ GO
 
 -- Teia N�vel 4 Final
 GO
-DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel4;
+DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel4_novo;
 GO
 SELECT DISTINCT
     raw.cpf_cnpj_socio,
@@ -1354,11 +1998,63 @@ SELECT DISTINCT
     CASE WHEN lst.cnpj IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_farmacia_fp,
     CASE WHEN cobi.is_cadunico = 1 THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_cadunico,
     CASE WHEN obt.cpf IS NOT NULL THEN CAST(1 AS TINYINT) ELSE CAST(0 AS TINYINT) END AS is_falecido
-INTO temp_CGUSC.fp.teia_fonte_nivel4
+INTO temp_CGUSC.fp.teia_fonte_nivel4_novo
 FROM #teia_fonte_nivel4_raw raw
 INNER JOIN #metadata_empresas m ON m.cnpj_empresa = raw.cnpj_empresa
 LEFT JOIN temp_CGUSC.fp.lista_cnpjs lst ON lst.cnpj = raw.cnpj_empresa
 LEFT JOIN #temp_metadata_cpfs cobi ON cobi.CPF = raw.cpf_cnpj_socio
 LEFT JOIN temp_CGUSC.fp.obito_unificada obt ON obt.cpf = raw.cpf_cnpj_socio;
 GO
-CREATE CLUSTERED INDEX cx_t4_final ON temp_CGUSC.fp.teia_fonte_nivel4 (cpf_cnpj_socio, cnpj_empresa);
+CREATE CLUSTERED INDEX cx_t4_final ON temp_CGUSC.fp.teia_fonte_nivel4_novo (cpf_cnpj_socio, cnpj_empresa);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM temp_CGUSC.fp.teia_fonte_nivel4_novo)
+BEGIN
+    THROW 50015, 'A nova tabela fp.teia_fonte_nivel4 ficou vazia. A publicacao foi cancelada.', 1;
+END;
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+    DROP TABLE IF EXISTS temp_CGUSC.fp.teia_fonte_nivel4;
+    EXEC sys.sp_rename
+        N'fp.teia_fonte_nivel4_novo',
+        N'teia_fonte_nivel4',
+        N'OBJECT';
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+GO
+
+SELECT
+    'OK' AS status,
+    'ETAPAS_2_A_6_FINALIZADAS' AS etapa,
+    (SELECT COUNT_BIG(*) FROM temp_CGUSC.fp.dados_socios) AS qtd_dados_socios,
+    (
+        SELECT COUNT_BIG(*)
+        FROM temp_CGUSC.fp.dados_socios
+        WHERE is_esocial = 1
+    ) AS qtd_socios_esocial,
+    (
+        SELECT COUNT_BIG(*)
+        FROM temp_CGUSC.fp.dados_socios
+        WHERE is_seguro_defeso = 1
+    ) AS qtd_socios_seguro_defeso,
+    (SELECT COUNT_BIG(*) FROM temp_CGUSC.fp.teia_fonte_nivel2) AS qtd_teia_nivel2,
+    (SELECT COUNT_BIG(*) FROM temp_CGUSC.fp.teia_fonte_nivel3) AS qtd_teia_nivel3,
+    (
+        SELECT COUNT_BIG(*)
+        FROM temp_CGUSC.fp.teia_fonte_nivel3
+        WHERE is_esocial = 1
+    ) AS qtd_n3_esocial,
+    (
+        SELECT COUNT_BIG(*)
+        FROM temp_CGUSC.fp.teia_fonte_nivel3
+        WHERE is_seguro_defeso = 1
+    ) AS qtd_n3_seguro_defeso,
+    (SELECT COUNT_BIG(*) FROM temp_CGUSC.fp.teia_fonte_nivel4) AS qtd_teia_nivel4;
+GO

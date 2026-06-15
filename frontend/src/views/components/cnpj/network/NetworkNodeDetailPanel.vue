@@ -1,10 +1,12 @@
 <script setup>
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 import {
   formatCnaeEvidence,
   formatCpfCnpj,
   formatSocietyDate,
 } from "@/utils/network/networkFormatters";
+import { useStatusClass } from "@/composables/useStatusClass";
 
 const props = defineProps({
   node: {
@@ -38,6 +40,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["close", "copy", "expand"]);
+const router = useRouter();
+const { situacaoRfClass, conexaoMsClass } = useStatusClass();
 
 const nodeTitle = computed(
   () =>
@@ -50,6 +54,57 @@ const nodeTitle = computed(
 const documentLabel = computed(() =>
   String(props.node.id || "").replace(/\D/g, "").length === 11 ? "CPF" : "CNPJ",
 );
+
+const percentualNaoComprovacao = computed(() => {
+  if (props.node.type !== "PJ_FARMACIA_POPULAR") return null;
+  const value = Number(props.node.percentual_nao_comprovacao);
+  if (!Number.isFinite(value)) {
+    throw new Error(
+      `Farmacia Popular ${props.node.id || ""} sem percentual de nao comprovacao.`,
+    );
+  }
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
+});
+
+const criticidadeNaoComprovacao = computed(() => {
+  if (props.node.type !== "PJ_FARMACIA_POPULAR") return null;
+  const criticidade = props.node.criticidade_nao_comprovacao;
+  if (!["CRÍTICO", "ATENÇÃO", "NORMAL"].includes(criticidade)) {
+    throw new Error(
+      `Farmacia Popular ${props.node.id || ""} sem criticidade valida.`,
+    );
+  }
+  return criticidade;
+});
+
+const criticidadeClass = computed(() => {
+  if (criticidadeNaoComprovacao.value === "CRÍTICO") return "status-danger";
+  if (criticidadeNaoComprovacao.value === "ATENÇÃO") return "status-warn";
+  if (criticidadeNaoComprovacao.value === "NORMAL") return "status-success";
+  return "status-secondary";
+});
+
+const conexaoMs = computed(() => {
+  if (props.node.type !== "PJ_FARMACIA_POPULAR") return null;
+  if (!["Ativa", "Inativa"].includes(props.node.conexao_ms)) {
+    throw new Error(
+      `Farmacia Popular ${props.node.id || ""} sem Conexao MS valida.`,
+    );
+  }
+  return props.node.conexao_ms;
+});
+
+const formatStatusBadge = (value) => String(value).toLocaleUpperCase("pt-BR");
+
+function openEstablishmentDetail() {
+  if (props.node.type !== "PJ_FARMACIA_POPULAR") {
+    throw new Error("Detalhamento disponível apenas para Farmácia Popular.");
+  }
+  router.push(`/estabelecimentos/${String(props.node.id).replace(/\D/g, "")}`);
+}
 </script>
 
 <template>
@@ -58,8 +113,13 @@ const documentLabel = computed(() =>
       <div class="panel-header">
         <div
           class="panel-type-badge"
+          :class="{ 'pharmacy-program-badge': node.type === 'PJ_FARMACIA_POPULAR' }"
           :style="{ background: typeLabels[node.type]?.color }"
         >
+          <i
+            v-if="node.type === 'PJ_FARMACIA_POPULAR'"
+            class="pi pi-building"
+          />
           {{ typeLabels[node.type]?.label || node.type }}
         </div>
         <button class="close-btn" @click="emit('close')">
@@ -90,6 +150,45 @@ const documentLabel = computed(() =>
       </div>
 
       <div class="panel-fields">
+        <div v-if="node.municipio" class="panel-field">
+          <i class="pi pi-map-marker" />
+          <span>{{ node.municipio }} / {{ node.uf }}</span>
+        </div>
+
+        <div
+          v-if="node.type === 'PJ_FARMACIA_POPULAR'"
+          class="panel-field risk-field"
+        >
+          <i class="pi pi-chart-line" />
+          <span>Sem comp.</span>
+          <strong>{{ percentualNaoComprovacao }}</strong>
+          <span class="panel-status-badge" :class="criticidadeClass">
+            {{ formatStatusBadge(criticidadeNaoComprovacao) }}
+          </span>
+        </div>
+
+        <div
+          v-if="node.type === 'PJ_FARMACIA_POPULAR'"
+          class="panel-field ms-field"
+        >
+          <i class="pi pi-link" />
+          <span>Conexão MS</span>
+          <span class="panel-status-badge" :class="conexaoMsClass(conexaoMs)">
+            {{ formatStatusBadge(conexaoMs) }}
+          </span>
+        </div>
+
+        <div v-if="node.situacao_rf" class="panel-field rf-field">
+          <i class="pi pi-info-circle" />
+          <span>Situação RF</span>
+          <span
+            class="panel-status-badge"
+            :class="situacaoRfClass(node.situacao_rf)"
+          >
+            {{ formatStatusBadge(node.situacao_rf) }}
+          </span>
+        </div>
+
         <div
           v-if="node.type === 'PF' && node.is_falecido"
           class="panel-field deceased-field"
@@ -106,6 +205,24 @@ const documentLabel = computed(() =>
           <i class="pi pi-id-card" />
           <span>CadÚnico</span>
           <span class="cadunico-badge">Inscrito</span>
+        </div>
+
+        <div
+          v-if="node.type === 'PF' && node.is_esocial"
+          class="panel-field esocial-field"
+        >
+          <i class="pi pi-briefcase" />
+          <span>eSocial</span>
+          <span class="esocial-badge">Vinculo em outro CNPJ</span>
+        </div>
+
+        <div
+          v-if="node.type === 'PF' && node.is_seguro_defeso"
+          class="panel-field seguro-defeso-field"
+        >
+          <i class="pi pi-wallet" />
+          <span>Seguro Defeso</span>
+          <span class="seguro-defeso-badge">Beneficiário</span>
         </div>
 
         <div
@@ -166,15 +283,6 @@ const documentLabel = computed(() =>
           </div>
         </div>
 
-        <div v-if="node.municipio" class="panel-field mt-1">
-          <i class="pi pi-map-marker" />
-          <span>{{ node.municipio }} / {{ node.uf }}</span>
-        </div>
-
-        <div v-if="node.situacao_rf" class="panel-field">
-          <i class="pi pi-info-circle" />
-          <span>Situação RF: {{ node.situacao_rf }}</span>
-        </div>
       </div>
 
       <div v-if="node.societyLinks?.length" class="panel-relationships">
@@ -186,8 +294,11 @@ const documentLabel = computed(() =>
         >
           <div class="relationship-header">
             <span class="relationship-name">{{ link.otherName }}</span>
-            <span class="relationship-status" :class="{ inactive: !link.is_ativo }">
-              {{ link.is_ativo ? "Ativo" : "Inativo" }}
+            <span
+              class="panel-status-badge relationship-status"
+              :class="link.is_ativo ? 'status-success' : 'status-danger'"
+            >
+              {{ link.is_ativo ? "ATIVO" : "INATIVO" }}
             </span>
           </div>
 
@@ -215,12 +326,19 @@ const documentLabel = computed(() =>
 
       <div v-if="canExpand" class="panel-actions mt-3">
         <button
-          class="expand-btn"
+          class="panel-action-btn"
           :disabled="isExpanding || isExpanded"
           @click="emit('expand', node.id)"
         >
           <i :class="isExpanding ? 'pi pi-spin pi-spinner' : 'pi pi-plus-circle'" />
           <span>{{ expansionLabel }}</span>
+        </button>
+      </div>
+
+      <div v-if="node.type === 'PJ_FARMACIA_POPULAR'" class="panel-actions">
+        <button class="panel-action-btn" @click="openEstablishmentDetail">
+          <i class="pi pi-external-link" />
+          <span>Abrir detalhamento</span>
         </button>
       </div>
 
@@ -259,7 +377,36 @@ const documentLabel = computed(() =>
   align-items: center;
 }
 
+.risk-field strong {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.panel-status-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.16rem 0.42rem;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.risk-field .panel-status-badge,
+.ms-field .panel-status-badge,
+.rf-field .panel-status-badge {
+  width: 3.75rem;
+  flex-shrink: 0;
+}
+
 .panel-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.62rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -267,6 +414,21 @@ const documentLabel = computed(() =>
   color: #fff;
   padding: 0.2rem 0.6rem;
   border-radius: 99px;
+}
+
+.panel-type-badge.pharmacy-program-badge {
+  min-height: 2rem;
+  padding: 0.38rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--status-success) 45%, var(--tabs-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--status-success) 10%, var(--card-bg)) !important;
+  color: var(--status-success);
+  box-shadow: 0 4px 14px
+    color-mix(in srgb, var(--status-success) 10%, transparent);
+}
+
+.panel-type-badge.pharmacy-program-badge i {
+  font-size: 0.78rem;
 }
 
 .close-btn {
@@ -406,17 +568,7 @@ const documentLabel = computed(() =>
 
 .relationship-status {
   flex-shrink: 0;
-  padding: 0.12rem 0.42rem;
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.14);
-  color: #34d399;
-  font-size: 0.58rem;
-  font-weight: 700;
-}
-
-.relationship-status.inactive {
-  background: rgba(239, 68, 68, 0.14);
-  color: #fca5a5;
+  margin-left: 0;
 }
 
 .relationship-meta {
@@ -463,6 +615,8 @@ const documentLabel = computed(() =>
 }
 
 .cadunico-badge,
+.esocial-badge,
+.seguro-defeso-badge,
 .cnae-alert-badge,
 .par-alert-badge,
 .deceased-badge {
@@ -479,6 +633,34 @@ const documentLabel = computed(() =>
   border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
   background: color-mix(in srgb, #f59e0b 16%, transparent);
   color: color-mix(in srgb, #f59e0b 82%, var(--text-color));
+}
+
+.esocial-field {
+  color: color-mix(in srgb, var(--status-success) 78%, var(--text-color));
+}
+
+.esocial-field i {
+  color: var(--status-success);
+}
+
+.esocial-badge {
+  border: 1px solid color-mix(in srgb, var(--status-success) 44%, transparent);
+  background: color-mix(in srgb, var(--status-success) 14%, transparent);
+  color: color-mix(in srgb, var(--status-success) 86%, var(--text-color));
+}
+
+.seguro-defeso-field {
+  color: color-mix(in srgb, var(--status-info) 78%, var(--text-color));
+}
+
+.seguro-defeso-field i {
+  color: var(--status-info);
+}
+
+.seguro-defeso-badge {
+  border: 1px solid color-mix(in srgb, var(--status-info) 44%, transparent);
+  background: color-mix(in srgb, var(--status-info) 14%, transparent);
+  color: color-mix(in srgb, var(--status-info) 86%, var(--text-color));
 }
 
 .cnae-alert-field {
@@ -616,35 +798,39 @@ const documentLabel = computed(() =>
   margin-top: auto;
 }
 
-.expand-btn {
+.panel-action-btn {
   width: 100%;
-  display: flex;
+  min-height: 2.25rem;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  padding: 0.75rem;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.75rem;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--tabs-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary-color) 9%, var(--card-bg));
+  color: var(--primary-color);
+  font: inherit;
+  font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px
-    color-mix(in srgb, var(--primary-color) 30%, transparent);
+  transition:
+    background 0.18s,
+    border-color 0.18s;
 }
 
-.expand-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--primary-color) 85%, black);
-  transform: translateY(-1px);
+.panel-action-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-color) 16%, var(--card-bg));
+  border-color: var(--primary-color);
 }
 
-.expand-btn:disabled {
+.panel-action-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.panel-action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: var(--text-muted);
-  box-shadow: none;
 }
 
 .slide-in-enter-active,

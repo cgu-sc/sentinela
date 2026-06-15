@@ -559,10 +559,11 @@ def build_dynamic_matriz_risco(
     if perfil_df is not None:
         return _compute_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim, perfil_df=perfil_df)
 
+    ano_inicio, ano_fim = _period_year_bounds(data_inicio, data_fim)
     cache_key = (
         get_cache_generation(),
-        data_inicio.isoformat() if data_inicio else None,
-        data_fim.isoformat() if data_fim else None,
+        ano_inicio,
+        ano_fim,
     )
     now = time.monotonic()
     with _DYNAMIC_CACHE_LOCK:

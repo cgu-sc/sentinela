@@ -671,7 +671,7 @@ const openIntegrityDialog = () => {
 .integrity-strip {
   display: flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 36px;
   gap: 0.55rem;
   width: 100%;
   padding: 0.35rem 0.65rem;
@@ -722,11 +722,11 @@ const openIntegrityDialog = () => {
 .integrity-preview {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0.15rem 0.42rem;
+  min-height: 24px;
+  padding: 0.2rem 0.42rem;
   border: 1px solid var(--card-border);
   border-radius: 4px;
-  font-size: 0.68rem;
+  font-size: 0.71rem;
   font-weight: 600;
   white-space: nowrap;
 }

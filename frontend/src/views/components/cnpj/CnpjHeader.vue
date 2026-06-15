@@ -14,6 +14,7 @@ import { extractCnpjRaiz } from "@/composables/useParsing";
 import { MONTH_LABELS } from "@/config/constants";
 import ObservationDialog from "./ObservationDialog.vue";
 import IntegrityAlertsDialog from "./IntegrityAlertsDialog.vue";
+import CnpjCadastroDialog from "./CnpjCadastroDialog.vue";
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -205,6 +206,11 @@ const openObsDialog = () => {
   showObsDialog.value = true;
 };
 
+const showCadastroDialog = ref(false);
+const openCadastroDialog = () => {
+  showCadastroDialog.value = true;
+};
+
 const hasObservacao = computed(() => !!farmaciaLists.getObservacao(props.cnpj));
 const showIntegrityDialog = ref(false);
 
@@ -267,6 +273,15 @@ const openIntegrityDialog = () => {
                   ]"
                 />
               </div>
+              <button
+                v-if="cadastro || cnpjData"
+                type="button"
+                class="header-icon-btn header-icon-btn--cadastro"
+                v-tooltip.bottom="'Dados cadastrais'"
+                @click="openCadastroDialog"
+              >
+                <i class="pi pi-id-card" />
+              </button>
             </div>
             <span
               v-if="subtituloDisplay"
@@ -609,6 +624,13 @@ const openIntegrityDialog = () => {
       :cnpj="cnpj"
       :entity-name="tituloDisplay"
     />
+    <CnpjCadastroDialog
+      v-model:visible="showCadastroDialog"
+      :cnpj="cnpj"
+      :cadastro="cadastro"
+      :cnpj-data="cnpjData"
+      :geo-data="geoData"
+    />
     <IntegrityAlertsDialog
       v-model:visible="showIntegrityDialog"
       :data="integrityAlerts"
@@ -894,12 +916,13 @@ const openIntegrityDialog = () => {
 
 .cnpj-copy-wrap-new {
   background: var(--establishment-header-bg);
-  padding: 0.4rem 0.85rem;
+  min-height: 34px;
+  padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   transition: all 0.2s ease-in-out;
   border: 1px solid var(--establishment-header-border) !important;
 }
@@ -912,14 +935,77 @@ const openIntegrityDialog = () => {
 
 .cnpj-text {
   font-family: "Inter", sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .cnpj-copy-wrap-new i {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--establishment-header-border);
+  background: var(--establishment-header-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.header-icon-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.header-icon-btn--cadastro {
+  margin-left: 0.1rem;
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 34%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+
+.header-icon-btn--cadastro::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 28%, transparent);
+  box-shadow:
+    0 0 0 0 color-mix(in srgb, var(--primary-color) 16%, transparent),
+    0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
+  opacity: 0.65;
+  pointer-events: none;
+  animation: cadastroHaloPulse 2.8s ease-in-out infinite;
+}
+
+.header-icon-btn i {
+  font-size: 0.85rem;
+}
+
+@keyframes cadastroHaloPulse {
+  0% {
+    transform: scale(0.98);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(0.98);
+    opacity: 0.45;
+  }
 }
 
 .header-main-info {

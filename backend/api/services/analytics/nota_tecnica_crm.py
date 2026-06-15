@@ -139,6 +139,38 @@ def _format_date_br(value: Any) -> str:
     return text
 
 
+def _as_date_for_weekend_marker(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text[:19], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _write_date_cell_with_weekend_marker(cell, value: Any, formatter: Callable[[Any], str] = _format_date_br):
+    p = cell.paragraphs[0]
+    p.text = ""
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p, formatter(value), color="0F172A", size=6.8)
+
+    parsed_date = _as_date_for_weekend_marker(value)
+    if parsed_date is None or parsed_date.weekday() < 5:
+        return
+
+    p.add_run().add_break()
+    _run(p, "(fim de semana)", color="64748B", size=6.8)
+
+
 def _vez_ou_vezes(value: float) -> str:
     return "vez" if abs(value) <= 1 else "vezes"
 
@@ -1250,9 +1282,11 @@ def _add_crm_unico_complementar_text(
         crm_uf = f"{crm_row}/{uf_row}" if uf_row else crm_row
         intervalo = row.get("nu_minutos_intervalo")
         taxa_hora = _required_positive_float(row.get("taxa_hora"), "taxa_hora", "alerta de CRM unico")
+        dt_inicio = row.get("dt_ini_hora") or row.get("dt")
+        dt_fim = row.get("dt_fim_hora") or row.get("dt")
+        _write_date_cell_with_weekend_marker(cells[0], dt_inicio, _format_datetime_br_minute)
+        _write_date_cell_with_weekend_marker(cells[1], dt_fim, _format_datetime_br_minute)
         values = [
-            _format_datetime_br_minute(row.get("dt_ini_hora") or row.get("dt")),
-            _format_datetime_br_minute(row.get("dt_fim_hora") or row.get("dt")),
             str(_as_int(row.get("nu_prescricoes"))),
             _format_janela_minutos(intervalo if intervalo is not None else row.get("nu_minutos")),
             f'{_format_decimal_pt(taxa_hora, 1)}/h',
@@ -1260,9 +1294,6 @@ def _add_crm_unico_complementar_text(
             if row.get("valor_alerta_disponivel")
             else "N/d",
         ]
-        for idx, value in enumerate(values[:2]):
-            _write_cell(cells[idx], value, size=6.8, align=WD_ALIGN_PARAGRAPH.CENTER)
-
         p_medico = cells[2].paragraphs[0]
         p_medico.text = ""
         p_medico.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -1271,7 +1302,7 @@ def _add_crm_unico_complementar_text(
         _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=6.8)
         _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=5.8)
 
-        for col_idx, value in enumerate(values[2:], start=3):
+        for col_idx, value in enumerate(values, start=3):
             align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
             _write_cell(cells[col_idx], value, size=6.8, align=align)
 
@@ -1347,9 +1378,11 @@ def _add_crms_multiplos_complementar_text(
                 if crm_principal_aut > 0 and crm_principal != "N/d"
                 else crm_principal
             )
+            dt_inicio = evento.get("dt_ini_hora") or evento.get("dt")
+            dt_fim = evento.get("dt_fim_hora") or evento.get("dt")
+            _write_date_cell_with_weekend_marker(cells[0], dt_inicio, _format_datetime_br_minute)
+            _write_date_cell_with_weekend_marker(cells[1], dt_fim, _format_datetime_br_minute)
             values = [
-                _format_datetime_br_minute(evento.get("dt_ini_hora") or evento.get("dt")),
-                _format_datetime_br_minute(evento.get("dt_fim_hora") or evento.get("dt")),
                 str(_as_int(evento.get("nu_crms"))),
                 crm_principal_txt,
                 str(_as_int(evento.get("nu_prescricoes"))),
@@ -1359,9 +1392,9 @@ def _add_crms_multiplos_complementar_text(
                 if evento.get("valor_alerta_disponivel")
                 else "N/d",
             ]
-            for idx, value in enumerate(values):
-                align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell(cells[idx], value, size=6.8, align=align)
+            for col_idx, value in enumerate(values, start=2):
+                align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (2, 4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER
+                _write_cell(cells[col_idx], value, size=6.8, align=align)
 
 
 def _add_crm_volume_horario_complementar_text(
@@ -1460,15 +1493,15 @@ def _add_crm_volume_horario_complementar_text(
 
     for row in rows:
         cells = table.add_row().cells
+        _write_date_cell_with_weekend_marker(cells[0], row.get("dt"))
         values = [
-            _format_date_br(row.get("dt")),
             _format_hour_range(row.get("hr")),
             str(_as_int(row.get("nu_prescricoes"))),
             str(_as_int(row.get("nu_crms"))),
             _format_optional_decimal_pt(row.get("mediana_hora"), 1),
             _format_volume_horario_multiplicador(row),
         ]
-        for idx, value in enumerate(values):
+        for idx, value in enumerate(values, start=1):
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER
             _write_cell(cells[idx], value, size=6.8, align=align)
 

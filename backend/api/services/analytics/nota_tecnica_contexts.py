@@ -377,6 +377,12 @@ def _build_gtin_sem_comprovacao_context(
             "qtd_sem_comprovacao": int(r["qtd_sem_comprovacao"] or 0),
             "valor_vendas": round(float(r["valor_vendas"] or 0.0), 2),
             "valor_sem_comprovacao": round(float(r["valor_sem_comprovacao"] or 0.0), 2),
+            "pct_sem_comprovacao": round(
+                (float(r["valor_sem_comprovacao"] or 0.0) / float(r["valor_vendas"] or 0.0) * 100)
+                if float(r["valor_vendas"] or 0.0) > 0
+                else 0.0,
+                2,
+            ),
         })
 
     if missing_descriptions:
@@ -386,6 +392,8 @@ def _build_gtin_sem_comprovacao_context(
         raise RuntimeError("Lista de GTINs sem comprovacao vazia apos enriquecimento de medicamentos.")
 
     total_valor = round(sum(r["valor_sem_comprovacao"] for r in rows), 2)
+    total_vendas = round(sum(r["valor_vendas"] for r in rows), 2)
+    total_pct_sem_comprovacao = (total_valor / total_vendas * 100) if total_vendas > 0 else 0.0
     total_qtd = sum(r["qtd_sem_comprovacao"] for r in rows)
     target_value = total_valor * concentration_target
     acumulado = 0.0
@@ -404,6 +412,8 @@ def _build_gtin_sem_comprovacao_context(
         "total_gtins": len(rows),
         "total_qtd": total_qtd,
         "total_valor": total_valor,
+        "total_vendas": total_vendas,
+        "total_pct_sem_comprovacao": total_pct_sem_comprovacao,
         "representativos_count": representativos_count,
         "representativos_valor": representativos_valor,
         "representativos_pct": representativos_pct,

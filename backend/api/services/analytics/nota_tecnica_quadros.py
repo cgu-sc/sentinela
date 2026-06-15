@@ -22,6 +22,8 @@ from .nota_tecnica_formatters import (
     _title_case_pt,
 )
 
+_CNAES_FARMACEUTICOS = {"4771701", "4771702"}
+
 
 def _format_quadro_title(paragraph, *, space_before: float = 16, space_after: float = 8):
     _format_block_title(
@@ -39,6 +41,45 @@ def _format_quadro_footnote(paragraph, *, space_before: float = 5, space_after: 
         space_after=space_after,
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
+
+
+def _format_cnae_secundario_destacado(cnaes_secundarios: Any) -> str:
+    if cnaes_secundarios is None:
+        raise RuntimeError("Campo cnaes_secundarios ausente no contexto do Quadro 01.")
+    if not isinstance(cnaes_secundarios, list):
+        raise RuntimeError("Campo cnaes_secundarios deve ser uma lista no contexto do Quadro 01.")
+    if not cnaes_secundarios:
+        return "—"
+
+    def normalize_item(item: Any) -> tuple[int, str, str | None]:
+        if not isinstance(item, dict):
+            raise RuntimeError("Item de cnaes_secundarios deve ser um objeto.")
+        raw_id = item.get("id_cnae")
+        if raw_id is None:
+            raise RuntimeError("Item de cnaes_secundarios sem id_cnae.")
+        code = "".join(char for char in str(raw_id) if char.isdigit())
+        if not code:
+            raise RuntimeError("Item de cnaes_secundarios com id_cnae invalido.")
+        description = item.get("descricao")
+        if description is not None and not isinstance(description, str):
+            raise RuntimeError("Item de cnaes_secundarios com descricao invalida.")
+        return int(code), code, description.strip() if description else None
+
+    normalized = [normalize_item(item) for item in cnaes_secundarios]
+    selected = min(
+        (
+            item
+            for item in normalized
+            if item[1] in _CNAES_FARMACEUTICOS
+        ),
+        default=None,
+        key=lambda item: item[0],
+    )
+    if selected is None:
+        selected = min(normalized, key=lambda item: item[0])
+
+    _, code, description = selected
+    return f"{code} - {description}" if description else code
 
 
 def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str, Any]]):
@@ -180,19 +221,20 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     )
 
     rows_data = gtin_comp["rows"]
-    table = doc.add_table(rows=len(rows_data) + 2, cols=5)
+    table = doc.add_table(rows=len(rows_data) + 2, cols=6)
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(0.94), Inches(2.56), Inches(1.08), Inches(1.08), Inches(1.34)],
+        [Inches(0.82), Inches(2.28), Inches(0.96), Inches(0.96), Inches(1.16), Inches(0.92)],
     )
 
     headers = [
         'GTIN',
         'Descrição',
         'Patologia associada',
-        'Quantidade de medicamentos sem comprovação',
+        'Qtd de medicamentos sem comprovação',
         'Valor de vendas sem comprovação (R$)',
+        'Percentual sem comprovação',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
@@ -220,6 +262,8 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
         _run(cells[3].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
         cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
         _run(cells[4].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color='0F172A', size=8)
+        cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[5].paragraphs[0], f'{_format_decimal_pt(item["pct_sem_comprovacao"], 2)}%', color='0F172A', size=8)
 
     total_cells = table.rows[-1].cells
     total_cells[0].merge(total_cells[2])
@@ -229,6 +273,8 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     _run(total_cells[3].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
     total_cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     _run(total_cells[4].paragraphs[0], f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='0F172A', size=8, bold=True)
+    total_cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(total_cells[5].paragraphs[0], f'{_format_decimal_pt(gtin_comp["total_pct_sem_comprovacao"], 2)}%', color='0F172A', size=8, bold=True)
     for cell in total_cells:
         _cell_bg(cell, 'F8FAFC')
 
@@ -466,6 +512,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         ('Nome Fantasia', data.get('nome_fantasia') or '—'),
         ('Natureza Jurídica', data.get('natureza_juridica') or '—'),
         ('CNAE Principal', f"{data.get('id_cnae_principal') or ''} - {data.get('cnae_principal') or ''}"),
+        ('CNAE Secundário', _format_cnae_secundario_destacado(data.get('cnaes_secundarios'))),
         ('Abertura', abertura_txt),
         ('Situação', data.get('situacao_rf') or '—'),
         ('Porte', data.get('porte_empresa') or '—'),

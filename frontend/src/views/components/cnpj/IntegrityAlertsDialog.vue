@@ -16,12 +16,6 @@ const dialogVisible = computed({
 
 const alerts = computed(() => props.data?.alertas ?? []);
 
-const scopeLabel = (scope) => {
-  if (scope === "cnpj") return "Estabelecimento";
-  if (scope === "representante") return "Representante";
-  return "Sócio";
-};
-
 const formatDocument = (value) => {
   const clean = String(value ?? "").replace(/\D/g, "");
   if (clean.length === 11) {
@@ -68,10 +62,9 @@ const navigate = (alert) => {
         <div class="integrity-alert-content">
           <div class="integrity-alert-heading">
             <span class="integrity-alert-title">{{ alert.titulo }}</span>
+            <span class="integrity-alert-sep">·</span>
+            <span class="integrity-alert-entity">{{ alert.entidade_nome }}</span>
           </div>
-          <span class="integrity-alert-entity">
-            {{ scopeLabel(alert.escopo) }}: {{ alert.entidade_nome }}
-          </span>
           <span class="integrity-alert-meta">
             {{ formatDocument(alert.entidade_id) }} · Fonte: {{ alert.fonte }}
           </span>
@@ -138,14 +131,25 @@ const navigate = (alert) => {
 .integrity-alert-heading {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
-.integrity-alert-title,
-.integrity-alert-entity {
+.integrity-alert-title {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-color);
+}
+
+.integrity-alert-sep {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.integrity-alert-entity {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .integrity-alert-meta {

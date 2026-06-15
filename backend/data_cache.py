@@ -316,6 +316,9 @@ _BENCH_CRM_BR_PATH = _global_cache_path("bench_crm_br")
 _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH = _global_cache_path("crm_prescricoes_brasil_semestre")
 _DADOS_MEDICO_PARQUET_PATH = _global_cache_path("dados_medico")
 _DADOS_FARMACIA_PARQUET_PATH = _global_cache_path("dados_farmacia")
+_DADOS_FARMACIA_CNAES_SECUNDARIOS_PARQUET_PATH = _global_cache_path(
+    "dados_farmacia_cnaes_secundarios"
+)
 _PERFIL_ESTABELECIMENTO_PARQUET_PATH = _global_cache_path("perfil_estabelecimento")
 _DADOS_SOCIOS_PARQUET_PATH = _global_cache_path("dados_socios")
 _TEIA_FONTE_NIVEL2_PARQUET_PATH = _global_cache_path("teia_fonte_nivel2")
@@ -349,6 +352,7 @@ _df_bench_crm_uf: pl.DataFrame | None = None
 _df_bench_crm_regiao: pl.DataFrame | None = None
 _df_bench_crm_br: pl.DataFrame | None = None
 _df_dados_farmacia: pl.DataFrame | None = None
+_df_dados_farmacia_cnaes_secundarios: pl.DataFrame | None = None
 _df_perfil_estabelecimento: pl.DataFrame | None = None
 _df_dados_socios:   pl.DataFrame | None = None
 _df_teia_fonte_nivel2: pl.DataFrame | None = None
@@ -521,8 +525,9 @@ def _sync_falecidos(engine, progress_callback=None):
     if not chunk_list:
         raise RuntimeError("Tabela fonte temp_CGUSC.fp.falecidos_por_farmacia nao retornou linhas para sincronizacao.")
 
-    _df_falecidos = pl.concat(chunk_list).sort(["cnpj", "cpf", "data_autorizacao"])
-    _df_falecidos.write_parquet(_FALECIDOS_PARQUET_PATH, compression="zstd")
+    df_falecidos = pl.concat(chunk_list).sort(["cnpj", "cpf", "data_autorizacao"])
+    df_falecidos.write_parquet(_FALECIDOS_PARQUET_PATH, compression="zstd")
+    _df_falecidos = df_falecidos
 
 
 def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
@@ -572,13 +577,14 @@ def _sync_localidades(engine, progress_callback=None):
     pdf = pd.read_sql(sql, engine)
     print(f"   -> Localidades carregadas: {len(pdf):,} registros.")
     if progress_callback: progress_callback(100)
-    _df_localidades = pl.from_pandas(pdf).with_columns([
+    df_localidades = pl.from_pandas(pdf).with_columns([
         pl.col("sg_uf").cast(pl.Categorical),
         pl.col("no_regiao_saude").cast(pl.Categorical),
         pl.col("no_municipio").cast(pl.Categorical),
         pl.col("unidade_pf").cast(pl.Categorical),
     ])
-    _df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="zstd")
+    df_localidades.write_parquet(_LOCALIDADES_PARQUET_PATH, compression="zstd")
+    _df_localidades = df_localidades
 
 def _sync_rede(engine, progress_callback=None):
     """Tarefa 2: Sincroniza a tabela de rede de estabelecimentos."""
@@ -590,7 +596,7 @@ def _sync_rede(engine, progress_callback=None):
     print(f"   -> Rede carregada com sucesso: {len(pdf):,} registros.")
     if progress_callback: progress_callback(100)
     
-    _df_rede = pl.from_pandas(pdf).with_columns([
+    df_rede = pl.from_pandas(pdf).with_columns([
         pl.col("cnpj_raiz").cast(pl.String),
         pl.col("cnpj").cast(pl.String),
         pl.col("razao_social").cast(pl.String),
@@ -600,7 +606,8 @@ def _sync_rede(engine, progress_callback=None):
         pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
         pl.col("is_grande_rede").cast(pl.Boolean),
     ]).sort(["cnpj_raiz", "cnpj"])
-    _df_rede.write_parquet(_REDE_PARQUET_PATH, compression="zstd")
+    df_rede.write_parquet(_REDE_PARQUET_PATH, compression="zstd")
+    _df_rede = df_rede
 
 def _sync_matriz_risco(engine, progress_callback=None):
     """Tarefa 4: Sincroniza a matriz anual de componentes dos indicadores."""
@@ -629,11 +636,12 @@ def _sync_matriz_risco(engine, progress_callback=None):
     schema = _GLOBAL_PARQUET_SCHEMAS["matriz_risco"]
     cast_exprs = [pl.col(col).cast(dtype, strict=False) for col, dtype in schema.items()]
     typed_chunks = [chunk.with_columns(cast_exprs).select(list(schema.keys())) for chunk in chunk_list]
-    _df_matriz_risco = (
+    df_matriz_risco = (
         pl.concat(typed_chunks)
         .sort(["id_cnpj", "ano_base"])
     )
-    _df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")
+    df_matriz_risco.write_parquet(_MATRIZ_PARQUET_PATH, compression="zstd")
+    _df_matriz_risco = df_matriz_risco
 
 def _sync_volume_atipico_semestral(engine, progress_callback=None):
     """Sincroniza a base semestral crua do filtro dinamico de volume atipico."""
@@ -676,14 +684,15 @@ def _sync_volume_atipico_semestral(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
-    _df_volume_atipico_semestral = (
+    df_volume_atipico_semestral = (
         pl.concat(chunk_list).sort(["id_cnpj", "chave_semestre"])
         if chunk_list else pl.DataFrame()
     )
-    _df_volume_atipico_semestral.write_parquet(
+    df_volume_atipico_semestral.write_parquet(
         _VOLUME_ATIPICO_SEMESTRAL_PARQUET_PATH,
         compression="zstd",
     )
+    _df_volume_atipico_semestral = df_volume_atipico_semestral
 
 def _sync_geografico_origem_uf(engine, progress_callback=None):
     """Sincroniza a distribuicao geografica por UF de residencia do paciente."""
@@ -936,10 +945,10 @@ def _sync_esocial(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
-    _df_esocial_cnpj_trabalhador_ano = (
+    df_esocial_cnpj_trabalhador_ano = (
         pl.concat(trabalhador_chunks).sort(["id_cnpj", "ano_base", "cpf_trabalhador", "matricula"])
     )
-    _df_esocial_cnpj_trabalhador_ano.write_parquet(
+    df_esocial_cnpj_trabalhador_ano.write_parquet(
         _ESOCIAL_CNPJ_TRABALHADOR_ANO_PARQUET_PATH,
         compression="zstd",
     )
@@ -978,7 +987,7 @@ def _sync_esocial(engine, progress_callback=None):
         FROM [temp_CGUSC].[fp].[esocial_cnpj_ano]
     """
     pdf_ano = pd.read_sql(ano_sql, engine)
-    _df_esocial_cnpj_ano = pl.from_pandas(pdf_ano).with_columns([
+    df_esocial_cnpj_ano = pl.from_pandas(pdf_ano).with_columns([
         pl.col("id_cnpj").cast(pl.Int32),
         pl.col("ano_base").cast(pl.Int16),
         pl.col("mes_base").cast(pl.Int8),
@@ -1003,7 +1012,7 @@ def _sync_esocial(engine, progress_callback=None):
         pl.col("dt_carga_fonte").cast(pl.Date, strict=False),
         pl.col("dt_processamento").cast(pl.Datetime, strict=False),
     ]).sort(["id_cnpj", "ano_base"])
-    _df_esocial_cnpj_ano.write_parquet(
+    df_esocial_cnpj_ano.write_parquet(
         _ESOCIAL_CNPJ_ANO_PARQUET_PATH,
         compression="zstd",
     )
@@ -1043,7 +1052,7 @@ def _sync_esocial(engine, progress_callback=None):
         FROM [temp_CGUSC].[fp].[esocial_cnpj_movimentacao_ano]
     """
     pdf_movimentacao = pd.read_sql(movimentacao_sql, engine)
-    _df_esocial_cnpj_movimentacao_ano = pl.from_pandas(pdf_movimentacao).with_columns([
+    df_esocial_cnpj_movimentacao_ano = pl.from_pandas(pdf_movimentacao).with_columns([
         pl.col("id_cnpj").cast(pl.Int32),
         pl.col("ano_base").cast(pl.Int16),
         pl.col("id_regiao_saude").cast(pl.Int32),
@@ -1069,7 +1078,7 @@ def _sync_esocial(engine, progress_callback=None):
         pl.col("motivo_classificacao").cast(pl.String),
         pl.col("dt_processamento").cast(pl.Datetime, strict=False),
     ]).sort(["id_cnpj", "ano_base"])
-    _df_esocial_cnpj_movimentacao_ano.write_parquet(
+    df_esocial_cnpj_movimentacao_ano.write_parquet(
         _ESOCIAL_CNPJ_MOVIMENTACAO_ANO_PARQUET_PATH,
         compression="zstd",
     )
@@ -1107,7 +1116,7 @@ def _sync_esocial(engine, progress_callback=None):
         FROM [temp_CGUSC].[fp].[esocial_cnpj_ultima_movimentacao]
     """
     pdf_ultima_movimentacao = pd.read_sql(ultima_movimentacao_sql, engine)
-    _df_esocial_cnpj_ultima_movimentacao = pl.from_pandas(pdf_ultima_movimentacao).with_columns([
+    df_esocial_cnpj_ultima_movimentacao = pl.from_pandas(pdf_ultima_movimentacao).with_columns([
         pl.col("id_cnpj").cast(pl.Int32),
         pl.col("ano_ultima_movimentacao").cast(pl.Int16),
         pl.col("ano_esocial_referencia_ultima_movimentacao").cast(pl.Int16),
@@ -1131,7 +1140,7 @@ def _sync_esocial(engine, progress_callback=None):
         pl.col("motivo_mov_sem_funcionario").cast(pl.String),
         pl.col("dt_processamento").cast(pl.Datetime, strict=False),
     ]).sort("id_cnpj")
-    _df_esocial_cnpj_ultima_movimentacao.write_parquet(
+    df_esocial_cnpj_ultima_movimentacao.write_parquet(
         _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH,
         compression="zstd",
     )
@@ -1210,7 +1219,7 @@ def _sync_sentinela_metadados_base(engine, progress_callback=None):
         FROM [temp_CGUSC].[fp].[sentinela_metadados_base]
     """
     pdf = pd.read_sql(sql, engine)
-    _df_sentinela_metadados_base = pl.from_pandas(pdf).with_columns([
+    df_sentinela_metadados_base = pl.from_pandas(pdf).with_columns([
         pl.col("nome_base").cast(pl.String),
         pl.col("nome_artefato").cast(pl.String),
         pl.col("fonte_origem").cast(pl.String),
@@ -1225,10 +1234,11 @@ def _sync_sentinela_metadados_base(engine, progress_callback=None):
         pl.col("dt_processamento_fim").cast(pl.Datetime, strict=False),
         pl.col("observacao").cast(pl.String),
     ]).sort(["nome_base", "nome_artefato"])
-    _df_sentinela_metadados_base.write_parquet(
+    df_sentinela_metadados_base.write_parquet(
         _SENTINELA_METADADOS_BASE_PARQUET_PATH,
         compression="zstd",
     )
+    _df_sentinela_metadados_base = df_sentinela_metadados_base
 
     if progress_callback:
         progress_callback(100)
@@ -1279,9 +1289,9 @@ def _sync_dados_par(engine, progress_callback=None):
         progress_callback(100)
 
     if pdf.empty:
-        _df_dados_par = _empty_dados_par_df()
+        df_dados_par = _empty_dados_par_df()
     else:
-        _df_dados_par = pl.from_pandas(pdf).with_columns([
+        df_dados_par = pl.from_pandas(pdf).with_columns([
             pl.col("cnpj").cast(pl.Utf8),
             pl.col("is_par").cast(pl.Boolean),
             pl.col("qtd_processos_par").cast(pl.Int32),
@@ -1291,7 +1301,8 @@ def _sync_dados_par(engine, progress_callback=None):
             pl.col("par_ultima_conclusao").cast(pl.Date, strict=False),
         ]).sort("cnpj")
 
-    _df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
+    df_dados_par.write_parquet(_DADOS_PAR_PARQUET_PATH, compression="zstd")
+    _df_dados_par = df_dados_par
 
 def _sync_par_teia_alvos(engine, progress_callback=None):
     """Sincroniza flags agregadas de PAR na teia por CNPJ alvo."""
@@ -1406,9 +1417,9 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
         progress_callback(100)
 
     if pdf.empty:
-        _df_par_teia_alvos = _empty_par_teia_alvos_df()
+        df_par_teia_alvos = _empty_par_teia_alvos_df()
     else:
-        _df_par_teia_alvos = pl.from_pandas(pdf).with_columns([
+        df_par_teia_alvos = pl.from_pandas(pdf).with_columns([
             pl.col("cnpj").cast(pl.Utf8),
             pl.col("has_par_alvo").cast(pl.Boolean),
             pl.col("has_par_n2").cast(pl.Boolean),
@@ -1420,7 +1431,8 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
             pl.col("qtd_empresas_par_qualquer").cast(pl.Int32),
         ]).sort("cnpj")
 
-    _df_par_teia_alvos.write_parquet(_PAR_TEIA_ALVOS_PARQUET_PATH, compression="zstd")
+    df_par_teia_alvos.write_parquet(_PAR_TEIA_ALVOS_PARQUET_PATH, compression="zstd")
+    _df_par_teia_alvos = df_par_teia_alvos
 
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
@@ -1443,8 +1455,6 @@ def _sync_dados_farmacia(engine, progress_callback=None):
                D.codibge as id_ibge7,
                D.id_cnae_principal as id_cnae_principal, 
                D.cnae_principal as cnae_principal,
-               D.id_cnae_secundario as id_cnae_secundario, 
-               D.cnae_secundario as cnae_secundario,
                D.is_cnae_farmacia_ausente as is_cnae_farmacia_ausente,
                D.data_abertura as data_abertura,
                D.data_processamento as data_processamento,
@@ -1471,19 +1481,88 @@ def _sync_dados_farmacia(engine, progress_callback=None):
         chunk_df = pl.from_pandas(chunk).with_columns([
             pl.col("id_cnpj").cast(pl.Int32),
             pl.col("id_cnae_principal").cast(pl.String),
-            pl.col("id_cnae_secundario").cast(pl.Int64, strict=False).cast(pl.String),
             pl.col("is_cnae_farmacia_ausente").cast(pl.Int8),
         ])
         chunk_list.append(chunk_df)
         rows_processed += len(chunk)
         p = int((rows_processed / total_rows) * 100) if total_rows > 0 else 100
         print(f"   -> Progresso Dados Farmácias: {p}% ({rows_processed:,} / {total_rows:,})")
-        if progress_callback: progress_callback(p)
+        if progress_callback:
+            progress_callback(int(p * 0.85))
 
-    _df_dados_farmacia = pl.concat(chunk_list).with_columns([
+    df_dados_farmacia = pl.concat(chunk_list).with_columns([
         (pl.col("is_matriz") == "M").alias("is_matriz"),
     ]).sort("cnpj")
-    _df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
+    df_dados_farmacia.write_parquet(_DADOS_FARMACIA_PARQUET_PATH, compression="zstd")
+    _df_dados_farmacia = df_dados_farmacia
+    _sync_dados_farmacia_cnaes_secundarios(
+        engine,
+        (
+            (lambda p: progress_callback(85 + int(p * 0.15)))
+            if progress_callback
+            else None
+        ),
+    )
+
+
+def _sync_dados_farmacia_cnaes_secundarios(engine, progress_callback=None):
+    """Sincroniza a relacao normalizada de CNAEs secundarios das farmacias."""
+    global _df_dados_farmacia_cnaes_secundarios
+    print("Sincronizando CNAEs Secundarios das Farmacias...")
+    sql = """
+        SELECT
+            C.id_cnpj,
+            C.id_cnae_secundario AS id_cnae,
+            C.cnae_secundario AS descricao
+        FROM [temp_CGUSC].[fp].[dados_farmacia_cnaes_secundarios] C
+        ORDER BY C.id_cnpj, C.id_cnae_secundario
+    """
+    with engine.connect() as conn:
+        total_rows = conn.execute(
+            text(
+                "SELECT COUNT(*) "
+                "FROM [temp_CGUSC].[fp].[dados_farmacia_cnaes_secundarios]"
+            )
+        ).scalar()
+
+    chunk_list = []
+    rows_processed = 0
+    chunk_size = 10_000
+    for chunk in pd.read_sql(sql, engine, chunksize=chunk_size):
+        chunk_df = pl.from_pandas(chunk).with_columns([
+            pl.col("id_cnpj").cast(pl.Int32),
+            pl.col("id_cnae").cast(pl.Int32),
+            pl.col("descricao").cast(pl.String),
+        ])
+        chunk_list.append(chunk_df)
+        rows_processed += len(chunk)
+        if progress_callback:
+            progress_callback(
+                int((rows_processed / total_rows) * 100) if total_rows else 100
+            )
+
+    if chunk_list:
+        df_dados_farmacia_cnaes_secundarios = (
+            pl.concat(chunk_list)
+            .with_columns(pl.col("descricao").cast(pl.Categorical))
+            .sort(["id_cnpj", "id_cnae"])
+        )
+    else:
+        df_dados_farmacia_cnaes_secundarios = pl.DataFrame(
+            schema={
+                "id_cnpj": pl.Int32,
+                "id_cnae": pl.Int32,
+                "descricao": pl.Categorical,
+            }
+        )
+
+    df_dados_farmacia_cnaes_secundarios.write_parquet(
+        _DADOS_FARMACIA_CNAES_SECUNDARIOS_PARQUET_PATH,
+        compression="zstd",
+    )
+    _df_dados_farmacia_cnaes_secundarios = df_dados_farmacia_cnaes_secundarios
+    if progress_callback:
+        progress_callback(100)
 
 
 def _sync_perfil_estabelecimento(engine, progress_callback=None):
@@ -1544,14 +1623,15 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
-    _df_perfil_estabelecimento = (
+    df_perfil_estabelecimento = (
         pl.concat(chunk_list).unique(subset=["id_cnpj"]).sort("id_cnpj")
         if chunk_list else pl.DataFrame()
     )
-    _df_perfil_estabelecimento.write_parquet(
+    df_perfil_estabelecimento.write_parquet(
         _PERFIL_ESTABELECIMENTO_PARQUET_PATH,
         compression="zstd",
     )
+    _df_perfil_estabelecimento = df_perfil_estabelecimento
 
 
 def _sync_dados_socios(engine, progress_callback=None):
@@ -1598,7 +1678,7 @@ def _sync_dados_socios(engine, progress_callback=None):
 
     df_full = pl.concat(chunk_list)
 
-    _df_dados_socios = df_full.with_columns([
+    df_dados_socios = df_full.with_columns([
         pl.col("cnpj").cast(pl.String),
         pl.col("cpf_cnpj_socio").cast(pl.String),
         pl.col("nome_socio").cast(pl.String),
@@ -1622,7 +1702,8 @@ def _sync_dados_socios(engine, progress_callback=None):
         pl.col("is_falecido").cast(pl.Int8),
     ]).sort("cnpj")
 
-    _df_dados_socios.write_parquet(_DADOS_SOCIOS_PARQUET_PATH, compression="zstd")
+    df_dados_socios.write_parquet(_DADOS_SOCIOS_PARQUET_PATH, compression="zstd")
+    _df_dados_socios = df_dados_socios
     print(f"   -> Sincronização de Sócios finalizada ({len(_df_dados_socios):,} registros).")
 
 
@@ -1857,14 +1938,15 @@ def _sync_medicamentos(engine, progress_callback=None):
     print(f"   -> Cadastro carregado: {len(pdf):,} medicamentos.")
     if progress_callback: progress_callback(100)
     
-    _df_medicamentos = pl.from_pandas(pdf).with_columns([
+    df_medicamentos = pl.from_pandas(pdf).with_columns([
         pl.col("codigo_barra").cast(pl.String),
         pl.col("principio_ativo").cast(pl.Categorical),
         pl.col("produto").cast(pl.Categorical),
         pl.col("laboratorio").cast(pl.Categorical),
         pl.col("patologia").cast(pl.Categorical),
     ]).sort("codigo_barra")
-    _df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="zstd")
+    df_medicamentos.write_parquet(_MEDICAMENTOS_PARQUET_PATH, compression="zstd")
+    _df_medicamentos = df_medicamentos
 
 
 def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
@@ -1964,10 +2046,10 @@ def _sync_analise_gtin_inconsistencia_clinica(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
-    _df_analise_gtin_inconsistencia_clinica = (
+    df_analise_gtin_inconsistencia_clinica = (
         pl.concat(chunk_list).sort(["id_regiao_saude", "patologia", "regra_clinica", "ano_base", "id_cnpj"])
     )
-    _df_analise_gtin_inconsistencia_clinica.write_parquet(
+    df_analise_gtin_inconsistencia_clinica.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_PARQUET_PATH,
         compression="zstd",
     )
@@ -2036,10 +2118,10 @@ def _sync_analise_gtin_inconsistencia_clinica_municipio(engine, progress_callbac
         if progress_callback:
             progress_callback(p)
 
-    _df_analise_gtin_inconsistencia_clinica_municipio = (
+    df_analise_gtin_inconsistencia_clinica_municipio = (
         pl.concat(chunk_list).sort(["id_ibge7", "patologia", "ano_base"])
     )
-    _df_analise_gtin_inconsistencia_clinica_municipio.write_parquet(
+    df_analise_gtin_inconsistencia_clinica_municipio.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_MUNICIPIO_PARQUET_PATH,
         compression="zstd",
     )
@@ -2117,10 +2199,10 @@ def _sync_analise_gtin_inconsistencia_clinica_regiao(engine, progress_callback=N
         if progress_callback:
             progress_callback(p)
 
-    _df_analise_gtin_inconsistencia_clinica_regiao = (
+    df_analise_gtin_inconsistencia_clinica_regiao = (
         pl.concat(chunk_list).sort(["id_regiao_saude", "patologia", "regra_clinica", "ano_base"])
     )
-    _df_analise_gtin_inconsistencia_clinica_regiao.write_parquet(
+    df_analise_gtin_inconsistencia_clinica_regiao.write_parquet(
         _ANALISE_GTIN_INCONSISTENCIA_CLINICA_REGIAO_PARQUET_PATH,
         compression="zstd",
     )
@@ -2180,13 +2262,14 @@ def _sync_dados_ibge_demografia(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
-    _df_dados_ibge_demografia = (
+    df_dados_ibge_demografia = (
         pl.concat(chunk_list).sort(["id_ibge7", "ano_censo", "ordem", "sexo"])
     )
-    _df_dados_ibge_demografia.write_parquet(
+    df_dados_ibge_demografia.write_parquet(
         _DADOS_IBGE_DEMOGRAFIA_PARQUET_PATH,
         compression="zstd",
     )
+    _df_dados_ibge_demografia = df_dados_ibge_demografia
 
 
 def _sync_movimentacao(engine, progress_callback):
@@ -2232,7 +2315,7 @@ def _sync_movimentacao(engine, progress_callback):
         progress_callback(p)
 
     print("   -> Organizando e otimizando dados (Polars)...")
-    _df_movimentacao = pl.concat(chunk_list).with_columns([
+    df_movimentacao = pl.concat(chunk_list).with_columns([
         pl.col("id_cnpj").cast(pl.Int32),
         pl.col("periodo").cast(pl.Date),
         pl.col("total_qnt_caixas_vendidas").cast(pl.Int64),
@@ -2241,7 +2324,8 @@ def _sync_movimentacao(engine, progress_callback):
         pl.col("total_vendas").cast(pl.Float64),
         pl.col("total_sem_comprovacao").cast(pl.Float64),
     ]).sort(["id_cnpj", "periodo"])  # ORDENAÇÃO é a chave para compressão Parquet
-    _df_movimentacao.write_parquet(_PARQUET_PATH, compression="zstd")
+    df_movimentacao.write_parquet(_PARQUET_PATH, compression="zstd")
+    _df_movimentacao = df_movimentacao
 
 def _sync_crm_benchmarks(engine, progress_callback=None):
     """Tarefa 5: Gera bench_uf, bench_regiao e bench_br como parquets a partir das tabelas de indicadores do banco."""
@@ -2465,7 +2549,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_farmacia_cnaes_secundarios, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
     _ON_DEMAND_GLOBAL_CACHE_READY.clear()
 
@@ -2503,9 +2587,12 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "id_cnpj",
                 "id_cnae_principal",
                 "cnae_principal",
-                "id_cnae_secundario",
-                "cnae_secundario",
                 "is_cnae_farmacia_ausente",
+            },
+            "dados_farmacia_cnaes_secundarios": {
+                "id_cnpj",
+                "id_cnae",
+                "descricao",
             },
             "dados_socios": {"is_cadunico", "is_esocial", "is_seguro_defeso", "is_falecido"},
             "teia_fonte_nivel2": {"is_cadunico", "is_falecido"},
@@ -2767,6 +2854,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_bench_crm_regiao= _try_load("bench_crm_regiao", _BENCH_CRM_REGIAO_PATH)
         _df_bench_crm_br    = _try_load("bench_crm_br",   _BENCH_CRM_BR_PATH)
         _df_dados_farmacia  = _try_load("dados_farmacia",  _DADOS_FARMACIA_PARQUET_PATH)
+        _df_dados_farmacia_cnaes_secundarios = _try_load(
+            "dados_farmacia_cnaes_secundarios",
+            _DADOS_FARMACIA_CNAES_SECUNDARIOS_PARQUET_PATH,
+        )
         _df_perfil_estabelecimento = _try_load("perfil_estabelecimento", _PERFIL_ESTABELECIMENTO_PARQUET_PATH)
         _df_dados_socios    = _try_load("dados_socios",    _DADOS_SOCIOS_PARQUET_PATH)
         _df_teia_fonte_nivel2 = None
@@ -2922,6 +3013,14 @@ def get_df_dados_farmacia() -> pl.DataFrame:
         raise RuntimeError("Cache de Dados das Farmácias não carregado. Execute uma sincronização.")
     return _df_dados_farmacia
 
+def get_df_dados_farmacia_cnaes_secundarios() -> pl.DataFrame:
+    if _df_dados_farmacia_cnaes_secundarios is None:
+        raise RuntimeError(
+            "Cache de CNAEs secundarios das farmacias nao carregado. "
+            "Execute uma sincronizacao."
+        )
+    return _df_dados_farmacia_cnaes_secundarios
+
 def get_df_perfil_estabelecimento() -> pl.DataFrame:
     if _df_perfil_estabelecimento is None:
         raise RuntimeError("Cache de Perfil dos Estabelecimentos nao carregado. Execute uma sincronizacao.")
@@ -3056,6 +3155,11 @@ def get_cache_status() -> dict:
         "crm_prescricoes_brasil_semestre": {"label": "CRM Brasil Semestral", "path": _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)},
         "dados_medico": {"label": "Dados Medico", "path": _DADOS_MEDICO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("dados_medico", _DADOS_MEDICO_PARQUET_PATH)},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
+        "dados_farmacia_cnaes_secundarios": {
+            "label": "CNAEs Secundarios das Farmacias",
+            "path": _DADOS_FARMACIA_CNAES_SECUNDARIOS_PARQUET_PATH,
+            "loaded": _df_dados_farmacia_cnaes_secundarios is not None,
+        },
         "perfil_estabelecimento": {"label": "Perfil Estabelecimentos", "path": _PERFIL_ESTABELECIMENTO_PARQUET_PATH, "loaded": _df_perfil_estabelecimento is not None},
         "dados_socios":   {"label": "Dados dos Sócios",        "path": _DADOS_SOCIOS_PARQUET_PATH,    "loaded": _df_dados_socios is not None},
         "teia_fonte_nivel2":{"label": "Participações Externas",  "path": _TEIA_FONTE_NIVEL2_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("teia_fonte_nivel2", _TEIA_FONTE_NIVEL2_PARQUET_PATH)},
@@ -3079,10 +3183,12 @@ def get_cache_status() -> dict:
     }
     modules_status = {}
     for key, v in modules.items():
-        exists = os.path.exists(v["path"])
-        loaded = v["loaded"]
+        path = str(v["path"])
+        label = str(v["label"])
+        loaded = bool(v["loaded"])
+        exists = os.path.exists(path)
         modules_status[key] = {
-            "label": v["label"],
+            "label": label,
             "exists": exists,
             "loaded": loaded,
             "status": _get_cache_module_status(loaded, exists),

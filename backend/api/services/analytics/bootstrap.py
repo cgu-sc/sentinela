@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
 import polars as pl
@@ -10,6 +11,7 @@ from data_cache import (
     get_df_perfil_estabelecimento,
     get_localidades_df,
 )
+from .farmacia import get_cnaes_secundarios_farmacia
 from .matriz_risco_dinamica import build_dynamic_matriz_risco
 from ...schemas.analytics import (
     CnpjAccessStatusSchema,
@@ -117,6 +119,58 @@ def _scope_total(df: pl.DataFrame, scope_col: str | None, scope_value: object) -
     )
 
 
+def _optional_float(value: object, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser numerico.")
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(Decimal(value.strip()))
+        except (InvalidOperation, ValueError):
+            raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser numerico.")
+    raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser numerico.")
+
+
+def _optional_int(value: object, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser inteiro.")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
+        raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser inteiro.")
+    if isinstance(value, Decimal):
+        try:
+            if value == value.to_integral_value():
+                return int(value)
+        except InvalidOperation:
+            pass
+        raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser inteiro.")
+    if isinstance(value, str):
+        try:
+            parsed = Decimal(value.strip())
+            if parsed == parsed.to_integral_value():
+                return int(parsed)
+        except (InvalidOperation, ValueError):
+            pass
+        raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser inteiro.")
+    raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser inteiro.")
+
+
+def _optional_str(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise HTTPException(status_code=500, detail=f"Campo {field_name} deve ser texto.")
+
+
 def _risk_row(
     cnpj: str,
     uf: str | None,
@@ -124,7 +178,7 @@ def _risk_row(
     id_ibge7: int | str | None,
     data_inicio: date | None,
     data_fim: date | None,
-) -> dict:
+) -> dict[str, object]:
     risco_df = build_dynamic_matriz_risco(
         data_inicio=data_inicio,
         data_fim=data_fim,
@@ -145,7 +199,7 @@ def _risk_row(
     _require_columns(risco_df, required, "matriz_risco_dinamica")
     row_df = risco_df.filter(pl.col("cnpj") == cnpj).select(required)
     if row_df.is_empty():
-        totals = {column: None for column in required}
+        totals: dict[str, object] = {column: None for column in required}
         totals["cnpj"] = cnpj
         totals["total_nacional"] = _scope_total(risco_df, None, None)
         totals["total_uf"] = _scope_total(risco_df, "uf", uf)
@@ -231,7 +285,6 @@ def get_cnpj_bootstrap(
             },
         )
     cadastro_row = cadastro_df.row(0, named=True)
-
     perfil = get_df_perfil_estabelecimento()
     perfil_required = [
         "id_cnpj",
@@ -283,18 +336,18 @@ def get_cnpj_bootstrap(
         is_conexao_ativa=bool(perfil_row.get("is_conexao_ativa")),
         is_matriz=bool(perfil_row.get("is_matriz")),
         id_ibge7=int(perfil_row["id_ibge7"]),
-        score_risco_final=float(risco["score_risco_final"]) if risco.get("score_risco_final") is not None else None,
-        classificacao_risco=risco.get("classificacao_risco"),
+        score_risco_final=_optional_float(risco.get("score_risco_final"), "score_risco_final"),
+        classificacao_risco=_optional_str(risco.get("classificacao_risco"), "classificacao_risco"),
         municipio=perfil_row.get("no_municipio"),
         uf=perfil_row.get("uf"),
-        rank_nacional=int(risco["rank_nacional"]) if risco.get("rank_nacional") is not None else None,
-        total_nacional=int(risco["total_nacional"]) if risco.get("total_nacional") is not None else None,
-        rank_uf=int(risco["rank_uf"]) if risco.get("rank_uf") is not None else None,
-        total_uf=int(risco["total_uf"]) if risco.get("total_uf") is not None else None,
-        rank_regiao_saude=int(risco["rank_regiao_saude"]) if risco.get("rank_regiao_saude") is not None else None,
-        total_regiao_saude=int(risco["total_regiao_saude"]) if risco.get("total_regiao_saude") is not None else None,
-        rank_municipio=int(risco["rank_municipio"]) if risco.get("rank_municipio") is not None else None,
-        total_municipio=int(risco["total_municipio"]) if risco.get("total_municipio") is not None else None,
+        rank_nacional=_optional_int(risco.get("rank_nacional"), "rank_nacional"),
+        total_nacional=_optional_int(risco.get("total_nacional"), "total_nacional"),
+        rank_uf=_optional_int(risco.get("rank_uf"), "rank_uf"),
+        total_uf=_optional_int(risco.get("total_uf"), "total_uf"),
+        rank_regiao_saude=_optional_int(risco.get("rank_regiao_saude"), "rank_regiao_saude"),
+        total_regiao_saude=_optional_int(risco.get("total_regiao_saude"), "total_regiao_saude"),
+        rank_municipio=_optional_int(risco.get("rank_municipio"), "rank_municipio"),
+        total_municipio=_optional_int(risco.get("total_municipio"), "total_municipio"),
     )
 
     return CnpjBootstrapResponse(
@@ -307,7 +360,10 @@ def get_cnpj_bootstrap(
             municipio=cadastro_row.get("municipio"),
             uf=cadastro_row.get("uf"),
         ),
-        cadastro=DadosFarmaciaSchema(**cadastro_row),
+        cadastro=DadosFarmaciaSchema(
+            **cadastro_row,
+            cnaes_secundarios=get_cnaes_secundarios_farmacia(clean_cnpj),
+        ),
         cnpj_data=cnpj_data,
         geo_data=geo_data,
         qtd_municipios_regiao=qtd_municipios_regiao,

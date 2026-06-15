@@ -1206,8 +1206,6 @@ def generate_nota_tecnica(
         'natureza_juridica': cadastro.get('natureza_juridica'),
         'id_cnae_principal': cadastro.get('id_cnae_principal'),
         'cnae_principal': cadastro.get('cnae_principal'),
-        'id_cnae_secundario': cadastro.get('id_cnae_secundario'),
-        'cnae_secundario': cadastro.get('cnae_secundario'),
         'data_abertura': cadastro.get('data_abertura'),
         'situacao_rf': cnpj_data.get('situacao_rf') or 'ATIVA',
         'porte_empresa': cnpj_data.get('porte_empresa') or 'MICROEMPRESA',

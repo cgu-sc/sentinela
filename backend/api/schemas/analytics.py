@@ -489,6 +489,11 @@ class CrmTimelineDatasetResponse(BaseModel):
     save_time_ms: Optional[float] = None
 
 # ── Dados Cadastrais e Geográficos ─────────────────────
+class CnaeSecundarioSchema(BaseModel):
+    id_cnae: int
+    descricao: Optional[str] = None
+
+
 class DadosFarmaciaSchema(BaseModel):
     cnpj: str
     razao_social: Optional[str] = None
@@ -505,8 +510,7 @@ class DadosFarmaciaSchema(BaseModel):
     id_ibge7: Optional[str] = None
     id_cnae_principal: Optional[str] = None
     cnae_principal: Optional[str] = None
-    id_cnae_secundario: Optional[str] = None
-    cnae_secundario: Optional[str] = None
+    cnaes_secundarios: List[CnaeSecundarioSchema]
     is_cnae_farmacia_ausente: bool
     data_abertura: Optional[datetime] = None
     data_processamento: Optional[datetime] = None
@@ -621,8 +625,7 @@ class NetworkNodeSchema(BaseModel):
     nome_fantasia: Optional[str] = None
     id_cnae_principal: Optional[int] = None
     cnae_principal: Optional[str] = None
-    id_cnae_secundario: Optional[int] = None
-    cnae_secundario: Optional[str] = None
+    cnaes_secundarios: List[CnaeSecundarioSchema]
     municipio: Optional[str] = None
     uf: Optional[str] = None
     situacao_rf: Optional[str] = None

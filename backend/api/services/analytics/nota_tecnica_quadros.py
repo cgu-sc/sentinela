@@ -466,7 +466,6 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         ('Nome Fantasia', data.get('nome_fantasia') or '—'),
         ('Natureza Jurídica', data.get('natureza_juridica') or '—'),
         ('CNAE Principal', f"{data.get('id_cnae_principal') or ''} - {data.get('cnae_principal') or ''}"),
-        ('CNAE Secundária', f"{data.get('id_cnae_secundario') or ''} - {data.get('cnae_secundario') or ''}"),
         ('Abertura', abertura_txt),
         ('Situação', data.get('situacao_rf') or '—'),
         ('Porte', data.get('porte_empresa') or '—'),

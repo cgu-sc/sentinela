@@ -65,6 +65,14 @@ def _dados_medico_schema() -> dict:
     }
 
 
+def _farmacias_cnaes_secundarios_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "id_cnae": pl.Int32,
+        "descricao": pl.Categorical,
+    }
+
+
 def _matriz_risco_schema() -> dict:
     return {
         "id_cnpj": pl.Int32,
@@ -144,6 +152,12 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("crm_prescricoes_brasil_semestre", cache_files.CRM_PRESCRICOES_BRASIL_SEMESTRE_PARQUET, "global", _crm_prescricoes_brasil_semestre_schema()),
     CacheDefinition("dados_medico", cache_files.DADOS_MEDICO_PARQUET, "global", _dados_medico_schema()),
     CacheDefinition("dados_farmacia", cache_files.FARMACIAS_PARQUET, "global"),
+    CacheDefinition(
+        "dados_farmacia_cnaes_secundarios",
+        cache_files.FARMACIAS_CNAES_SECUNDARIOS_PARQUET,
+        "global",
+        _farmacias_cnaes_secundarios_schema(),
+    ),
     CacheDefinition("perfil_estabelecimento", cache_files.PERFIL_ESTABELECIMENTO_PARQUET, "global"),
     CacheDefinition("dados_socios", cache_files.SOCIOS_PARQUET, "global"),
     CacheDefinition("teia_fonte_nivel2", cache_files.TEIA_FONTE_NIVEL2_PARQUET, "global"),
@@ -203,8 +217,9 @@ def _n2_n4_node_schema() -> dict:
         "nome_fantasia": pl.Utf8,
         "id_cnae_principal": pl.Int32,
         "cnae_principal": pl.Utf8,
-        "id_cnae_secundario": pl.Int32,
-        "cnae_secundario": pl.Utf8,
+        "cnaes_secundarios": pl.List(
+            pl.Struct({"id_cnae": pl.Int32, "descricao": pl.Utf8})
+        ),
         "municipio": pl.Utf8,
         "uf": pl.Utf8,
         "situacao_rf": pl.Utf8,

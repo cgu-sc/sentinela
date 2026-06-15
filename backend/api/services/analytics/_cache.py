@@ -10,10 +10,11 @@ import zlib
 import json
 import copy
 import unicodedata
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from cache_files import (
     CRM_RAIOX_TX_PARQUET,
     FARMACIAS_PARQUET,
+    FARMACIAS_CNAES_SECUNDARIOS_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
     TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
     TEIA_GRAFO_NIVEL2_NODES_PARQUET,
@@ -24,7 +25,8 @@ from cache_files import (
 )
 from data_cache import (
     get_df, get_rede_df, get_localidades_df,
-    get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, 
+    get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia,
+    get_df_dados_farmacia_cnaes_secundarios,
     get_df_dados_socios, scan_teia_fonte_nivel2, scan_teia_fonte_nivel3,
     scan_teia_fonte_nivel4, get_df_dados_par, get_cache_dir
 )
@@ -72,6 +74,9 @@ from ...schemas.analytics import (
 COMPANY_CLASSIFICATION_VERSION = 2
 PHARMACY_CNAES = {"4771701", "4771702"}
 PHARMACY_NAME_TERMS = ("farmacia", "drogaria")
+CNAES_SECUNDARIOS_DTYPE = pl.List(
+    pl.Struct({"id_cnae": pl.Int32, "descricao": pl.Utf8})
+)
 
 
 def _normalize_company_text(value) -> str:
@@ -87,6 +92,27 @@ def _is_truthy_flag(value) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "t", "sim", "yes"}
     return bool(value)
+
+
+def _is_cache_version_at_least(value: object, minimum: int) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value >= minimum
+    if isinstance(value, float):
+        return value.is_integer() and int(value) >= minimum
+    if isinstance(value, Decimal):
+        try:
+            return value == value.to_integral_value() and value >= Decimal(minimum)
+        except InvalidOperation:
+            return False
+    if isinstance(value, str):
+        try:
+            parsed = Decimal(value.strip())
+            return parsed == parsed.to_integral_value() and parsed >= Decimal(minimum)
+        except (InvalidOperation, ValueError):
+            return False
+    return False
 
 
 def _is_pharmacy_by_activity_or_name(row: dict) -> bool:
@@ -135,7 +161,7 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
 
-    # Se o cache já existe e parece saudável, não faz nada
+     # Se o cache já existe e parece saudável, não faz nada
     if os.path.exists(TX_PARQUET_PATH):
         try:
             header = pl.read_parquet(TX_PARQUET_PATH, n_rows=1)
@@ -143,7 +169,10 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
                 "_crm_raiox_tx_cache_version" in header.columns
                 and (
                     header.height == 0
-                    or int(header["_crm_raiox_tx_cache_version"].max() or 0) >= _CRM_RAIOX_TX_CACHE_VERSION
+                    or _is_cache_version_at_least(
+                        header["_crm_raiox_tx_cache_version"].max(),
+                        _CRM_RAIOX_TX_CACHE_VERSION,
+                    )
                 )
             )
             if "codigo_barra" in header.columns and has_current_version:
@@ -266,7 +295,7 @@ def sync_network(cnpj: str) -> None:
                 "id", "label", "type", "network_level", "razao_social", "nome_socio",
                 "nome_fantasia", "classification_version", "is_falecido", "is_cadunico",
                 "is_esocial", "is_seguro_defeso", "is_cnae_farmacia_ausente", "id_cnae_principal",
-                "cnae_principal", "id_cnae_secundario", "cnae_secundario", "is_par", "qtd_processos_par",
+                "cnae_principal", "cnaes_secundarios", "is_par", "qtd_processos_par",
                 "par_situacoes", "par_primeira_instauracao", "par_ultima_instauracao",
                 "par_ultima_conclusao"
             }
@@ -297,6 +326,18 @@ def sync_network(cnpj: str) -> None:
                 )
             if os.path.getmtime(FARMACIAS_PATH) > graph_mtime:
                 raise ValueError("teia anterior ao cache de farmacias")
+
+            CNAES_SECUNDARIOS_PATH = os.path.join(
+                get_cache_dir(),
+                FARMACIAS_CNAES_SECUNDARIOS_PARQUET,
+            )
+            if not os.path.exists(CNAES_SECUNDARIOS_PATH):
+                raise FileNotFoundError(
+                    "Cache obrigatorio de CNAEs secundarios nao encontrado: "
+                    f"{CNAES_SECUNDARIOS_PATH}"
+                )
+            if os.path.getmtime(CNAES_SECUNDARIOS_PATH) > graph_mtime:
+                raise ValueError("teia anterior ao cache de CNAEs secundarios")
 
             DADOS_PAR_PATH = os.path.join(get_cache_dir(), "dados_par.parquet")
             if os.path.exists(DADOS_PAR_PATH):
@@ -339,8 +380,7 @@ def sync_network(cnpj: str) -> None:
                     "nome_fantasia": None,
                     "id_cnae_principal": None,
                     "cnae_principal": None,
-                    "id_cnae_secundario": None,
-                    "cnae_secundario": None,
+                    "cnaes_secundarios": [],
                     "municipio": None,
                     "uf": None,
                     "situacao_rf": None,
@@ -370,14 +410,29 @@ def sync_network(cnpj: str) -> None:
         cnae_info_by_cnpj = {
             str(row["cnpj"]): row
             for row in df_farm.select([
+                "id_cnpj",
                 "cnpj",
                 "id_cnae_principal",
                 "cnae_principal",
-                "id_cnae_secundario",
-                "cnae_secundario",
                 "is_cnae_farmacia_ausente",
             ]).to_dicts()
         }
+        cnaes_secundarios_by_id_cnpj: dict[int, list[dict]] = {}
+        for row in get_df_dados_farmacia_cnaes_secundarios().iter_rows(named=True):
+            cnaes_secundarios_by_id_cnpj.setdefault(int(row["id_cnpj"]), []).append({
+                "id_cnae": row["id_cnae"],
+                "descricao": row["descricao"],
+            })
+
+        def get_cnaes_secundarios(cnpj_value) -> list[dict]:
+            farmacia_info = cnae_info_by_cnpj.get(str(cnpj_value))
+            if farmacia_info is None:
+                return []
+            return cnaes_secundarios_by_id_cnpj.get(
+                int(farmacia_info["id_cnpj"]),
+                [],
+            )
+
         df_par = get_df_dados_par()
         par_info_by_cnpj = {
             str(row["cnpj"]): row
@@ -416,8 +471,7 @@ def sync_network(cnpj: str) -> None:
                 "nome_socio": None,
                 "id_cnae_principal": r.get("id_cnae_principal"),
                 "cnae_principal": r.get("cnae_principal"),
-                "id_cnae_secundario": r.get("id_cnae_secundario"),
-                "cnae_secundario": r.get("cnae_secundario"),
+                "cnaes_secundarios": get_cnaes_secundarios(cnpj),
                 "municipio": r.get("municipio"),
                 "uf": r.get("uf"),
                 "situacao_rf": r.get("situacao_rf"),
@@ -433,8 +487,8 @@ def sync_network(cnpj: str) -> None:
             nodes[cnpj] = {
                 "id": cnpj, "label": f"CNPJ {cnpj}", "type": "PJ_ALVO", "network_level": "root",
                 "razao_social": None, "nome_fantasia": None, "nome_socio": None,
-                "id_cnae_principal": None, "cnae_principal": None, "id_cnae_secundario": None,
-                "cnae_secundario": None, "municipio": None, "uf": None,
+                "id_cnae_principal": None, "cnae_principal": None,
+                "cnaes_secundarios": [], "municipio": None, "uf": None,
                 "situacao_rf": None, "classification_version": COMPANY_CLASSIFICATION_VERSION,
                 "is_falecido": False, "is_cadunico": False, "is_esocial": False,
                 "is_seguro_defeso": False, "is_cnae_farmacia_ausente": False,
@@ -459,8 +513,7 @@ def sync_network(cnpj: str) -> None:
                     "nome_socio": s["nome_socio"],
                     "id_cnae_principal": None,
                     "cnae_principal": None,
-                    "id_cnae_secundario": None,
-                    "cnae_secundario": None,
+                    "cnaes_secundarios": [],
                     "municipio": s.get("municipio"),
                     "uf": s.get("uf"),
                     "situacao_rf": None,
@@ -520,8 +573,7 @@ def sync_network(cnpj: str) -> None:
                         "nome_socio": None,
                         "id_cnae_principal": p.get("id_cnae_principal"),
                         "cnae_principal": cnae_info.get("cnae_principal"),
-                        "id_cnae_secundario": cnae_info.get("id_cnae_secundario"),
-                        "cnae_secundario": cnae_info.get("cnae_secundario"),
+                        "cnaes_secundarios": get_cnaes_secundarios(cnpj_ext),
                         "municipio": p["municipio"],
                         "uf": p["uf"],
                         "situacao_rf": p["situacao_rf"],
@@ -584,8 +636,7 @@ def sync_network(cnpj: str) -> None:
                         "nome_fantasia": None,
                         "id_cnae_principal": None,
                         "cnae_principal": None,
-                        "id_cnae_secundario": None,
-                        "cnae_secundario": None,
+                        "cnaes_secundarios": [],
                         "municipio": row.get("municipio"),
                         "uf": row.get("uf"),
                         "situacao_rf": None,
@@ -626,7 +677,7 @@ def sync_network(cnpj: str) -> None:
 
         n2_node_columns = [
             "id", "label", "type", "network_level", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
+            "id_cnae_principal", "cnae_principal", "cnaes_secundarios",
             "municipio", "uf", "situacao_rf", "classification_version",
             "is_falecido", "is_cadunico", "is_esocial", "is_seguro_defeso",
             "is_cnae_farmacia_ausente",
@@ -637,7 +688,7 @@ def sync_network(cnpj: str) -> None:
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "network_level": pl.Utf8,
             "razao_social": pl.Utf8, "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8,
             "id_cnae_principal": pl.Int32, "cnae_principal": pl.Utf8,
-            "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
+            "cnaes_secundarios": CNAES_SECUNDARIOS_DTYPE,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_esocial": pl.Boolean,
@@ -721,8 +772,7 @@ def sync_network(cnpj: str) -> None:
                         "nome_socio": None,
                         "id_cnae_principal": row.get("id_cnae_principal"),
                         "cnae_principal": cnae_info.get("cnae_principal"),
-                        "id_cnae_secundario": cnae_info.get("id_cnae_secundario"),
-                        "cnae_secundario": cnae_info.get("cnae_secundario"),
+                        "cnaes_secundarios": get_cnaes_secundarios(cnpj_ext),
                         "municipio": row["municipio"],
                         "uf": row["uf"],
                         "situacao_rf": row["situacao_rf"],
@@ -759,7 +809,7 @@ def sync_network(cnpj: str) -> None:
         # ── Salva Parquets Nível 4 ──────────────────────────────────────────
         n4_node_columns = [
             "id", "label", "type", "network_level", "razao_social", "nome_socio", "nome_fantasia",
-            "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
+            "id_cnae_principal", "cnae_principal", "cnaes_secundarios",
             "municipio", "uf", "situacao_rf", "classification_version",
             "is_falecido", "is_cadunico", "is_esocial", "is_seguro_defeso",
             "is_cnae_farmacia_ausente",
@@ -769,7 +819,7 @@ def sync_network(cnpj: str) -> None:
         pl.DataFrame(project_rows(list(n4_nodes_dict.values()), n4_node_columns) if n4_nodes_dict else [], schema={
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "network_level": pl.Utf8, "razao_social": pl.Utf8,
             "nome_socio": pl.Utf8, "nome_fantasia": pl.Utf8, "id_cnae_principal": pl.Int32,
-            "cnae_principal": pl.Utf8, "id_cnae_secundario": pl.Int32, "cnae_secundario": pl.Utf8,
+            "cnae_principal": pl.Utf8, "cnaes_secundarios": CNAES_SECUNDARIOS_DTYPE,
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_esocial": pl.Boolean,

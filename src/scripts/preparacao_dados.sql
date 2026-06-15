@@ -432,15 +432,63 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 -- ETAPA 1: Dados cadastrais das farmácias (1ª passagem)
 --------------------------------------------------------------
 
-DROP TABLE IF EXISTS #cnpjs_cnae_farmacia_secundario;
+DROP TABLE IF EXISTS #tempCnaesSecundarios;
+
+IF EXISTS (
+    SELECT 1
+    FROM temp_CGUSC.fp.lista_cnpjs LST
+    INNER JOIN db_CNPJ.dbo.CNAESecundaria CS
+        ON CS.CNPJ = LST.cnpj
+    WHERE TRY_CAST(CS.idSubClasseCNAE AS INT) IS NULL
+)
+BEGIN
+    THROW 50005, 'Existem CNAEs secundarios invalidos para farmacias do programa.', 1;
+END;
 
 SELECT DISTINCT
-    CAST(CS.CNPJ AS CHAR(14)) AS cnpj
-INTO #cnpjs_cnae_farmacia_secundario
+    CAST(CS.CNPJ AS CHAR(14)) AS cnpj,
+    TRY_CAST(CS.idSubClasseCNAE AS INT) AS id_cnae_secundario,
+    CAST(
+        temp_CGUSC.dbo.InitCapEachWord(SC.DescSubClasseCNAE)
+        AS VARCHAR(255)
+    ) AS cnae_secundario
+INTO #tempCnaesSecundarios
 FROM temp_CGUSC.fp.lista_cnpjs LST
 INNER JOIN db_CNPJ.dbo.CNAESecundaria CS
     ON CS.CNPJ = LST.cnpj
-WHERE TRY_CAST(CS.idSubClasseCNAE AS INT) IN (4771701, 4771702);
+LEFT JOIN db_CNPJ.dbo.SubClasseCNAE SC
+    ON SC.idSubClasseCNAE = CS.idSubClasseCNAE
+;
+
+DECLARE @qtd_cnaes_secundarios_sem_descricao BIGINT;
+DECLARE @aviso_cnaes_secundarios VARCHAR(2048);
+
+SELECT
+    @qtd_cnaes_secundarios_sem_descricao = COUNT_BIG(*)
+FROM #tempCnaesSecundarios
+WHERE NULLIF(LTRIM(RTRIM(cnae_secundario)), '') IS NULL;
+
+IF @qtd_cnaes_secundarios_sem_descricao > 0
+BEGIN
+    SET @aviso_cnaes_secundarios =
+        'AVISO: '
+        + CAST(@qtd_cnaes_secundarios_sem_descricao AS VARCHAR(20))
+        + ' vinculos de CNAE secundario serao preservados sem descricao, '
+        + 'pois o codigo nao foi encontrado na tabela db_CNPJ.dbo.SubClasseCNAE.';
+
+    RAISERROR(@aviso_cnaes_secundarios, 10, 1) WITH NOWAIT;
+END;
+
+CREATE UNIQUE CLUSTERED INDEX ix_tempCnaesSecundarios
+    ON #tempCnaesSecundarios(cnpj, id_cnae_secundario);
+
+DROP TABLE IF EXISTS #cnpjs_cnae_farmacia_secundario;
+
+SELECT DISTINCT
+    cnpj
+INTO #cnpjs_cnae_farmacia_secundario
+FROM #tempCnaesSecundarios
+WHERE id_cnae_secundario IN (4771701, 4771702);
 
 CREATE UNIQUE CLUSTERED INDEX ix_cnpjs_cnae_farmacia_secundario
     ON #cnpjs_cnae_farmacia_secundario(cnpj);
@@ -478,8 +526,6 @@ SELECT
     temp_CGUSC.dbo.InitCapEachWord(qua.DescricaoQualificacao)  AS descricaoQualificacaoResponsavel,
     c.CnaeFiscal                                               AS id_cnae_principal,
     temp_CGUSC.dbo.InitCapEachWord(cnae_p.DescSubClasseCNAE)   AS cnae_principal,
-    cnae_s_base.idSubClasseCNAE                                AS id_cnae_secundario,
-    temp_CGUSC.dbo.InitCapEachWord(cnae_s.DescSubClasseCNAE)   AS cnae_secundario,
     CASE
         WHEN TRY_CAST(c.CnaeFiscal AS INT) IN (4771701, 4771702)
           OR cnae_farmacia_secundario.cnpj IS NOT NULL
@@ -499,19 +545,6 @@ LEFT JOIN  db_CNPJ.dbo.qualificacao                      AS qua  ON qua.idQualif
 LEFT JOIN  db_CNPJ.dbo.Municipio                         AS mun  ON mun.SkMunicipio         = c.CodMunicipio
 LEFT JOIN  temp_CGUSC.fp.dados_ibge                      AS ibge ON ibge.id_ibge7           = mun.CodIbge
 LEFT JOIN  db_CNPJ.dbo.SubClasseCNAE                     AS cnae_p ON cnae_p.idSubClasseCNAE = c.CnaeFiscal
-LEFT JOIN  (
-    SELECT
-        CS.CNPJ,
-        CS.idSubClasseCNAE,
-        ROW_NUMBER() OVER (
-            PARTITION BY CS.CNPJ
-            ORDER BY CS.idSubClasseCNAE
-        ) AS rn
-    FROM db_CNPJ.dbo.CNAESecundaria CS
-    INNER JOIN temp_CGUSC.fp.lista_cnpjs LST_CNAE
-        ON LST_CNAE.cnpj = CS.CNPJ
-) AS cnae_s_base ON cnae_s_base.CNPJ = lst.cnpj AND cnae_s_base.rn = 1
-LEFT JOIN  db_CNPJ.dbo.SubClasseCNAE                     AS cnae_s ON cnae_s.idSubClasseCNAE = cnae_s_base.idSubClasseCNAE
 LEFT JOIN  #cnpjs_cnae_farmacia_secundario AS cnae_farmacia_secundario
     ON cnae_farmacia_secundario.cnpj = lst.cnpj;
 
@@ -558,8 +591,6 @@ SELECT
     f.descricaoQualificacaoResponsavel,
     f.id_cnae_principal,
     f.cnae_principal,
-    f.id_cnae_secundario,
-    f.cnae_secundario,
     f.is_cnae_farmacia_ausente,
     f.telefone_1,
     f.telefone_2,
@@ -675,6 +706,7 @@ CREATE INDEX ix_tempDatasMovimentacao_cnpj
 -- ETAPA 5: Tabela final consolidada
 --------------------------------------------------------------
 
+DROP TABLE IF EXISTS temp_CGUSC.fp.dados_farmacia_cnaes_secundarios;
 DROP TABLE IF EXISTS temp_CGUSC.fp.dados_farmacia;
 
 SELECT
@@ -714,6 +746,42 @@ CREATE INDEX ix_dadosFarmacia_codibge
 CREATE INDEX ix_dadosFarmacia_geo
     ON temp_CGUSC.fp.dados_farmacia (latitude, longitude)
     WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+
+SELECT
+    F.id AS id_cnpj,
+    C.id_cnae_secundario,
+    C.cnae_secundario,
+    CAST(GETDATE() AS SMALLDATETIME) AS data_processamento
+INTO temp_CGUSC.fp.dados_farmacia_cnaes_secundarios
+FROM #tempCnaesSecundarios C
+INNER JOIN temp_CGUSC.fp.dados_farmacia F
+    ON F.cnpj = C.cnpj;
+
+IF (
+    SELECT COUNT_BIG(*)
+    FROM temp_CGUSC.fp.dados_farmacia_cnaes_secundarios
+) <> (
+    SELECT COUNT_BIG(*)
+    FROM #tempCnaesSecundarios
+)
+BEGIN
+    THROW 50007, 'Nem todos os CNAEs secundarios foram associados a dados_farmacia.', 1;
+END;
+
+ALTER TABLE temp_CGUSC.fp.dados_farmacia_cnaes_secundarios
+    ALTER COLUMN id_cnpj INT NOT NULL;
+
+ALTER TABLE temp_CGUSC.fp.dados_farmacia_cnaes_secundarios
+    ALTER COLUMN id_cnae_secundario INT NOT NULL;
+
+ALTER TABLE temp_CGUSC.fp.dados_farmacia_cnaes_secundarios
+    ADD CONSTRAINT PK_dados_farmacia_cnaes_secundarios
+        PRIMARY KEY CLUSTERED (id_cnpj, id_cnae_secundario);
+
+ALTER TABLE temp_CGUSC.fp.dados_farmacia_cnaes_secundarios
+    ADD CONSTRAINT FK_dados_farmacia_cnaes_secundarios_farmacia
+        FOREIGN KEY (id_cnpj)
+        REFERENCES temp_CGUSC.fp.dados_farmacia(id);
 
 
 

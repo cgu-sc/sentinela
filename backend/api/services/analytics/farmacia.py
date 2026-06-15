@@ -2,7 +2,10 @@ import polars as pl
 from fastapi import HTTPException
 
 from cache_producers.farmacia import load_or_sync_memoria_calculo
-from data_cache import get_df_dados_farmacia
+from data_cache import (
+    get_df_dados_farmacia,
+    get_df_dados_farmacia_cnaes_secundarios,
+)
 from ...schemas.analytics import (
     CnpjAccessStatusSchema,
     DadosFarmaciaSchema,
@@ -14,6 +17,33 @@ from ...schemas.analytics import (
 
 def _clean_cnpj(value: str) -> str:
     return "".join(ch for ch in value if ch.isdigit())
+
+
+def get_cnaes_secundarios_farmacia(cnpj: str) -> list[dict]:
+    clean_cnpj = _clean_cnpj(cnpj)
+    if len(clean_cnpj) != 14:
+        raise HTTPException(
+            status_code=422,
+            detail="A consulta de CNAEs secundarios exige CNPJ com 14 digitos.",
+        )
+    farmacia = (
+        get_df_dados_farmacia()
+        .filter(pl.col("cnpj") == clean_cnpj)
+        .select("id_cnpj")
+    )
+    if farmacia.is_empty():
+        raise HTTPException(
+            status_code=404,
+            detail="CNPJ nao encontrado na base carregada do Programa Farmacia Popular.",
+        )
+    id_cnpj = farmacia.item(0, "id_cnpj")
+    return (
+        get_df_dados_farmacia_cnaes_secundarios()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .select(["id_cnae", "descricao"])
+        .sort("id_cnae")
+        .to_dicts()
+    )
 
 
 def get_cnpj_access_status(cnpj: str) -> CnpjAccessStatusSchema:
@@ -74,7 +104,11 @@ def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
                 status_code=404,
                 detail="CNPJ nao encontrado na base carregada do Programa Farmacia Popular.",
             )
-        return DadosFarmaciaSchema(**rows.row(0, named=True))
+        cadastro = rows.row(0, named=True)
+        return DadosFarmaciaSchema(
+            **cadastro,
+            cnaes_secundarios=get_cnaes_secundarios_farmacia(clean_cnpj),
+        )
     except HTTPException:
         raise
     except Exception as exc:

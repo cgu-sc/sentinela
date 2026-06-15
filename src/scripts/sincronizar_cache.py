@@ -83,7 +83,7 @@ MODULOS = sorted([
     {"id": 16, "name": "eSocial", "func": _sync_esocial, "peso": "rapido"},
     {"id": 17, "name": "Metadados", "func": _sync_sentinela_metadados_base, "peso": "rapido"},
     {"id": 14, "name": "PAR", "func": _sync_dados_par, "peso": "rapido"},
-    {"id": 7, "name": "Farmacias", "func": _sync_dados_farmacia, "peso": "medio"},
+    {"id": 7, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio"},
     {"id": 13, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio"},
     {"id": 4, "name": "Falecidos global", "func": _sync_falecidos, "peso": "medio"},
     {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido"},
@@ -98,7 +98,7 @@ MODULOS = sorted([
 ], key=lambda modulo: modulo["id"])
 
 DEPENDENCIAS_MODULOS = {
-    6: {10, 11},
+    6: {7, 10, 11},
     11: {10},
 }
 

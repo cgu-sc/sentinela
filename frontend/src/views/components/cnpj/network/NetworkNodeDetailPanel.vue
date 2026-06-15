@@ -235,7 +235,10 @@ function openEstablishmentDetail() {
         </div>
 
         <div
-          v-if="node.type !== 'PF' && node.is_cnae_farmacia_ausente"
+          v-if="
+            node.type !== 'PF' &&
+            (node.id_cnae_principal || node.cnaes_secundarios.length > 0)
+          "
           class="cnae-evidence"
         >
           <div class="cnae-evidence-row">
@@ -244,10 +247,14 @@ function openEstablishmentDetail() {
               {{ formatCnaeEvidence(node.id_cnae_principal, node.cnae_principal) }}
             </strong>
           </div>
-          <div class="cnae-evidence-row">
+          <div
+            v-for="cnae in node.cnaes_secundarios"
+            :key="cnae.id_cnae"
+            class="cnae-evidence-row"
+          >
             <span>Secundário</span>
             <strong>
-              {{ formatCnaeEvidence(node.id_cnae_secundario, node.cnae_secundario) }}
+              {{ formatCnaeEvidence(cnae.id_cnae, cnae.descricao) }}
             </strong>
           </div>
         </div>

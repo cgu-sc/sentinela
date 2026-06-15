@@ -40,6 +40,7 @@ export function buildAnalyticsParams(filters = {}) {
     razaoSocial = null,
     estabelecimento = null,
     parTeia = null,
+    socioBeneficio = null,
     volumeAtipicoEnabled = false,
     volumeAtipicoPercentual = null,
   } = filters || {};
@@ -62,6 +63,7 @@ export function buildAnalyticsParams(filters = {}) {
   if (razaoSocial) params.razao_social = razaoSocial;
   if (estabelecimento) params.estabelecimento = estabelecimento;
   if (parTeia) params.par_teia = parTeia;
+  if (socioBeneficio) params.socio_beneficio = socioBeneficio;
   if (volumeAtipicoEnabled) {
     params.volume_atipico = true;
     if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {

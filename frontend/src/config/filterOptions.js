@@ -10,6 +10,16 @@ export const FILTER_OPTIONS = {
     { label: 'Empresa N4 com PAR', value: 'n4' },
     { label: 'Qualquer empresa da teia', value: 'qualquer' },
   ],
+  socioBeneficio: [
+    { label: 'Todos', value: 'Todos' },
+    { label: 'CadÚnico - sócio direto', value: 'cadunico_direto' },
+    { label: 'CadÚnico - sócio N3', value: 'cadunico_n3' },
+    { label: 'CadÚnico - direto ou N3', value: 'cadunico_qualquer' },
+    { label: 'Seguro Defeso - sócio direto', value: 'seguro_defeso_direto' },
+    { label: 'Seguro Defeso - sócio N3', value: 'seguro_defeso_n3' },
+    { label: 'Seguro Defeso - direto ou N3', value: 'seguro_defeso_qualquer' },
+    { label: 'CadÚnico ou Seguro Defeso - qualquer nível', value: 'qualquer' },
+  ],
   cluster:  ['Todos', 'Cluster 0 - Risco Crítico', 'Cluster 1 - Risco Alto', 'Cluster 2 - Risco Médio', 'Cluster 3 - Risco Baixo'],
   rfa:      ['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k'],
 };

@@ -143,6 +143,7 @@ const msOptions = FILTER_OPTIONS.ms;
 const porteOptions = FILTER_OPTIONS.porte;
 const grandeRedeOptions = FILTER_OPTIONS.grandeRede;
 const parTeiaOptions = FILTER_OPTIONS.parTeia;
+const socioBeneficioOptions = FILTER_OPTIONS.socioBeneficio;
 const clusterOptions = FILTER_OPTIONS.cluster;
 const rfaOptions = FILTER_OPTIONS.rfa;
 const parTeiaTooltip =
@@ -150,6 +151,10 @@ const parTeiaTooltip =
   "Empresa N2 com PAR: empresa vinculada no nível 2 da teia possui PAR.\n" +
   "Empresa N4 com PAR: empresa vinculada no nível 4 da teia possui PAR.\n" +
   "Qualquer empresa da teia: considera Alvo, N2 ou N4.";
+const socioBeneficioTooltip =
+  "Sócio direto: pessoa física com vínculo ativo na farmácia alvo.\n" +
+  "Sócio N3: pessoa física com vínculo ativo em empresa do nível 2.\n" +
+  "Direto ou N3: considera qualquer um desses dois níveis.";
 
 const { formatBRL: formatCurrency } = useFormatting();
 
@@ -353,6 +358,7 @@ const isFilterActive = (field) => {
     selectedPorte: FILTER_DEFAULTS.PORTE,
     selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
     selectedParTeia: FILTER_DEFAULTS.PAR_TEIA,
+    selectedSocioBeneficio: FILTER_DEFAULTS.SOCIO_BENEFICIO,
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
@@ -390,6 +396,7 @@ const activeFilterCount = computed(() => {
     "selectedPorte",
     "selectedGrandeRede",
     "selectedParTeia",
+    "selectedSocioBeneficio",
     "selectedCnpjRaiz",
     "percentualNaoComprovacaoRange",
     "valorMinSemComp",
@@ -411,7 +418,6 @@ const scopeFilterCount = computed(() =>
     "selectedRegiaoSaude",
     "selectedMunicipio",
     "selectedUnidadePf",
-    "selectedCnpjRaiz",
   ]),
 );
 
@@ -421,7 +427,14 @@ const registryFilterCount = computed(() =>
     "selectedMS",
     "selectedPorte",
     "selectedGrandeRede",
+    "selectedCnpjRaiz",
+  ]),
+);
+
+const integrityFilterCount = computed(() =>
+  countActiveFilters([
     "selectedParTeia",
+    "selectedSocioBeneficio",
   ]),
 );
 
@@ -780,36 +793,6 @@ onBeforeUnmount(() => {
         :class="{ 'filter-locked': allFiltersLocked }"
       >
         <label class="filter-label">
-          Empresas com PAR
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: parTeiaTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedParTeia')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedParTeia = FILTER_ALL_VALUE"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <Dropdown
-          v-model="filterStore.selectedParTeia"
-          :options="parTeiaOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="w-full filter-input"
-          panelClass="sidebar-panel"
-          :class="{ 'filter-active': isFilterActive('selectedParTeia') }"
-        />
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
           Estabelecimento
           <i
             class="pi pi-info-circle"
@@ -858,6 +841,71 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </AutoComplete>
+      </div>
+
+      <div class="sidebar-section-heading">
+        <span><i class="pi pi-shield"></i> Integridade societária</span>
+        <small v-if="integrityFilterCount">{{ integrityFilterCount }}</small>
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Empresas com PAR
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: parTeiaTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedParTeia')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedParTeia = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedParTeia"
+          :options="parTeiaOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedParTeia') }"
+        />
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio no CadÚnico/Seguro Defeso
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioBeneficioTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioBeneficio')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioBeneficio = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedSocioBeneficio"
+          :options="socioBeneficioOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedSocioBeneficio') }"
+        />
       </div>
 
       <div class="sidebar-section-heading">

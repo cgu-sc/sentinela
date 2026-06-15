@@ -73,6 +73,20 @@ def _farmacias_cnaes_secundarios_schema() -> dict:
     }
 
 
+def _alertas_alvos_schema() -> dict:
+    return {
+        "cnpj": pl.Utf8,
+        "has_cadunico_direto": pl.Boolean,
+        "has_cadunico_n3": pl.Boolean,
+        "qtd_cadunico_direto": pl.Int32,
+        "qtd_cadunico_n3": pl.Int32,
+        "has_seguro_defeso_direto": pl.Boolean,
+        "has_seguro_defeso_n3": pl.Boolean,
+        "qtd_seguro_defeso_direto": pl.Int32,
+        "qtd_seguro_defeso_n3": pl.Int32,
+    }
+
+
 def _matriz_risco_schema() -> dict:
     return {
         "id_cnpj": pl.Int32,
@@ -177,6 +191,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("sentinela_metadados_base", cache_files.SENTINELA_METADADOS_BASE_PARQUET, "global"),
     CacheDefinition("dados_par", cache_files.DADOS_PAR_PARQUET, "global"),
     CacheDefinition("par_teia_alvos", cache_files.PAR_TEIA_ALVOS_PARQUET, "global"),
+    CacheDefinition("alertas_alvos", cache_files.ALERTAS_ALVOS_PARQUET, "global", _alertas_alvos_schema()),
     CacheDefinition("falecidos", cache_files.FALECIDOS_PARQUET, "global", _falecidos_schema()),
 )
 

@@ -199,7 +199,7 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
                 )
             )
 
-        if socio.is_seguro_defeso:
+        if socio.is_seguro_defeso and vinculo_ativo:
             alertas.append(
                 IntegrityAlertSchema(
                     tipo="socio_seguro_defeso",

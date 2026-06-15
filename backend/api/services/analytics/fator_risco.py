@@ -9,6 +9,7 @@ from data_cache import get_df, get_df_perfil_estabelecimento
 
 from ...schemas.analytics import FatorRiscoBucketSchema, FatorRiscoResponseSchema
 from ...utils.text_search import apply_token_search
+from .alertas_alvos import apply_socio_beneficio_filter
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 
@@ -35,6 +36,7 @@ def get_fator_risco_data(
     volume_atipico: bool = False,
     volume_atipico_limite: Optional[float] = None,
     par_teia: Optional[str] = None,
+    socio_beneficio: Optional[str] = None,
     estabelecimento: Optional[str] = None,
 ) -> FatorRiscoResponseSchema:
     """
@@ -81,6 +83,7 @@ def get_fator_risco_data(
             ("cnpj", "razao_social", "nome_fantasia"),
         )
         perfil_filtrado = apply_par_teia_filter(perfil_filtrado, par_teia)
+        perfil_filtrado = apply_socio_beneficio_filter(perfil_filtrado, socio_beneficio)
         period_df = (
             df.filter(mov_mask)
             .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")

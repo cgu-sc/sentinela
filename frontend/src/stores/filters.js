@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, reactive, watch } from 'vue';
 import axios from 'axios';
 import { FILTER_DEFAULTS, FILTER_ALL_VALUE, TIMING } from '@/config/constants';
+import { SOCIO_BENEFICIO_FILTER_OPTIONS } from '@/config/filterOptions';
 import { useGeoStore } from './geo';
 import { API_ENDPOINTS } from '@/config/api';
 import { extractCnpjFilter } from '@/composables/useParsing';
@@ -41,6 +42,16 @@ function withoutEmptyValues(params) {
   );
 }
 
+const SOCIO_BENEFICIO_FILTER_VALUES = new Set(
+  SOCIO_BENEFICIO_FILTER_OPTIONS.map(({ value }) => value)
+);
+
+function normalizeSocioBeneficioFilter(value) {
+  return SOCIO_BENEFICIO_FILTER_VALUES.has(value)
+    ? value
+    : FILTER_DEFAULTS.SOCIO_BENEFICIO;
+}
+
 export const useFilterStore = defineStore('filters', () => {
   const saved = loadFromStorage();
   const geoStore = useGeoStore();
@@ -64,7 +75,9 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedPorte = ref(saved?.selectedPorte ?? FILTER_DEFAULTS.PORTE);
   const selectedGrandeRede = ref(saved?.selectedGrandeRede ?? FILTER_DEFAULTS.GRANDE_REDE);
   const selectedParTeia = ref(saved?.selectedParTeia ?? FILTER_DEFAULTS.PAR_TEIA);
-  const selectedSocioBeneficio = ref(saved?.selectedSocioBeneficio ?? FILTER_DEFAULTS.SOCIO_BENEFICIO);
+  const selectedSocioBeneficio = ref(
+    normalizeSocioBeneficioFilter(saved?.selectedSocioBeneficio)
+  );
   const selectedUnidadePf = ref(saved?.selectedUnidadePf ?? FILTER_ALL_VALUE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
   const hoveredMunicipioName = ref(null);
@@ -324,7 +337,9 @@ export const useFilterStore = defineStore('filters', () => {
     if ('selectedPorte' in filters) selectedPorte.value = filters.selectedPorte;
     if ('selectedGrandeRede' in filters) selectedGrandeRede.value = filters.selectedGrandeRede;
     if ('selectedParTeia' in filters) selectedParTeia.value = filters.selectedParTeia;
-    if ('selectedSocioBeneficio' in filters) selectedSocioBeneficio.value = filters.selectedSocioBeneficio;
+    if ('selectedSocioBeneficio' in filters) {
+      selectedSocioBeneficio.value = normalizeSocioBeneficioFilter(filters.selectedSocioBeneficio);
+    }
     if ('selectedUnidadePf' in filters) selectedUnidadePf.value = filters.selectedUnidadePf;
     if ('selectedCnpjRaiz' in filters) selectedCnpjRaiz.value = filters.selectedCnpjRaiz;
     if (Array.isArray(filters.percentualNaoComprovacaoRange)) percentualNaoComprovacaoRange.value = filters.percentualNaoComprovacaoRange;

@@ -75,6 +75,7 @@ def _farmacias_cnaes_secundarios_schema() -> dict:
 
 def _perfil_alertas_societarios_schema() -> dict:
     return {
+        "is_cnae_incompativel_farmaceutico": pl.Boolean,
         "has_cadunico_direto": pl.Boolean,
         "has_cadunico_n3": pl.Boolean,
         "qtd_cadunico_direto": pl.Int32,

@@ -317,6 +317,7 @@ SELECT
     R.qtd_estabelecimentos_rede,
     R.is_grande_rede,
     R.is_matriz,
+    CAST(CASE WHEN DF.is_cnae_farmacia_ausente = 1 THEN 1 ELSE 0 END AS BIT) AS is_cnae_incompativel_farmaceutico,
 
     CAST(CASE WHEN ISNULL(AD.qtd_cadunico_direto, 0) > 0
         THEN 1 ELSE 0 END AS BIT) AS has_cadunico_direto,
@@ -372,6 +373,7 @@ IF EXISTS (
        OR has_seguro_defeso_n3 IS NULL
        OR qtd_seguro_defeso_direto IS NULL
        OR qtd_seguro_defeso_n3 IS NULL
+       OR is_cnae_incompativel_farmaceutico IS NULL
 )
 BEGIN
     THROW 50022, 'O novo perfil consolidado possui alertas societarios nulos.', 1;

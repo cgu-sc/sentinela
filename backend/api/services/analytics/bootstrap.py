@@ -300,12 +300,14 @@ def get_cnpj_bootstrap(
         "porte_empresa",
         "is_conexao_ativa",
         "is_matriz",
+        "is_cnae_incompativel_farmaceutico",
     ]
     _require_columns(perfil, perfil_required, "perfil_estabelecimento")
     perfil_row = _first_row(
         perfil.filter(pl.col("cnpj") == clean_cnpj).select(perfil_required),
         "Perfil do CNPJ",
     )
+    is_cnae_incompativel = bool(perfil_row["is_cnae_incompativel_farmaceutico"])
 
     id_cnpj = int(perfil_row["id_cnpj"])
     period_summary = _period_summary(id_cnpj, data_inicio, data_fim)
@@ -362,6 +364,8 @@ def get_cnpj_bootstrap(
         ),
         cadastro=DadosFarmaciaSchema(
             **cadastro_row,
+            is_cnae_incompativel_farmaceutico=is_cnae_incompativel,
+            is_cnae_farmacia_ausente=is_cnae_incompativel,
             cnaes_secundarios=get_cnaes_secundarios_farmacia(clean_cnpj),
         ),
         cnpj_data=cnpj_data,

@@ -5,13 +5,9 @@ from fastapi import HTTPException
 
 
 SOCIO_BENEFICIO_SCOPES = {
-    "cadunico_direto",
-    "cadunico_n3",
-    "cadunico_qualquer",
-    "seguro_defeso_direto",
-    "seguro_defeso_n3",
-    "seguro_defeso_qualquer",
-    "qualquer",
+    "direto",
+    "n3",
+    "direto_n3",
 }
 
 
@@ -24,23 +20,15 @@ SOCIO_BENEFICIO_REQUIRED_COLUMNS = {
 
 
 def _scope_expr(scope: str) -> pl.Expr:
-    if scope == "cadunico_direto":
-        return pl.col("has_cadunico_direto")
-    if scope == "cadunico_n3":
-        return pl.col("has_cadunico_n3")
-    if scope == "cadunico_qualquer":
-        return pl.col("has_cadunico_direto") | pl.col("has_cadunico_n3")
-    if scope == "seguro_defeso_direto":
-        return pl.col("has_seguro_defeso_direto")
-    if scope == "seguro_defeso_n3":
-        return pl.col("has_seguro_defeso_n3")
-    if scope == "seguro_defeso_qualquer":
-        return pl.col("has_seguro_defeso_direto") | pl.col("has_seguro_defeso_n3")
-    if scope == "qualquer":
+    if scope == "direto":
+        return pl.col("has_cadunico_direto") | pl.col("has_seguro_defeso_direto")
+    if scope == "n3":
+        return pl.col("has_cadunico_n3") | pl.col("has_seguro_defeso_n3")
+    if scope == "direto_n3":
         return (
             pl.col("has_cadunico_direto")
-            | pl.col("has_cadunico_n3")
             | pl.col("has_seguro_defeso_direto")
+            | pl.col("has_cadunico_n3")
             | pl.col("has_seguro_defeso_n3")
         )
     raise HTTPException(

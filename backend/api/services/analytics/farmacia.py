@@ -5,6 +5,7 @@ from cache_producers.farmacia import load_or_sync_memoria_calculo
 from data_cache import (
     get_df_dados_farmacia,
     get_df_dados_farmacia_cnaes_secundarios,
+    get_df_perfil_estabelecimento,
 )
 from ...schemas.analytics import (
     CnpjAccessStatusSchema,
@@ -37,6 +38,12 @@ def get_cnaes_secundarios_farmacia(cnpj: str) -> list[dict]:
             detail="CNPJ nao encontrado na base carregada do Programa Farmacia Popular.",
         )
     id_cnpj = farmacia.item(0, "id_cnpj")
+    perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == clean_cnpj)
+    if perfil.is_empty():
+        raise HTTPException(
+            status_code=404,
+            detail="CNPJ nao encontrado no perfil consolidado do Programa Farmacia Popular.",
+        )
     return (
         get_df_dados_farmacia_cnaes_secundarios()
         .filter(pl.col("id_cnpj") == id_cnpj)
@@ -105,8 +112,19 @@ def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
                 detail="CNPJ nao encontrado na base carregada do Programa Farmacia Popular.",
             )
         cadastro = rows.row(0, named=True)
+        perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == clean_cnpj)
+        if perfil.is_empty():
+            raise HTTPException(
+                status_code=404,
+                detail="CNPJ nao encontrado no perfil consolidado do Programa Farmacia Popular.",
+            )
+        is_cnae_incompativel = bool(
+            perfil.select("is_cnae_incompativel_farmaceutico").item(0, 0)
+        )
         return DadosFarmaciaSchema(
             **cadastro,
+            is_cnae_incompativel_farmaceutico=is_cnae_incompativel,
+            is_cnae_farmacia_ausente=is_cnae_incompativel,
             cnaes_secundarios=get_cnaes_secundarios_farmacia(clean_cnpj),
         )
     except HTTPException:

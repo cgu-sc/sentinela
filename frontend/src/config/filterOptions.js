@@ -1,25 +1,23 @@
+export const SOCIO_BENEFICIO_FILTER_OPTIONS = [
+  { label: 'Sem filtro', value: 'Todos' },
+  { label: 'Sócio direto', value: 'direto' },
+  { label: 'Sócio N3', value: 'n3' },
+  { label: 'Sócio direto ou N3', value: 'direto_n3' },
+];
+
 export const FILTER_OPTIONS = {
   situacao: ['Todos', 'Ativa', 'Baixada', 'Suspensa', 'Inapta'],
   ms:       ['Todos', 'Ativa', 'Inativa'],
   porte:      ['Todos', 'Microempresa (ME)', 'Empresa de Pequeno Porte (EPP)', 'Demais'],
   grandeRede: ['Todos', 'Sim', 'Não'],
   parTeia: [
-    { label: 'Todos', value: 'Todos' },
+    { label: 'Sem filtro', value: 'Todos' },
     { label: 'Alvo com PAR', value: 'alvo' },
     { label: 'Empresa N2 com PAR', value: 'n2' },
     { label: 'Empresa N4 com PAR', value: 'n4' },
-    { label: 'Qualquer empresa da teia', value: 'qualquer' },
+    { label: 'Qualquer empresa com PAR', value: 'qualquer' },
   ],
-  socioBeneficio: [
-    { label: 'Todos', value: 'Todos' },
-    { label: 'CadÚnico - sócio direto', value: 'cadunico_direto' },
-    { label: 'CadÚnico - sócio N3', value: 'cadunico_n3' },
-    { label: 'CadÚnico - direto ou N3', value: 'cadunico_qualquer' },
-    { label: 'Seguro Defeso - sócio direto', value: 'seguro_defeso_direto' },
-    { label: 'Seguro Defeso - sócio N3', value: 'seguro_defeso_n3' },
-    { label: 'Seguro Defeso - direto ou N3', value: 'seguro_defeso_qualquer' },
-    { label: 'CadÚnico ou Seguro Defeso - qualquer nível', value: 'qualquer' },
-  ],
+  socioBeneficio: SOCIO_BENEFICIO_FILTER_OPTIONS,
   cluster:  ['Todos', 'Cluster 0 - Risco Crítico', 'Cluster 1 - Risco Alto', 'Cluster 2 - Risco Médio', 'Cluster 3 - Risco Baixo'],
   rfa:      ['Todos', 'Acima de R$ 1 Mi', 'Entre R$ 500k e R$ 1 Mi', 'Até R$ 500k'],
 };

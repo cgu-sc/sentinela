@@ -63,7 +63,7 @@ const estabelecimentoTipo = computed(() => {
 });
 
 const cnaeAlertLabel = computed(() =>
-  props.cadastro?.is_cnae_farmacia_ausente
+  props.cadastro?.is_cnae_incompativel_farmaceutico
     ? "CNAE incompatível com atividade farmacêutica"
     : "CNAE compatível identificado",
 );
@@ -135,7 +135,7 @@ const cnaeAlertLabel = computed(() =>
             <span>Classificação CNAE</span>
             <strong
               class="cnae-status"
-              :class="{ 'cnae-status--alert': cadastro?.is_cnae_farmacia_ausente }"
+              :class="{ 'cnae-status--alert': cadastro?.is_cnae_incompativel_farmaceutico }"
             >
               {{ cnaeAlertLabel }}
             </strong>

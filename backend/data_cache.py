@@ -1602,6 +1602,7 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
             P.qtd_estabelecimentos_rede,
             P.is_matriz,
             P.unidade_pf,
+            P.is_cnae_incompativel_farmaceutico,
             P.has_cadunico_direto,
             P.has_cadunico_n3,
             P.qtd_cadunico_direto,
@@ -1645,6 +1646,7 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
             pl.col("is_grande_rede").cast(pl.Boolean),
             pl.col("is_matriz").cast(pl.Boolean),
             pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
+            pl.col("is_cnae_incompativel_farmaceutico").cast(pl.Boolean),
             pl.col("has_cadunico_direto").cast(pl.Boolean),
             pl.col("has_cadunico_n3").cast(pl.Boolean),
             pl.col("qtd_cadunico_direto").cast(pl.Int32),
@@ -1678,6 +1680,7 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
         "has_seguro_defeso_n3",
         "qtd_seguro_defeso_direto",
         "qtd_seguro_defeso_n3",
+        "is_cnae_incompativel_farmaceutico",
     ]
     null_alert_columns = [
         column

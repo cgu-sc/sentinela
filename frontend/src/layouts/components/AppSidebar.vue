@@ -150,11 +150,11 @@ const parTeiaTooltip =
   "Alvo com PAR: o próprio CNPJ filtrado possui PAR.\n" +
   "Empresa N2 com PAR: empresa vinculada no nível 2 da teia possui PAR.\n" +
   "Empresa N4 com PAR: empresa vinculada no nível 4 da teia possui PAR.\n" +
-  "Qualquer empresa da teia: considera Alvo, N2 ou N4.";
+  "Qualquer empresa com PAR: considera Alvo, N2 ou N4.";
 const socioBeneficioTooltip =
-  "Sócio direto: pessoa física com vínculo ativo na farmácia alvo.\n" +
-  "Sócio N3: pessoa física com vínculo ativo em empresa do nível 2.\n" +
-  "Direto ou N3: considera qualquer um desses dois níveis.";
+  "Sócio direto: vínculo ativo na farmácia alvo e cadastro no CadÚnico ou Seguro Defeso.\n" +
+  "Sócio N3: vínculo ativo em empresa do nível 2 e cadastro no CadÚnico ou Seguro Defeso.\n" +
+  "Sócio direto ou N3: considera qualquer um desses dois níveis.";
 
 const { formatBRL: formatCurrency } = useFormatting();
 

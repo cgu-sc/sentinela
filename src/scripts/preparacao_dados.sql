@@ -432,6 +432,19 @@ CREATE NONCLUSTERED INDEX IDX_Memoria_CNPJ ON fp.memoria_calculo_consolidada(cnp
 -- ETAPA 1: Dados cadastrais das farmácias (1ª passagem)
 --------------------------------------------------------------
 
+DROP TABLE IF EXISTS #cnpjs_cnae_farmacia_secundario;
+
+SELECT DISTINCT
+    CAST(CS.CNPJ AS CHAR(14)) AS cnpj
+INTO #cnpjs_cnae_farmacia_secundario
+FROM temp_CGUSC.fp.lista_cnpjs LST
+INNER JOIN db_CNPJ.dbo.CNAESecundaria CS
+    ON CS.CNPJ = LST.cnpj
+WHERE TRY_CAST(CS.idSubClasseCNAE AS INT) IN (4771701, 4771702);
+
+CREATE UNIQUE CLUSTERED INDEX ix_cnpjs_cnae_farmacia_secundario
+    ON #cnpjs_cnae_farmacia_secundario(cnpj);
+
 DROP TABLE IF EXISTS #tempDadosFarmacias;
 
 SELECT
@@ -469,7 +482,7 @@ SELECT
     temp_CGUSC.dbo.InitCapEachWord(cnae_s.DescSubClasseCNAE)   AS cnae_secundario,
     CASE
         WHEN TRY_CAST(c.CnaeFiscal AS INT) IN (4771701, 4771702)
-          OR TRY_CAST(cnae_s_base.idSubClasseCNAE AS INT) IN (4771701, 4771702)
+          OR cnae_farmacia_secundario.cnpj IS NOT NULL
         THEN CAST(0 AS TINYINT)
         ELSE CAST(1 AS TINYINT)
     END                                                        AS is_cnae_farmacia_ausente,
@@ -487,10 +500,20 @@ LEFT JOIN  db_CNPJ.dbo.Municipio                         AS mun  ON mun.SkMunici
 LEFT JOIN  temp_CGUSC.fp.dados_ibge                      AS ibge ON ibge.id_ibge7           = mun.CodIbge
 LEFT JOIN  db_CNPJ.dbo.SubClasseCNAE                     AS cnae_p ON cnae_p.idSubClasseCNAE = c.CnaeFiscal
 LEFT JOIN  (
-    SELECT CNPJ, idSubClasseCNAE, ROW_NUMBER() OVER(PARTITION BY CNPJ ORDER BY idSubClasseCNAE) as rn 
-    FROM db_CNPJ.dbo.CNAESecundaria
+    SELECT
+        CS.CNPJ,
+        CS.idSubClasseCNAE,
+        ROW_NUMBER() OVER (
+            PARTITION BY CS.CNPJ
+            ORDER BY CS.idSubClasseCNAE
+        ) AS rn
+    FROM db_CNPJ.dbo.CNAESecundaria CS
+    INNER JOIN temp_CGUSC.fp.lista_cnpjs LST_CNAE
+        ON LST_CNAE.cnpj = CS.CNPJ
 ) AS cnae_s_base ON cnae_s_base.CNPJ = lst.cnpj AND cnae_s_base.rn = 1
-LEFT JOIN  db_CNPJ.dbo.SubClasseCNAE                     AS cnae_s ON cnae_s.idSubClasseCNAE = cnae_s_base.idSubClasseCNAE;
+LEFT JOIN  db_CNPJ.dbo.SubClasseCNAE                     AS cnae_s ON cnae_s.idSubClasseCNAE = cnae_s_base.idSubClasseCNAE
+LEFT JOIN  #cnpjs_cnae_farmacia_secundario AS cnae_farmacia_secundario
+    ON cnae_farmacia_secundario.cnpj = lst.cnpj;
 
 -- Índice em #tempDadosFarmacias
 -- Chave principal de acesso: CNPJ

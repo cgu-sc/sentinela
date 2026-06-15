@@ -1,10 +1,31 @@
 from ...schemas.analytics import IntegrityAlertSchema, IntegrityAlertsResponse
+from .farmacia import get_dados_farmacia
 from .socios import get_socios_farmacia
 
 
 def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
+    cadastro = get_dados_farmacia(cnpj)
     socios_response = get_socios_farmacia(cnpj)
     alertas: list[IntegrityAlertSchema] = []
+
+    if cadastro.is_cnae_farmacia_ausente:
+        alertas.append(
+            IntegrityAlertSchema(
+                tipo="cnpj_cnae_farmacia_ausente",
+                escopo="cnpj",
+                entidade_id=cadastro.cnpj,
+                entidade_nome=cadastro.nome_fantasia or cadastro.razao_social or cadastro.cnpj,
+                severidade="atencao",
+                titulo="CNAE compatível com atividade farmacêutica não identificado",
+                fonte="Cadastro Nacional da Pessoa Jurídica",
+                data_referencia=(
+                    cadastro.data_processamento.date()
+                    if cadastro.data_processamento is not None
+                    else None
+                ),
+                aba_destino="teia",
+            )
+        )
 
     for socio in socios_response.socios:
         if socio.indicador_socio != "PF":

@@ -507,7 +507,7 @@ class DadosFarmaciaSchema(BaseModel):
     cnae_principal: Optional[str] = None
     id_cnae_secundario: Optional[str] = None
     cnae_secundario: Optional[str] = None
-    is_cnae_farmacia_ausente: Optional[bool] = False
+    is_cnae_farmacia_ausente: bool
     data_abertura: Optional[datetime] = None
     data_processamento: Optional[datetime] = None
     natureza_juridica: Optional[str] = None

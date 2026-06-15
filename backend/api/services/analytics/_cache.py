@@ -13,6 +13,7 @@ import unicodedata
 from decimal import Decimal, ROUND_HALF_UP
 from cache_files import (
     CRM_RAIOX_TX_PARQUET,
+    FARMACIAS_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
     TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
     TEIA_GRAFO_NIVEL2_NODES_PARQUET,
@@ -284,10 +285,22 @@ def sync_network(cnpj: str) -> None:
             if not has_required_columns(N4_EDGES_PATH, edge_columns):
                 raise ValueError("N4 edges cache com schema antigo")
 
+            graph_mtime = min(
+                os.path.getmtime(path)
+                for path in [N2_NODES_PATH, N3_NODES_PATH, N4_NODES_PATH]
+            )
+
+            FARMACIAS_PATH = os.path.join(get_cache_dir(), FARMACIAS_PARQUET)
+            if not os.path.exists(FARMACIAS_PATH):
+                raise FileNotFoundError(
+                    f"Cache obrigatorio de farmacias nao encontrado: {FARMACIAS_PATH}"
+                )
+            if os.path.getmtime(FARMACIAS_PATH) > graph_mtime:
+                raise ValueError("teia anterior ao cache de farmacias")
+
             DADOS_PAR_PATH = os.path.join(get_cache_dir(), "dados_par.parquet")
             if os.path.exists(DADOS_PAR_PATH):
                 par_mtime = os.path.getmtime(DADOS_PAR_PATH)
-                graph_mtime = min(os.path.getmtime(p) for p in [N2_NODES_PATH, N3_NODES_PATH, N4_NODES_PATH])
                 if par_mtime > graph_mtime:
                     raise ValueError("teia anterior ao cache PAR")
 

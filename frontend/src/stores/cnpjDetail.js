@@ -89,6 +89,21 @@ function assertSocios(data) {
   });
 }
 
+function assertCadastroBootstrap(cadastro) {
+  if (!cadastro) {
+    throw new Error('Contrato invalido em bootstrap: cadastro obrigatorio.');
+  }
+  [
+    'is_dispersao_uf_nao_vizinha',
+    'pct_dispersao_uf_nao_vizinha',
+    'valor_dispersao_uf_nao_vizinha',
+  ].forEach((field) => {
+    if (cadastro[field] === undefined || cadastro[field] === null) {
+      throw new Error(`Contrato invalido em bootstrap.cadastro: ${field} obrigatorio.`);
+    }
+  });
+}
+
 function assertCrmDataLight(data) {
   if (!data || !Array.isArray(data.crms_interesse) || !data.summary) {
     throw new Error('Contrato invalido em crm-data: summary e crms_interesse obrigatorios.');
@@ -342,6 +357,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (!data.status?.status || !data.cadastro || !data.cnpj_data || !data.geo_data || !data.period_summary) {
           throw new Error('Resposta de bootstrap incompleta para a tela de estabelecimento.');
         }
+        assertCadastroBootstrap(data.cadastro);
 
         this.bootstrapData = data;
         this.bootstrapLoadedKey = key;

@@ -14,6 +14,7 @@ from ...schemas.analytics import (
     MovimentacaoRowSchema,
     MovimentacaoSummarySchema,
 )
+from .geografico import calcular_alerta_uf_nao_vizinha
 
 
 def _clean_cnpj(value: str) -> str:
@@ -121,10 +122,19 @@ def get_dados_farmacia(cnpj: str) -> DadosFarmaciaSchema:
         is_cnae_incompativel = bool(
             perfil.select("is_cnae_incompativel_farmaceutico").item(0, 0)
         )
+        perfil_row = perfil.select(["id_cnpj", "uf"]).row(0, named=True)
+        alerta_uf_nao_vizinha = calcular_alerta_uf_nao_vizinha(
+            id_cnpj=int(perfil_row["id_cnpj"]),
+            uf_farmacia=str(perfil_row["uf"]),
+        )
+        cadastro_payload = dict(cadastro)
+        cadastro_payload.pop("is_cnae_incompativel_farmaceutico", None)
+        cadastro_payload.pop("is_cnae_farmacia_ausente", None)
+        cadastro_payload["is_cnae_incompativel_farmaceutico"] = is_cnae_incompativel
+        cadastro_payload["is_cnae_farmacia_ausente"] = is_cnae_incompativel
+        cadastro_payload.update(alerta_uf_nao_vizinha)
         return DadosFarmaciaSchema(
-            **cadastro,
-            is_cnae_incompativel_farmaceutico=is_cnae_incompativel,
-            is_cnae_farmacia_ausente=is_cnae_incompativel,
+            **cadastro_payload,
             cnaes_secundarios=get_cnaes_secundarios_farmacia(clean_cnpj),
         )
     except HTTPException:

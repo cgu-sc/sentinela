@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Iterable
+from typing import Iterable, TypedDict
 
 import polars as pl
 from fastapi import HTTPException
@@ -9,6 +9,46 @@ from ...schemas.analytics import (
     GeograficoOrigemUfResponse,
     GeograficoOrigemUfRowSchema,
 )
+
+LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT = 5.0
+
+UF_VIZINHAS: dict[str, set[str]] = {
+    "AC": {"AM", "RO"},
+    "AL": {"BA", "PE", "SE"},
+    "AM": {"AC", "MT", "PA", "RO", "RR"},
+    "AP": {"PA"},
+    "BA": {"AL", "ES", "GO", "MG", "PE", "PI", "SE", "TO"},
+    "CE": {"PB", "PE", "PI", "RN"},
+    "DF": {"GO"},
+    "ES": {"BA", "MG", "RJ"},
+    "GO": {"BA", "DF", "MG", "MS", "MT", "TO"},
+    "MA": {"PA", "PI", "TO"},
+    "MG": {"BA", "ES", "GO", "MS", "RJ", "SP"},
+    "MS": {"GO", "MG", "MT", "PR", "SP"},
+    "MT": {"AM", "GO", "MS", "PA", "RO", "TO"},
+    "PA": {"AM", "AP", "MA", "MT", "RR", "TO"},
+    "PB": {"CE", "PE", "RN"},
+    "PE": {"AL", "BA", "CE", "PB", "PI"},
+    "PI": {"BA", "CE", "MA", "PE", "TO"},
+    "PR": {"MS", "SC", "SP"},
+    "RJ": {"ES", "MG", "SP"},
+    "RN": {"CE", "PB"},
+    "RO": {"AC", "AM", "MT"},
+    "RR": {"AM", "PA"},
+    "RS": {"SC"},
+    "SC": {"PR", "RS"},
+    "SE": {"AL", "BA"},
+    "SP": {"MG", "MS", "PR", "RJ"},
+    "TO": {"BA", "GO", "MA", "MT", "PA", "PI"},
+}
+
+UF_BRASILEIRAS = set(UF_VIZINHAS)
+
+
+class AlertaUfNaoVizinha(TypedDict):
+    is_dispersao_uf_nao_vizinha: bool
+    pct_dispersao_uf_nao_vizinha: float
+    valor_dispersao_uf_nao_vizinha: float
 
 
 def _clean_cnpj(value: str) -> str:
@@ -22,6 +62,73 @@ def _require_columns(df: pl.DataFrame, columns: Iterable[str], source: str) -> N
             status_code=500,
             detail=f"Contrato de cache invalido em {source}. Colunas ausentes: {', '.join(missing)}.",
         )
+
+
+def _normalizar_uf(value: object) -> str:
+    uf = str(value or "").strip().upper()
+    if uf not in UF_BRASILEIRAS:
+        raise HTTPException(status_code=500, detail=f"UF de farmacia invalida para alerta geografico: {uf}.")
+    return uf
+
+
+def calcular_alerta_uf_nao_vizinha(
+    id_cnpj: int,
+    uf_farmacia: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+) -> AlertaUfNaoVizinha:
+    uf_origem = _normalizar_uf(uf_farmacia)
+    required = ["id_cnpj", "ano_base", "uf_paciente", "valor_autorizado"]
+    origem_scan = scan_geografico_origem_uf()
+    missing = [column for column in required if column not in origem_scan.collect_schema().names()]
+    if missing:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Contrato de cache invalido em geografico_origem_uf. Colunas ausentes: {', '.join(missing)}.",
+        )
+
+    origem = origem_scan.filter(pl.col("id_cnpj") == id_cnpj).select(required)
+    if data_inicio:
+        origem = origem.filter(pl.col("ano_base") >= int(data_inicio.year))
+    if data_fim:
+        origem = origem.filter(pl.col("ano_base") <= int(data_fim.year))
+
+    origem_df = origem.collect()
+    _require_columns(origem_df, required, "geografico_origem_uf")
+    if origem_df.is_empty():
+        return {
+            "is_dispersao_uf_nao_vizinha": False,
+            "pct_dispersao_uf_nao_vizinha": 0.0,
+            "valor_dispersao_uf_nao_vizinha": 0.0,
+        }
+
+    total_valor = float(
+        origem_df.select(pl.col("valor_autorizado").cast(pl.Float64).sum()).item() or 0
+    )
+    if total_valor <= 0:
+        return {
+            "is_dispersao_uf_nao_vizinha": False,
+            "pct_dispersao_uf_nao_vizinha": 0.0,
+            "valor_dispersao_uf_nao_vizinha": 0.0,
+        }
+
+    ufs_proximas = UF_VIZINHAS[uf_origem] | {uf_origem}
+    ufs_distantes = sorted(UF_BRASILEIRAS - ufs_proximas)
+    valor_distante = float(
+        origem_df.with_columns(
+            pl.col("uf_paciente").cast(pl.Utf8).str.strip_chars().str.to_uppercase().alias("uf_paciente_norm")
+        )
+        .filter(pl.col("uf_paciente_norm").is_in(ufs_distantes))
+        .select(pl.col("valor_autorizado").cast(pl.Float64).sum())
+        .item()
+        or 0
+    )
+    percentual = (valor_distante / total_valor * 100) if total_valor > 0 else 0.0
+    return {
+        "is_dispersao_uf_nao_vizinha": percentual > LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT,
+        "pct_dispersao_uf_nao_vizinha": percentual,
+        "valor_dispersao_uf_nao_vizinha": valor_distante,
+    }
 
 
 def _row_schema(row: dict) -> GeograficoOrigemUfRowSchema:

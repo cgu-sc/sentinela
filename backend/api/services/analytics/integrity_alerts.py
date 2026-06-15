@@ -136,6 +136,25 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
             )
         )
 
+    if cadastro.is_dispersao_uf_nao_vizinha:
+        alertas.append(
+            IntegrityAlertSchema(
+                tipo="cnpj_dispersao_uf_nao_vizinha",
+                escopo="cnpj",
+                entidade_id=cadastro.cnpj,
+                entidade_nome=cadastro.nome_fantasia or cadastro.razao_social or cadastro.cnpj,
+                severidade="atencao",
+                titulo="Vendas para UFs sem divisa",
+                fonte="Dispersao geografica por UF",
+                data_referencia=(
+                    cadastro.data_processamento.date()
+                    if cadastro.data_processamento is not None
+                    else None
+                ),
+                aba_destino="indicadores",
+            )
+        )
+
     for socio in socios_response.socios:
         if socio.indicador_socio != "PF":
             continue

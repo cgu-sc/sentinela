@@ -513,6 +513,9 @@ class DadosFarmaciaSchema(BaseModel):
     cnaes_secundarios: List[CnaeSecundarioSchema]
     is_cnae_incompativel_farmaceutico: bool
     is_cnae_farmacia_ausente: bool
+    is_dispersao_uf_nao_vizinha: bool
+    pct_dispersao_uf_nao_vizinha: float
+    valor_dispersao_uf_nao_vizinha: float
     data_abertura: Optional[datetime] = None
     data_processamento: Optional[datetime] = None
     natureza_juridica: Optional[str] = None

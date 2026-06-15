@@ -12,6 +12,7 @@ from data_cache import (
     get_localidades_df,
 )
 from .farmacia import get_cnaes_secundarios_farmacia
+from .geografico import calcular_alerta_uf_nao_vizinha
 from .matriz_risco_dinamica import build_dynamic_matriz_risco
 from ...schemas.analytics import (
     CnpjAccessStatusSchema,
@@ -355,6 +356,14 @@ def get_cnpj_bootstrap(
     cadastro_payload = dict(cadastro_row)
     cadastro_payload["is_cnae_incompativel_farmaceutico"] = is_cnae_incompativel
     cadastro_payload["is_cnae_farmacia_ausente"] = is_cnae_incompativel
+    cadastro_payload.update(
+        calcular_alerta_uf_nao_vizinha(
+            id_cnpj=id_cnpj,
+            uf_farmacia=str(perfil_row["uf"]),
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        )
+    )
 
     return CnpjBootstrapResponse(
         status=CnpjAccessStatusSchema(

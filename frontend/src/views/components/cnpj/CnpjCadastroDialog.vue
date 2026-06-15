@@ -40,6 +40,12 @@ const formatCnae = (id, descricao) => {
   return descricao ? `${code} - ${descricao}` : code;
 };
 
+const formatPercent = (value) =>
+  `${Number(value ?? 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
+
 const formattedAddress = computed(() => {
   const cadastro = props.cadastro;
   if (!cadastro) return emptyValue;
@@ -67,6 +73,13 @@ const cnaeAlertLabel = computed(() =>
     ? "CNAE incompatível com atividade farmacêutica"
     : "CNAE compatível identificado",
 );
+
+const dispersaoUfNaoVizinhaLabel = computed(() => {
+  if (props.cadastro?.is_dispersao_uf_nao_vizinha) {
+    return `${formatPercent(props.cadastro?.pct_dispersao_uf_nao_vizinha)} para UFs sem divisa`;
+  }
+  return "Sem alerta identificado";
+});
 </script>
 
 <template>
@@ -169,6 +182,15 @@ const cnaeAlertLabel = computed(() =>
           <div class="field-item">
             <span>Região de saúde</span>
             <strong>{{ displayValue(geoData?.no_regiao_saude) }}</strong>
+          </div>
+          <div class="field-item">
+            <span>Dispersão UF sem divisa</span>
+            <strong
+              class="geo-status"
+              :class="{ 'geo-status--alert': cadastro?.is_dispersao_uf_nao_vizinha }"
+            >
+              {{ dispersaoUfNaoVizinhaLabel }}
+            </strong>
           </div>
         </div>
       </section>
@@ -304,6 +326,14 @@ const cnaeAlertLabel = computed(() =>
 
 .cnae-status--alert {
   color: var(--risk-high);
+}
+
+.geo-status {
+  color: var(--risk-low);
+}
+
+.geo-status--alert {
+  color: var(--risk-medium);
 }
 
 .cnae-block {

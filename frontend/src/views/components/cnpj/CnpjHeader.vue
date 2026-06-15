@@ -128,22 +128,6 @@ const situacaoRfClassComp = computed(() =>
   situacaoRfClass(props.cnpjData?.situacao_rf),
 );
 
-const dispersaoUfNaoVizinhaPct = computed(() =>
-  Number(props.cadastro?.pct_dispersao_uf_nao_vizinha ?? 0),
-);
-const hasDispersaoUfNaoVizinha = computed(() =>
-  props.cadastro?.is_dispersao_uf_nao_vizinha === true,
-);
-const dispersaoUfNaoVizinhaLabel = computed(() =>
-  `${dispersaoUfNaoVizinhaPct.value.toLocaleString("pt-BR", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  })}%`,
-);
-const dispersaoUfNaoVizinhaTooltip = computed(() =>
-  `${dispersaoUfNaoVizinhaLabel.value} do valor autorizado foi destinado a UFs sem divisa com a UF da farmacia no periodo analisado.`,
-);
-
 const nomeFantasia = computed(() => props.cadastro?.nome_fantasia ?? null);
 const razaoSocial = computed(
   () => props.cadastro?.razao_social ?? props.cnpjData?.razao_social ?? null,
@@ -387,16 +371,6 @@ const openIntegrityDialog = () => {
             <span class="institution-value">{{
               cnpjData.situacao_rf ?? "—"
             }}</span>
-          </div>
-          <div
-            v-if="hasDispersaoUfNaoVizinha"
-            class="institution-chip status-warn"
-            v-tooltip.bottom="dispersaoUfNaoVizinhaTooltip"
-          >
-            <span class="institution-label">
-              <i class="pi pi-exclamation-triangle" />
-            </span>
-            <span class="institution-value">{{ dispersaoUfNaoVizinhaLabel }}</span>
           </div>
         </div>
       </div>

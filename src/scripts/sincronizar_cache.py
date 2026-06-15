@@ -24,7 +24,6 @@ from data_cache import (
     _sync_analise_gtin_inconsistencia_clinica,
     _sync_analise_gtin_inconsistencia_clinica_municipio,
     _sync_analise_gtin_inconsistencia_clinica_regiao,
-    _sync_alertas_alvos,
     _sync_cnpj_parquets,
     _sync_crm_benchmarks,
     _sync_crm_prescricoes_brasil_semestre,
@@ -95,7 +94,6 @@ MODULOS = sorted([
     {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio"},
     {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado"},
     {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido"},
-    {"id": 25, "name": "Alertas alvos", "func": _sync_alertas_alvos, "peso": "rapido", "ordem": 11.2},
     {"id": 6, "name": "CNPJ parquets", "func": _sync_cnpj_parquets, "peso": "muito pesado", "ordem": 11.5},
 ], key=lambda modulo: modulo["id"])
 

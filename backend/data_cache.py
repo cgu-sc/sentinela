@@ -339,7 +339,6 @@ _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH = _global_cache_path("esocial_cnp
 _SENTINELA_METADADOS_BASE_PARQUET_PATH = _global_cache_path("sentinela_metadados_base")
 _DADOS_PAR_PARQUET_PATH = _global_cache_path("dados_par")
 _PAR_TEIA_ALVOS_PARQUET_PATH = _global_cache_path("par_teia_alvos")
-_ALERTAS_ALVOS_PARQUET_PATH = _global_cache_path("alertas_alvos")
 
 if not os.path.exists(_CACHE_DIR):
     os.makedirs(_CACHE_DIR, exist_ok=True)
@@ -373,7 +372,6 @@ _df_esocial_cnpj_ultima_movimentacao: pl.DataFrame | None = None
 _df_sentinela_metadados_base: pl.DataFrame | None = None
 _df_dados_par: pl.DataFrame | None = None
 _df_par_teia_alvos: pl.DataFrame | None = None
-_df_alertas_alvos: pl.DataFrame | None = None
 
 _cache_progress: int = 0
 _cache_status: str = "idle"
@@ -1438,157 +1436,6 @@ def _sync_par_teia_alvos(engine, progress_callback=None):
     _df_par_teia_alvos = df_par_teia_alvos
 
 
-def _sync_alertas_alvos(engine, progress_callback=None):
-    """Sincroniza alertas agregados por CNPJ alvo para filtros globais."""
-    global _df_alertas_alvos
-    print("Sincronizando alertas agregados por CNPJ alvo...")
-
-    _assert_fp_source_table(engine, "lista_cnpjs", {"cnpj"})
-    _assert_fp_source_table(
-        engine,
-        "dados_socios",
-        {
-            "cnpj",
-            "cpf_cnpj_socio",
-            "indicador_socio",
-            "data_exclusao_sociedade",
-            "is_cadunico",
-            "is_seguro_defeso",
-        },
-    )
-    _assert_fp_source_table(
-        engine,
-        "teia_fonte_nivel2",
-        {"cpf_cnpj_socio", "cnpj_empresa"},
-    )
-    _assert_fp_source_table(
-        engine,
-        "teia_fonte_nivel3",
-        {
-            "cnpj_empresa",
-            "cpf_cnpj_socio",
-            "indicador_socio",
-            "data_exclusao_sociedade",
-            "is_cadunico",
-            "is_seguro_defeso",
-        },
-    )
-
-    temp_sql = """
-        DROP TABLE IF EXISTS #alertas_alvos_cnpjs;
-        DROP TABLE IF EXISTS #alertas_alvos_diretos;
-        DROP TABLE IF EXISTS #alertas_alvos_caminhos_n2;
-        DROP TABLE IF EXISTS #alertas_alvos_n3;
-
-        SELECT DISTINCT
-            CAST(cnpj AS VARCHAR(14)) AS cnpj
-        INTO #alertas_alvos_cnpjs
-        FROM temp_CGUSC.fp.lista_cnpjs;
-
-        CREATE UNIQUE CLUSTERED INDEX ix_alertas_alvos_cnpjs
-            ON #alertas_alvos_cnpjs(cnpj);
-
-        SELECT
-            CAST(ds.cnpj AS VARCHAR(14)) AS cnpj,
-            COUNT(DISTINCT CASE
-                WHEN ds.is_cadunico = 1 THEN ds.cpf_cnpj_socio
-            END) AS qtd_cadunico_direto,
-            COUNT(DISTINCT CASE
-                WHEN ds.is_seguro_defeso = 1 THEN ds.cpf_cnpj_socio
-            END) AS qtd_seguro_defeso_direto
-        INTO #alertas_alvos_diretos
-        FROM temp_CGUSC.fp.dados_socios ds
-        WHERE ds.indicador_socio = 'PF'
-          AND ds.data_exclusao_sociedade IS NULL
-          AND (ds.is_cadunico = 1 OR ds.is_seguro_defeso = 1)
-        GROUP BY ds.cnpj;
-
-        CREATE UNIQUE CLUSTERED INDEX ix_alertas_alvos_diretos
-            ON #alertas_alvos_diretos(cnpj);
-
-        SELECT DISTINCT
-            CAST(ds.cnpj AS VARCHAR(14)) AS cnpj_alvo,
-            CAST(t2.cnpj_empresa AS VARCHAR(14)) AS cnpj_empresa
-        INTO #alertas_alvos_caminhos_n2
-        FROM temp_CGUSC.fp.dados_socios ds
-        INNER JOIN temp_CGUSC.fp.teia_fonte_nivel2 t2
-            ON t2.cpf_cnpj_socio = ds.cpf_cnpj_socio;
-
-        CREATE UNIQUE CLUSTERED INDEX ix_alertas_alvos_caminhos_n2
-            ON #alertas_alvos_caminhos_n2(cnpj_empresa, cnpj_alvo);
-
-        SELECT
-            c.cnpj_alvo AS cnpj,
-            COUNT(DISTINCT CASE
-                WHEN t3.is_cadunico = 1 THEN t3.cpf_cnpj_socio
-            END) AS qtd_cadunico_n3,
-            COUNT(DISTINCT CASE
-                WHEN t3.is_seguro_defeso = 1 THEN t3.cpf_cnpj_socio
-            END) AS qtd_seguro_defeso_n3
-        INTO #alertas_alvos_n3
-        FROM #alertas_alvos_caminhos_n2 c
-        INNER JOIN temp_CGUSC.fp.teia_fonte_nivel3 t3
-            ON t3.cnpj_empresa = c.cnpj_empresa
-        WHERE t3.indicador_socio = 'PF'
-          AND t3.data_exclusao_sociedade IS NULL
-          AND (t3.is_cadunico = 1 OR t3.is_seguro_defeso = 1)
-        GROUP BY c.cnpj_alvo;
-
-        CREATE UNIQUE CLUSTERED INDEX ix_alertas_alvos_n3
-            ON #alertas_alvos_n3(cnpj);
-    """
-
-    sql = """
-        SELECT
-            a.cnpj,
-            CASE WHEN ISNULL(d.qtd_cadunico_direto, 0) > 0
-                THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_cadunico_direto,
-            CASE WHEN ISNULL(n3.qtd_cadunico_n3, 0) > 0
-                THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_cadunico_n3,
-            ISNULL(d.qtd_cadunico_direto, 0) AS qtd_cadunico_direto,
-            ISNULL(n3.qtd_cadunico_n3, 0) AS qtd_cadunico_n3,
-            CASE WHEN ISNULL(d.qtd_seguro_defeso_direto, 0) > 0
-                THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_seguro_defeso_direto,
-            CASE WHEN ISNULL(n3.qtd_seguro_defeso_n3, 0) > 0
-                THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_seguro_defeso_n3,
-            ISNULL(d.qtd_seguro_defeso_direto, 0) AS qtd_seguro_defeso_direto,
-            ISNULL(n3.qtd_seguro_defeso_n3, 0) AS qtd_seguro_defeso_n3
-        FROM #alertas_alvos_cnpjs a
-        LEFT JOIN #alertas_alvos_diretos d ON d.cnpj = a.cnpj
-        LEFT JOIN #alertas_alvos_n3 n3 ON n3.cnpj = a.cnpj
-        ORDER BY a.cnpj
-    """
-
-    with engine.begin() as conn:
-        conn.exec_driver_sql(temp_sql)
-        pdf = pd.read_sql(sql, conn)
-    if pdf.empty:
-        raise RuntimeError("Consulta de alertas agregados nao retornou os CNPJs alvo obrigatorios.")
-
-    df_alertas_alvos = pl.from_pandas(pdf).with_columns([
-        pl.col("cnpj").cast(pl.Utf8).str.replace_all(r"\D", "").str.zfill(14),
-        pl.col("has_cadunico_direto").cast(pl.Boolean),
-        pl.col("has_cadunico_n3").cast(pl.Boolean),
-        pl.col("qtd_cadunico_direto").cast(pl.Int32),
-        pl.col("qtd_cadunico_n3").cast(pl.Int32),
-        pl.col("has_seguro_defeso_direto").cast(pl.Boolean),
-        pl.col("has_seguro_defeso_n3").cast(pl.Boolean),
-        pl.col("qtd_seguro_defeso_direto").cast(pl.Int32),
-        pl.col("qtd_seguro_defeso_n3").cast(pl.Int32),
-    ]).sort("cnpj")
-
-    if df_alertas_alvos["cnpj"].null_count() > 0:
-        raise RuntimeError("Cache alertas_alvos possui CNPJ nulo.")
-    if df_alertas_alvos["cnpj"].n_unique() != df_alertas_alvos.height:
-        raise RuntimeError("Cache alertas_alvos possui mais de uma linha para o mesmo CNPJ.")
-
-    df_alertas_alvos.write_parquet(_ALERTAS_ALVOS_PARQUET_PATH, compression="zstd")
-    _df_alertas_alvos = df_alertas_alvos
-    print(f"   -> CNPJs alvo indexados para alertas: {df_alertas_alvos.height:,}")
-    if progress_callback:
-        progress_callback(100)
-
-
 def _sync_dados_farmacia(engine, progress_callback=None):
     """Tarefa 8: Sincroniza dados cadastrais e geográficos das farmácias."""
     global _df_dados_farmacia
@@ -1724,6 +1571,21 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
     """Sincroniza a dimensao cadastral usada para filtrar/enriquecer a movimentacao."""
     global _df_perfil_estabelecimento
     print("Sincronizando Perfil dos Estabelecimentos...")
+    profile_rows = _assert_fp_source_table(
+        engine,
+        "perfil_consolidado_estabelecimento",
+        {
+            "cnpj",
+            "has_cadunico_direto",
+            "has_cadunico_n3",
+            "qtd_cadunico_direto",
+            "qtd_cadunico_n3",
+            "has_seguro_defeso_direto",
+            "has_seguro_defeso_n3",
+            "qtd_seguro_defeso_direto",
+            "qtd_seguro_defeso_n3",
+        },
+    )
     sql = """
         SELECT
             D.id AS id_cnpj,
@@ -1739,7 +1601,15 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
             P.is_grande_rede,
             P.qtd_estabelecimentos_rede,
             P.is_matriz,
-            P.unidade_pf
+            P.unidade_pf,
+            P.has_cadunico_direto,
+            P.has_cadunico_n3,
+            P.qtd_cadunico_direto,
+            P.qtd_cadunico_n3,
+            P.has_seguro_defeso_direto,
+            P.has_seguro_defeso_n3,
+            P.qtd_seguro_defeso_direto,
+            P.qtd_seguro_defeso_n3
         FROM [temp_CGUSC].[fp].[dados_farmacia] D
         LEFT JOIN [temp_CGUSC].[fp].[perfil_consolidado_estabelecimento] P
             ON P.cnpj = D.cnpj
@@ -1748,6 +1618,11 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
     """
     with engine.connect() as conn:
         total_rows = conn.execute(text("SELECT COUNT(*) FROM [temp_CGUSC].[fp].[dados_farmacia]")).scalar()
+    if profile_rows != total_rows:
+        raise RuntimeError(
+            "Perfil consolidado nao cobre todas as farmacias: "
+            f"{profile_rows:,} perfis para {total_rows:,} farmacias."
+        )
 
     print(f"   -> Perfis de estabelecimentos: {total_rows:,}")
     chunk_list = []
@@ -1770,6 +1645,14 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
             pl.col("is_grande_rede").cast(pl.Boolean),
             pl.col("is_matriz").cast(pl.Boolean),
             pl.col("qtd_estabelecimentos_rede").cast(pl.Int64),
+            pl.col("has_cadunico_direto").cast(pl.Boolean),
+            pl.col("has_cadunico_n3").cast(pl.Boolean),
+            pl.col("qtd_cadunico_direto").cast(pl.Int32),
+            pl.col("qtd_cadunico_n3").cast(pl.Int32),
+            pl.col("has_seguro_defeso_direto").cast(pl.Boolean),
+            pl.col("has_seguro_defeso_n3").cast(pl.Boolean),
+            pl.col("qtd_seguro_defeso_direto").cast(pl.Int32),
+            pl.col("qtd_seguro_defeso_n3").cast(pl.Int32),
         ])
         chunk_list.append(chunk_df)
         rows_processed += len(chunk)
@@ -1778,10 +1661,35 @@ def _sync_perfil_estabelecimento(engine, progress_callback=None):
         if progress_callback:
             progress_callback(p)
 
+    if not chunk_list:
+        raise RuntimeError("Consulta de perfil_estabelecimento nao retornou registros.")
+
     df_perfil_estabelecimento = (
-        pl.concat(chunk_list).unique(subset=["id_cnpj"]).sort("id_cnpj")
-        if chunk_list else pl.DataFrame()
+        pl.concat(chunk_list)
+        .unique(subset=["id_cnpj"])
+        .sort("id_cnpj")
     )
+    alert_columns = [
+        "has_cadunico_direto",
+        "has_cadunico_n3",
+        "qtd_cadunico_direto",
+        "qtd_cadunico_n3",
+        "has_seguro_defeso_direto",
+        "has_seguro_defeso_n3",
+        "qtd_seguro_defeso_direto",
+        "qtd_seguro_defeso_n3",
+    ]
+    null_alert_columns = [
+        column
+        for column in alert_columns
+        if df_perfil_estabelecimento[column].null_count() > 0
+    ]
+    if null_alert_columns:
+        raise RuntimeError(
+            "Perfil de estabelecimentos possui alertas societarios nulos: "
+            + ", ".join(null_alert_columns)
+        )
+
     df_perfil_estabelecimento.write_parquet(
         _PERFIL_ESTABELECIMENTO_PARQUET_PATH,
         compression="zstd",
@@ -2704,7 +2612,7 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
 # --- GERENCIADOR DE CACHE ---
 
 def load_cache(engine, force_refresh: bool = False) -> None:
-    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_farmacia_cnaes_secundarios, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _df_alertas_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
+    global _df_movimentacao, _df_localidades, _df_rede, _df_matriz_risco, _df_bench_crm_uf, _df_bench_crm_regiao, _df_bench_crm_br, _df_dados_farmacia, _df_dados_farmacia_cnaes_secundarios, _df_perfil_estabelecimento, _df_dados_socios, _df_teia_fonte_nivel2, _df_teia_fonte_nivel3, _df_teia_fonte_nivel4, _df_medicamentos, _df_falecidos, _df_analise_gtin_inconsistencia_clinica, _df_analise_gtin_inconsistencia_clinica_municipio, _df_analise_gtin_inconsistencia_clinica_regiao, _df_dados_ibge_demografia, _df_volume_atipico_semestral, _df_esocial_cnpj_ano, _df_esocial_cnpj_trabalhador_ano, _df_esocial_cnpj_movimentacao_ano, _df_esocial_cnpj_ultima_movimentacao, _df_sentinela_metadados_base, _df_dados_par, _df_par_teia_alvos, _cache_progress, _cache_status, _cache_error_message, _cache_generation
     import time
     _ON_DEMAND_GLOBAL_CACHE_READY.clear()
 
@@ -2737,6 +2645,14 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "qtd_estabelecimentos_rede",
                 "is_matriz",
                 "unidade_pf",
+                "has_cadunico_direto",
+                "has_cadunico_n3",
+                "qtd_cadunico_direto",
+                "qtd_cadunico_n3",
+                "has_seguro_defeso_direto",
+                "has_seguro_defeso_n3",
+                "qtd_seguro_defeso_direto",
+                "qtd_seguro_defeso_n3",
             },
             "dados_farmacia": {
                 "id_cnpj",
@@ -2977,17 +2893,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "qtd_empresas_par_n4",
                 "qtd_empresas_par_qualquer",
             },
-            "alertas_alvos": {
-                "cnpj",
-                "has_cadunico_direto",
-                "has_cadunico_n3",
-                "qtd_cadunico_direto",
-                "qtd_cadunico_n3",
-                "has_seguro_defeso_direto",
-                "has_seguro_defeso_n3",
-                "qtd_seguro_defeso_direto",
-                "qtd_seguro_defeso_n3",
-            },
         }
         def _try_load(name, path):
             if not os.path.exists(path):
@@ -3058,8 +2963,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _df_dados_par = dados_par_loaded
         par_teia_alvos_loaded = _try_load("par_teia_alvos", _PAR_TEIA_ALVOS_PARQUET_PATH)
         _df_par_teia_alvos = par_teia_alvos_loaded
-        alertas_alvos_loaded = _try_load("alertas_alvos", _ALERTAS_ALVOS_PARQUET_PATH)
-        _df_alertas_alvos = alertas_alvos_loaded
 
         if missing:
             print(f"[AVISO]  Cache incompleto — módulos ausentes: {', '.join(missing)}")
@@ -3104,7 +3007,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Sócios Indiretos (Expansão)", "weight": 4, "func": lambda cb: _sync_teia_fonte_nivel3(engine, cb)},
         {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
         {"name": "PAR na Teia dos Alvos",   "weight": 1,  "func": lambda cb: _sync_par_teia_alvos(engine, cb)},
-        {"name": "Alertas Agregados dos Alvos", "weight": 1, "func": lambda cb: _sync_alertas_alvos(engine, cb)},
         {"name": "Movimentação (Vendas)", "weight": 42, "func": lambda cb: _sync_movimentacao(engine, cb)},
     ]
 
@@ -3312,12 +3214,6 @@ def get_df_par_teia_alvos() -> pl.DataFrame:
     return _df_par_teia_alvos
 
 
-def get_df_alertas_alvos() -> pl.DataFrame:
-    if _df_alertas_alvos is None:
-        raise RuntimeError("Cache de Alertas dos Alvos nao carregado. Execute uma sincronizacao.")
-    return _df_alertas_alvos
-
-
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
     modules = {
@@ -3356,7 +3252,6 @@ def get_cache_status() -> dict:
         "falecidos": {"label": "Falecidos", "path": _FALECIDOS_PARQUET_PATH, "loaded": _df_falecidos is not None},
         "dados_par":      {"label": "Indicadores PAR",          "path": _DADOS_PAR_PARQUET_PATH,       "loaded": _df_dados_par is not None},
         "par_teia_alvos": {"label": "PAR na Teia dos Alvos",     "path": _PAR_TEIA_ALVOS_PARQUET_PATH,  "loaded": _df_par_teia_alvos is not None},
-        "alertas_alvos": {"label": "Alertas Agregados dos Alvos", "path": _ALERTAS_ALVOS_PARQUET_PATH, "loaded": _df_alertas_alvos is not None},
     }
     modules_status = {}
     for key, v in modules.items():

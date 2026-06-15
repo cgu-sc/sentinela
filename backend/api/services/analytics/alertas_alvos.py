@@ -3,8 +3,6 @@ from typing import Optional
 import polars as pl
 from fastapi import HTTPException
 
-from data_cache import get_df_alertas_alvos
-
 
 SOCIO_BENEFICIO_SCOPES = {
     "cadunico_direto",
@@ -14,6 +12,14 @@ SOCIO_BENEFICIO_SCOPES = {
     "seguro_defeso_n3",
     "seguro_defeso_qualquer",
     "qualquer",
+}
+
+
+SOCIO_BENEFICIO_REQUIRED_COLUMNS = {
+    "has_cadunico_direto",
+    "has_cadunico_n3",
+    "has_seguro_defeso_direto",
+    "has_seguro_defeso_n3",
 }
 
 
@@ -53,23 +59,16 @@ def apply_socio_beneficio_filter(
     if not socio_beneficio or socio_beneficio == "Todos":
         return df
 
-    if "cnpj" not in df.columns:
+    missing_columns = SOCIO_BENEFICIO_REQUIRED_COLUMNS - set(df.columns)
+    if missing_columns:
         raise HTTPException(
             status_code=500,
-            detail="Filtro socio_beneficio exige coluna cnpj no DataFrame alvo.",
+            detail=(
+                "Filtro socio_beneficio exige colunas no perfil do estabelecimento: "
+                + ", ".join(sorted(missing_columns))
+            ),
         )
 
     scope = socio_beneficio.strip().lower()
     filter_expr = _scope_expr(scope)
-
-    try:
-        alertas_df = get_df_alertas_alvos()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    cnpjs_filtrados = (
-        alertas_df
-        .filter(filter_expr)
-        .select("cnpj")
-    )
-    return df.join(cnpjs_filtrados, on="cnpj", how="semi")
+    return df.filter(filter_expr)

@@ -237,7 +237,64 @@ GO
 
 DECLARE @MaxPeriodo DATE = (SELECT MAX(periodo) FROM fp.movimentacao_mensal_cnpj);
 
-DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento;
+DROP TABLE IF EXISTS #perfil_alertas_diretos;
+DROP TABLE IF EXISTS #perfil_caminhos_n2;
+DROP TABLE IF EXISTS #perfil_alertas_n3;
+
+SELECT
+    CAST(DS.cnpj AS VARCHAR(14)) AS cnpj,
+    COUNT(DISTINCT CASE
+        WHEN DS.is_cadunico = 1 THEN DS.cpf_cnpj_socio
+    END) AS qtd_cadunico_direto,
+    COUNT(DISTINCT CASE
+        WHEN DS.is_seguro_defeso = 1 THEN DS.cpf_cnpj_socio
+    END) AS qtd_seguro_defeso_direto
+INTO #perfil_alertas_diretos
+FROM fp.dados_socios DS
+WHERE DS.indicador_socio = 'PF'
+  AND DS.data_exclusao_sociedade IS NULL
+  AND (DS.is_cadunico = 1 OR DS.is_seguro_defeso = 1)
+GROUP BY DS.cnpj;
+
+CREATE UNIQUE CLUSTERED INDEX IX_perfil_alertas_diretos_cnpj
+    ON #perfil_alertas_diretos(cnpj);
+
+-- O caminho ate o N3 e apenas estrutural. Conforme a regra de negocio,
+-- somente o vinculo do proprio socio N3 precisa estar ativo.
+SELECT DISTINCT
+    CAST(DS.cnpj AS VARCHAR(14)) AS cnpj_alvo,
+    CAST(T2.cnpj_empresa AS VARCHAR(14)) AS cnpj_empresa
+INTO #perfil_caminhos_n2
+FROM fp.dados_socios DS
+INNER JOIN fp.teia_fonte_nivel2 T2
+    ON T2.cpf_cnpj_socio = DS.cpf_cnpj_socio
+WHERE DS.indicador_socio = 'PF'
+  AND DS.cpf_cnpj_socio IS NOT NULL;
+
+CREATE UNIQUE CLUSTERED INDEX IX_perfil_caminhos_n2_empresa_alvo
+    ON #perfil_caminhos_n2(cnpj_empresa, cnpj_alvo);
+
+SELECT
+    C.cnpj_alvo AS cnpj,
+    COUNT(DISTINCT CASE
+        WHEN T3.is_cadunico = 1 THEN T3.cpf_cnpj_socio
+    END) AS qtd_cadunico_n3,
+    COUNT(DISTINCT CASE
+        WHEN T3.is_seguro_defeso = 1 THEN T3.cpf_cnpj_socio
+    END) AS qtd_seguro_defeso_n3
+INTO #perfil_alertas_n3
+FROM #perfil_caminhos_n2 C
+INNER JOIN fp.teia_fonte_nivel3 T3
+    ON T3.cnpj_empresa = C.cnpj_empresa
+WHERE T3.indicador_socio = 'PF'
+  AND T3.data_exclusao_sociedade IS NULL
+  AND (T3.is_cadunico = 1 OR T3.is_seguro_defeso = 1)
+GROUP BY C.cnpj_alvo;
+
+CREATE UNIQUE CLUSTERED INDEX IX_perfil_alertas_n3_cnpj
+    ON #perfil_alertas_n3(cnpj);
+
+DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento_novo;
 
 SELECT
     DF.cnpj,
@@ -259,18 +316,82 @@ SELECT
     -- GRANDES REDES: vem direto da rede_estabelecimentos (fonte da verdade)
     R.qtd_estabelecimentos_rede,
     R.is_grande_rede,
-    R.is_matriz 
+    R.is_matriz,
 
-INTO fp.perfil_consolidado_estabelecimento
+    CAST(CASE WHEN ISNULL(AD.qtd_cadunico_direto, 0) > 0
+        THEN 1 ELSE 0 END AS BIT) AS has_cadunico_direto,
+    CAST(CASE WHEN ISNULL(AN3.qtd_cadunico_n3, 0) > 0
+        THEN 1 ELSE 0 END AS BIT) AS has_cadunico_n3,
+    CAST(ISNULL(AD.qtd_cadunico_direto, 0) AS INT) AS qtd_cadunico_direto,
+    CAST(ISNULL(AN3.qtd_cadunico_n3, 0) AS INT) AS qtd_cadunico_n3,
+    CAST(CASE WHEN ISNULL(AD.qtd_seguro_defeso_direto, 0) > 0
+        THEN 1 ELSE 0 END AS BIT) AS has_seguro_defeso_direto,
+    CAST(CASE WHEN ISNULL(AN3.qtd_seguro_defeso_n3, 0) > 0
+        THEN 1 ELSE 0 END AS BIT) AS has_seguro_defeso_n3,
+    CAST(ISNULL(AD.qtd_seguro_defeso_direto, 0) AS INT) AS qtd_seguro_defeso_direto,
+    CAST(ISNULL(AN3.qtd_seguro_defeso_n3, 0) AS INT) AS qtd_seguro_defeso_n3
+
+INTO fp.perfil_consolidado_estabelecimento_novo
 FROM fp.dados_farmacia DF
-INNER JOIN fp.rede_estabelecimentos R ON R.cnpj = DF.cnpj
+LEFT JOIN fp.rede_estabelecimentos R ON R.cnpj = DF.cnpj
+LEFT JOIN #perfil_alertas_diretos AD ON AD.cnpj = DF.cnpj
+LEFT JOIN #perfil_alertas_n3 AN3 ON AN3.cnpj = DF.cnpj
 LEFT JOIN (
     SELECT codIBGE, MIN(nome_unidade_PF) as nome_unidade_PF 
     FROM fp.jurisdicoes_pf 
     GROUP BY codIBGE
 ) J ON J.codIBGE = DF.codibge;
 
-CREATE UNIQUE CLUSTERED INDEX IX_perfil_cnpj ON fp.perfil_consolidado_estabelecimento (cnpj);
+CREATE UNIQUE CLUSTERED INDEX IX_perfil_cnpj
+    ON fp.perfil_consolidado_estabelecimento_novo(cnpj);
+
+IF NOT EXISTS (SELECT 1 FROM fp.perfil_consolidado_estabelecimento_novo)
+BEGIN
+    THROW 50020, 'O novo perfil consolidado ficou vazio. A publicacao foi cancelada.', 1;
+END;
+
+IF (
+    SELECT COUNT_BIG(*)
+    FROM fp.perfil_consolidado_estabelecimento_novo
+) <> (
+    SELECT COUNT_BIG(*)
+    FROM fp.dados_farmacia
+)
+BEGIN
+    THROW 50021, 'O novo perfil consolidado nao cobre todas as farmacias.', 1;
+END;
+
+IF EXISTS (
+    SELECT 1
+    FROM fp.perfil_consolidado_estabelecimento_novo
+    WHERE has_cadunico_direto IS NULL
+       OR has_cadunico_n3 IS NULL
+       OR qtd_cadunico_direto IS NULL
+       OR qtd_cadunico_n3 IS NULL
+       OR has_seguro_defeso_direto IS NULL
+       OR has_seguro_defeso_n3 IS NULL
+       OR qtd_seguro_defeso_direto IS NULL
+       OR qtd_seguro_defeso_n3 IS NULL
+)
+BEGIN
+    THROW 50022, 'O novo perfil consolidado possui alertas societarios nulos.', 1;
+END;
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+    DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento;
+    EXEC sys.sp_rename
+        N'fp.perfil_consolidado_estabelecimento_novo',
+        N'perfil_consolidado_estabelecimento',
+        N'OBJECT';
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
 GO
 
 

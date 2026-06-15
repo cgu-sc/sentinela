@@ -30,7 +30,6 @@ ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET = "esocial_cnpj_ultima_movimentacao.par
 SENTINELA_METADADOS_BASE_PARQUET = "sentinela_metadados_base.parquet"
 DADOS_PAR_PARQUET = "dados_par.parquet"
 PAR_TEIA_ALVOS_PARQUET = "par_teia_alvos.parquet"
-ALERTAS_ALVOS_PARQUET = "alertas_alvos.parquet"
 
 MEMORIA_CALCULO_PARQUET = "memoria_calculo.parquet"
 MOVIMENTACAO_MENSAL_GTIN_PARQUET = "movimentacao_mensal_gtin.parquet"

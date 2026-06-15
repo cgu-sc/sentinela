@@ -73,9 +73,8 @@ def _farmacias_cnaes_secundarios_schema() -> dict:
     }
 
 
-def _alertas_alvos_schema() -> dict:
+def _perfil_alertas_societarios_schema() -> dict:
     return {
-        "cnpj": pl.Utf8,
         "has_cadunico_direto": pl.Boolean,
         "has_cadunico_n3": pl.Boolean,
         "qtd_cadunico_direto": pl.Int32,
@@ -172,7 +171,12 @@ GLOBAL_CACHE_DEFINITIONS = (
         "global",
         _farmacias_cnaes_secundarios_schema(),
     ),
-    CacheDefinition("perfil_estabelecimento", cache_files.PERFIL_ESTABELECIMENTO_PARQUET, "global"),
+    CacheDefinition(
+        "perfil_estabelecimento",
+        cache_files.PERFIL_ESTABELECIMENTO_PARQUET,
+        "global",
+        _perfil_alertas_societarios_schema(),
+    ),
     CacheDefinition("dados_socios", cache_files.SOCIOS_PARQUET, "global"),
     CacheDefinition("teia_fonte_nivel2", cache_files.TEIA_FONTE_NIVEL2_PARQUET, "global"),
     CacheDefinition("teia_fonte_nivel3", cache_files.TEIA_FONTE_NIVEL3_PARQUET, "global"),
@@ -191,7 +195,6 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("sentinela_metadados_base", cache_files.SENTINELA_METADADOS_BASE_PARQUET, "global"),
     CacheDefinition("dados_par", cache_files.DADOS_PAR_PARQUET, "global"),
     CacheDefinition("par_teia_alvos", cache_files.PAR_TEIA_ALVOS_PARQUET, "global"),
-    CacheDefinition("alertas_alvos", cache_files.ALERTAS_ALVOS_PARQUET, "global", _alertas_alvos_schema()),
     CacheDefinition("falecidos", cache_files.FALECIDOS_PARQUET, "global", _falecidos_schema()),
 )
 

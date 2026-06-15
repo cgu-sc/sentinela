@@ -3,6 +3,7 @@ from typing import Any, Optional
 import unicodedata
 
 import polars as pl
+from fastapi import HTTPException
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -1133,6 +1134,14 @@ def _build_incompatibilidade_patologica_context(
 
     try:
         clinico_data = get_incompatibilidade_patologica_data(cnpj, data_inicio, data_fim).model_dump()
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {
+                "unavailable": True,
+                "motivo": str(exc.detail or "Detalhamento clinico indisponivel."),
+                "periodo_desc": periodo_desc,
+            }
+        raise RuntimeError(f"Detalhamento clinico indisponivel para a Nota Tecnica: {exc}") from exc
     except Exception as exc:
         raise RuntimeError(f"Detalhamento clinico indisponivel para a Nota Tecnica: {exc}") from exc
 

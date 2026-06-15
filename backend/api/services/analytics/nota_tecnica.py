@@ -1380,6 +1380,16 @@ def generate_nota_tecnica(
             if key == 'incompatibilidade_patologica':
                 clinico_comp = _build_incompatibilidade_patologica_context(cnpj, data_inicio, data_fim)
                 if clinico_comp:
+                    if clinico_comp.get("unavailable"):
+                        p_clinico_indisponivel = doc.add_paragraph()
+                        _run(
+                            p_clinico_indisponivel,
+                            'O detalhamento clínico desta criticidade não foi incluído porque não há análise clínica materializada para o CNPJ no período selecionado.',
+                            color='0F172A',
+                            size=10,
+                        )
+                        timing.mark(f"secao 7 criticidade {key} indisponivel")
+                        continue
                     tabela_inicio_clinica = tabela_num + 1
                     _add_incompatibilidade_patologica_text(
                         doc,

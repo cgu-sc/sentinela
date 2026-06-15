@@ -43,6 +43,7 @@ def load_socios(cnpj: str, engine=None) -> CacheLoadResult:
                 "is_falecido": pl.Boolean,
                 "is_cadunico": pl.Boolean,
                 "is_esocial": pl.Boolean,
+                "is_seguro_defeso": pl.Boolean,
             }),
             from_cache=False,
         )

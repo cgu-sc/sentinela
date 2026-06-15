@@ -161,6 +161,9 @@ const copyAndSignal = (text, key) => {
                     <span v-if="s.is_esocial" class="esocial-badge-inline" v-tooltip.top="'Sócio com vínculo trabalhista em outro CNPJ.'">
                       <i class="pi pi-briefcase" /> ESOCIAL
                     </span>
+                    <span v-if="s.is_seguro_defeso" class="seguro-defeso-badge-inline" v-tooltip.top="'Sócio beneficiário do Seguro Defeso.'">
+                      <i class="pi pi-wallet" /> SEGURO DEFESO
+                    </span>
                     <i :class="['pi', copiedKey === s.cpf_cnpj_socio + '-name' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']" 
                        @click="copyAndSignal(s.nome_socio, s.cpf_cnpj_socio + '-name')" 
                        v-tooltip.top="'Copiar Nome'" />
@@ -645,6 +648,20 @@ const copyAndSignal = (text, key) => {
   margin-left: 0.5rem;
   background: color-mix(in srgb, var(--primary-color) 10%, transparent);
   color: var(--primary-color);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.seguro-defeso-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--status-info) 30%, transparent);
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  background: color-mix(in srgb, var(--status-info) 10%, transparent);
+  color: var(--status-info);
   font-size: 0.65rem;
   font-weight: 600;
 }

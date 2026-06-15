@@ -81,7 +81,7 @@ function assertSocios(data) {
   }
 
   data.socios.forEach((socio, index) => {
-    ['cnpj', 'cpf_cnpj_socio', 'indicador_socio', 'is_cadunico', 'is_esocial', 'is_falecido'].forEach((field) => {
+    ['cnpj', 'cpf_cnpj_socio', 'indicador_socio', 'is_cadunico', 'is_esocial', 'is_seguro_defeso', 'is_falecido'].forEach((field) => {
       if (socio?.[field] === undefined || socio?.[field] === null) {
         throw new Error(`Contrato invalido em socios: socios[${index}].${field} obrigatorio.`);
       }

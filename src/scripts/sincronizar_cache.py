@@ -94,8 +94,30 @@ MODULOS = sorted([
     {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio"},
     {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado"},
     {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido"},
-    {"id": 6, "name": "CNPJ parquets", "func": _sync_cnpj_parquets, "peso": "muito pesado"},
+    {"id": 6, "name": "CNPJ parquets", "func": _sync_cnpj_parquets, "peso": "muito pesado", "ordem": 11.5},
 ], key=lambda modulo: modulo["id"])
+
+DEPENDENCIAS_MODULOS = {
+    6: {10, 11},
+    11: {10},
+}
+
+
+def _incluir_dependencias(selecionados: list[dict]) -> list[dict]:
+    ids = {modulo["id"] for modulo in selecionados}
+    pendentes = list(ids)
+
+    while pendentes:
+        modulo_id = pendentes.pop()
+        for dependencia_id in DEPENDENCIAS_MODULOS.get(modulo_id, set()):
+            if dependencia_id not in ids:
+                ids.add(dependencia_id)
+                pendentes.append(dependencia_id)
+
+    return sorted(
+        [modulo for modulo in MODULOS if modulo["id"] in ids],
+        key=lambda modulo: modulo.get("ordem", modulo["id"]),
+    )
 
 
 def exibir_menu():
@@ -114,7 +136,7 @@ def selecionar_modulos() -> list[dict]:
     entrada = input("\nDigite os numeros separados por virgula (ex: 1,3,7): ").strip()
 
     if entrada == "0":
-        return sorted(MODULOS, key=lambda m: m.get("ordem", m["id"]))
+        return _incluir_dependencias(MODULOS)
 
     ids_validos = {m["id"] for m in MODULOS}
     selecionados = []
@@ -136,7 +158,7 @@ def selecionar_modulos() -> list[dict]:
     if erros:
         print(f"\nAviso: opcoes ignoradas (invalidas): {', '.join(erros)}")
 
-    return sorted(selecionados, key=lambda m: m.get("ordem", m["id"]))
+    return _incluir_dependencias(selecionados)
 
 
 def perguntar_params(selecionados: list[dict]) -> None:

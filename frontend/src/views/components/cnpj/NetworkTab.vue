@@ -122,6 +122,7 @@ const readAlertNodes = () => {
         is_falecido: node.data("is_falecido"),
         is_cadunico: node.data("is_cadunico"),
         is_esocial: node.data("is_esocial"),
+        is_seguro_defeso: node.data("is_seguro_defeso"),
         is_cnae_farmacia_ausente: node.data("is_cnae_farmacia_ausente"),
         is_par: node.data("is_par"),
         qtd_processos_par: node.data("qtd_processos_par"),
@@ -145,6 +146,7 @@ const networkAlertGroups = computed(() => {
       is_falecido: isTruthyFlag(node.is_falecido),
       is_cadunico: isTruthyFlag(node.is_cadunico),
       is_esocial: isTruthyFlag(node.is_esocial),
+      is_seguro_defeso: isTruthyFlag(node.is_seguro_defeso),
     }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
   const companies = alertNodes
@@ -188,6 +190,12 @@ const networkAlertGroups = computed(() => {
       label: "eSocial",
       icon: "legend-esocial-ring",
       items: people.filter((node) => node.is_esocial),
+    },
+    {
+      key: "seguro-defeso",
+      label: "Seguro Defeso",
+      icon: "legend-seguro-defeso-ring",
+      items: people.filter((node) => node.is_seguro_defeso),
     },
   ].filter((group) => group.items.length > 0);
 });
@@ -1433,6 +1441,7 @@ async function buildGraph(data, { presentationState = null } = {}) {
           is_falecido: isTruthyFlag(n.is_falecido),
           is_cadunico: isTruthyFlag(n.is_cadunico),
           is_esocial: isTruthyFlag(n.is_esocial),
+          is_seguro_defeso: isTruthyFlag(n.is_seguro_defeso),
           is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
           is_par: isTruthyFlag(n.is_par),
           qtd_processos_par: n.qtd_processos_par || 0,
@@ -1592,6 +1601,7 @@ async function expandNode(nodeId) {
             is_falecido: isTruthyFlag(n.is_falecido),
             is_cadunico: isTruthyFlag(n.is_cadunico),
             is_esocial: isTruthyFlag(n.is_esocial),
+            is_seguro_defeso: isTruthyFlag(n.is_seguro_defeso),
             is_cnae_farmacia_ausente: isTruthyFlag(n.is_cnae_farmacia_ausente),
             is_par: isTruthyFlag(n.is_par),
             qtd_processos_par: n.qtd_processos_par || 0,

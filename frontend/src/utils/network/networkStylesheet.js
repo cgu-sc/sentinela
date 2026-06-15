@@ -1,4 +1,4 @@
-import { NETWORK_NODE_STYLES } from "./networkConstants";
+import { NETWORK_ALERT_COLORS, NETWORK_NODE_STYLES } from "./networkConstants";
 
 export function buildNetworkStylesheet() {
   const styles = [];
@@ -118,6 +118,16 @@ export function buildNetworkStylesheet() {
       "shadow-opacity": 0.85,
       "shadow-offset-x": 0,
       "shadow-offset-y": 0,
+      "z-index": 11,
+    },
+  });
+
+  styles.push({
+    selector: "node.seguro-defeso-pf",
+    style: {
+      "underlay-color": NETWORK_ALERT_COLORS.SEGURO_DEFESO,
+      "underlay-padding": 5,
+      "underlay-opacity": 0.62,
       "z-index": 11,
     },
   });

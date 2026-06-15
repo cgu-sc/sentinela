@@ -38,6 +38,10 @@ export function isEsocialPersonNode(node) {
   return (node?.type || "PF") === "PF" && isTruthyFlag(node?.is_esocial);
 }
 
+export function isSeguroDefesoPersonNode(node) {
+  return (node?.type || "PF") === "PF" && isTruthyFlag(node?.is_seguro_defeso);
+}
+
 export function isParCompanyNode(node) {
   return node?.type !== "PF" && isTruthyFlag(node?.is_par);
 }
@@ -48,6 +52,7 @@ export function getNodeClasses(node) {
     isParCompanyNode(node) ? "par-company" : "",
     isCadunicoPersonNode(node) ? "cadunico-pf" : "",
     isEsocialPersonNode(node) ? "esocial-pf" : "",
+    isSeguroDefesoPersonNode(node) ? "seguro-defeso-pf" : "",
     isDeceasedPersonNode(node) ? "deceased-pf" : "",
   ]
     .filter(Boolean)

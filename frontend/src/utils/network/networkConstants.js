@@ -14,6 +14,10 @@ export const NETWORK_RISK_BORDER_COLORS = {
   CRITICAL: RISK_COLORS.CRITICAL,
 };
 
+export const NETWORK_ALERT_COLORS = {
+  SEGURO_DEFESO: PALETTE.blue[500],
+};
+
 export const NETWORK_NODE_STYLES = {
   PJ_ALVO: {
     bg: "#ef4444",

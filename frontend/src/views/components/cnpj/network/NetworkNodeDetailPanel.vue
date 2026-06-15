@@ -217,6 +217,15 @@ function openEstablishmentDetail() {
         </div>
 
         <div
+          v-if="node.type === 'PF' && node.is_seguro_defeso"
+          class="panel-field seguro-defeso-field"
+        >
+          <i class="pi pi-wallet" />
+          <span>Seguro Defeso</span>
+          <span class="seguro-defeso-badge">Beneficiário</span>
+        </div>
+
+        <div
           v-if="node.type !== 'PF' && node.is_cnae_farmacia_ausente"
           class="panel-field cnae-alert-field"
         >
@@ -607,6 +616,7 @@ function openEstablishmentDetail() {
 
 .cadunico-badge,
 .esocial-badge,
+.seguro-defeso-badge,
 .cnae-alert-badge,
 .par-alert-badge,
 .deceased-badge {
@@ -637,6 +647,20 @@ function openEstablishmentDetail() {
   border: 1px solid color-mix(in srgb, var(--status-success) 44%, transparent);
   background: color-mix(in srgb, var(--status-success) 14%, transparent);
   color: color-mix(in srgb, var(--status-success) 86%, var(--text-color));
+}
+
+.seguro-defeso-field {
+  color: color-mix(in srgb, var(--status-info) 78%, var(--text-color));
+}
+
+.seguro-defeso-field i {
+  color: var(--status-info);
+}
+
+.seguro-defeso-badge {
+  border: 1px solid color-mix(in srgb, var(--status-info) 44%, transparent);
+  background: color-mix(in srgb, var(--status-info) 14%, transparent);
+  color: color-mix(in srgb, var(--status-info) 86%, var(--text-color));
 }
 
 .cnae-alert-field {

@@ -24,7 +24,6 @@ const emit = defineEmits(["preview", "clear-preview", "select"]);
       <div class="alert-group-header">
         <span :class="group.icon"></span>
         <span>{{ group.label }}</span>
-        <span class="alert-count">{{ group.items.length }}</span>
       </div>
       <button
         v-for="item in group.items"
@@ -110,6 +109,16 @@ const emit = defineEmits(["preview", "clear-preview", "select"]);
   flex-shrink: 0;
 }
 
+.legend-seguro-defeso-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 3px solid var(--status-info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-info) 30%, transparent);
+  background: color-mix(in srgb, var(--status-info) 18%, transparent);
+  flex-shrink: 0;
+}
+
 .legend-cnae-alert {
   width: 14px;
   height: 14px;
@@ -178,20 +187,6 @@ const emit = defineEmits(["preview", "clear-preview", "select"]);
   width: 11px;
   height: 3px;
   top: 38%;
-}
-
-.alert-count {
-  margin-left: auto;
-  min-width: 1.1rem;
-  height: 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
-  color: var(--text-secondary);
-  font-size: 0.58rem;
-  font-weight: 800;
 }
 
 .alert-person {

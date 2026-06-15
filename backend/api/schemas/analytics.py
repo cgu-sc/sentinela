@@ -578,6 +578,7 @@ class SocioSchema(BaseModel):
     is_falecido: Optional[bool] = False
     is_cadunico: bool
     is_esocial: bool
+    is_seguro_defeso: bool
 
 class SociosResponse(BaseModel):
     cnpj: str
@@ -628,6 +629,7 @@ class NetworkNodeSchema(BaseModel):
     is_falecido: Optional[bool] = False
     is_cadunico: bool
     is_esocial: bool
+    is_seguro_defeso: bool
     is_cnae_farmacia_ausente: bool
     is_par: Optional[bool] = False
     qtd_processos_par: Optional[int] = 0

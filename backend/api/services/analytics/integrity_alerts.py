@@ -58,6 +58,21 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
                 )
             )
 
+        if socio.is_seguro_defeso:
+            alertas.append(
+                IntegrityAlertSchema(
+                    tipo="socio_seguro_defeso",
+                    escopo="socio",
+                    entidade_id=socio.cpf_cnpj_socio,
+                    entidade_nome=entidade_nome,
+                    severidade="atencao",
+                    titulo="Sócio beneficiário do Seguro Defeso",
+                    fonte="Seguro Defeso",
+                    data_referencia=socios_response.data_processamento,
+                    aba_destino="socios",
+                )
+            )
+
     alertas.sort(
         key=lambda alerta: (
             0 if alerta.severidade == "critico" else 1,

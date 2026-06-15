@@ -15,7 +15,6 @@ const dialogVisible = computed({
 });
 
 const alerts = computed(() => props.data?.alertas ?? []);
-const severityLabel = (severity) => severity === "critico" ? "Crítico" : "Atenção";
 
 const scopeLabel = (scope) => {
   if (scope === "cnpj") return "Estabelecimento";
@@ -69,12 +68,6 @@ const navigate = (alert) => {
         <div class="integrity-alert-content">
           <div class="integrity-alert-heading">
             <span class="integrity-alert-title">{{ alert.titulo }}</span>
-            <span
-              class="integrity-severity"
-              :class="`integrity-severity--${alert.severidade}`"
-            >
-              {{ severityLabel(alert.severidade) }}
-            </span>
           </div>
           <span class="integrity-alert-entity">
             {{ scopeLabel(alert.escopo) }}: {{ alert.entidade_nome }}
@@ -158,29 +151,6 @@ const navigate = (alert) => {
 .integrity-alert-meta {
   font-size: 0.72rem;
   color: var(--text-muted);
-}
-
-.integrity-severity {
-  min-width: 62px;
-  padding: 0.14rem 0.35rem;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font-size: 0.62rem;
-  font-weight: 600;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.integrity-severity--critico {
-  color: var(--risk-critical);
-  border-color: color-mix(in srgb, var(--risk-critical) 35%, transparent);
-  background: color-mix(in srgb, var(--risk-critical) 10%, transparent);
-}
-
-.integrity-severity--atencao {
-  color: var(--risk-medium);
-  border-color: color-mix(in srgb, var(--risk-medium) 35%, transparent);
-  background: color-mix(in srgb, var(--risk-medium) 10%, transparent);
 }
 
 .integrity-alert-action {

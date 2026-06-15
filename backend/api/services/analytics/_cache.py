@@ -264,7 +264,7 @@ def sync_network(cnpj: str) -> None:
             n2_n4_node_columns = {
                 "id", "label", "type", "network_level", "razao_social", "nome_socio",
                 "nome_fantasia", "classification_version", "is_falecido", "is_cadunico",
-                "is_esocial", "is_cnae_farmacia_ausente", "id_cnae_principal",
+                "is_esocial", "is_seguro_defeso", "is_cnae_farmacia_ausente", "id_cnae_principal",
                 "cnae_principal", "id_cnae_secundario", "cnae_secundario", "is_par", "qtd_processos_par",
                 "par_situacoes", "par_primeira_instauracao", "par_ultima_instauracao",
                 "par_ultima_conclusao"
@@ -273,7 +273,7 @@ def sync_network(cnpj: str) -> None:
             edge_columns = {"id", "source", "target", "type", "network_level", "is_ativo", "data_entrada_sociedade", "data_exclusao_sociedade"}
             if not has_required_columns(N2_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N2 nodes cache com schema antigo")
-            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "network_level", "nome_socio", "is_falecido", "is_cadunico", "is_esocial", "is_cnae_farmacia_ausente", *par_node_columns}):
+            if not has_required_columns(N3_NODES_PATH, {"id", "label", "type", "network_level", "nome_socio", "is_falecido", "is_cadunico", "is_esocial", "is_seguro_defeso", "is_cnae_farmacia_ausente", *par_node_columns}):
                 raise ValueError("N3 nodes cache com schema antigo")
             if not has_required_columns(N4_NODES_PATH, n2_n4_node_columns):
                 raise ValueError("N4 nodes cache com schema antigo")
@@ -334,6 +334,7 @@ def sync_network(cnpj: str) -> None:
                     "is_falecido": False,
                     "is_cadunico": False,
                     "is_esocial": False,
+                    "is_seguro_defeso": False,
                     "is_cnae_farmacia_ausente": False,
                     **get_par_fields(representative_id),
                 }
@@ -411,6 +412,7 @@ def sync_network(cnpj: str) -> None:
                 "is_falecido": False,
                 "is_cadunico": False,
                 "is_esocial": False,
+                "is_seguro_defeso": False,
                 "is_cnae_farmacia_ausente": bool(r["is_cnae_farmacia_ausente"]),
                 **get_par_fields(cnpj),
             }
@@ -421,7 +423,8 @@ def sync_network(cnpj: str) -> None:
                 "id_cnae_principal": None, "cnae_principal": None, "id_cnae_secundario": None,
                 "cnae_secundario": None, "municipio": None, "uf": None,
                 "situacao_rf": None, "classification_version": COMPANY_CLASSIFICATION_VERSION,
-                "is_falecido": False, "is_cadunico": False, "is_esocial": False, "is_cnae_farmacia_ausente": False,
+                "is_falecido": False, "is_cadunico": False, "is_esocial": False,
+                "is_seguro_defeso": False, "is_cnae_farmacia_ausente": False,
                 **get_par_fields(cnpj),
             }
 
@@ -451,6 +454,7 @@ def sync_network(cnpj: str) -> None:
                     "is_falecido": bool(s.get("is_falecido", 0)),
                     "is_cadunico": bool(s["is_cadunico"]),
                     "is_esocial": bool(s["is_esocial"]),
+                    "is_seguro_defeso": bool(s["is_seguro_defeso"]),
                     "is_cnae_farmacia_ausente": False,
                     **get_par_fields(id_socio),
                 }
@@ -512,6 +516,7 @@ def sync_network(cnpj: str) -> None:
                         "is_falecido": False,
                         "is_cadunico": False,
                         "is_esocial": False,
+                        "is_seguro_defeso": False,
                         "is_cnae_farmacia_ausente": bool(cnae_info.get("is_cnae_farmacia_ausente", False)),
                         **get_par_fields(cnpj_ext),
                     }
@@ -574,6 +579,7 @@ def sync_network(cnpj: str) -> None:
                         "is_falecido": bool(row.get("is_falecido", 0)),
                         "is_cadunico": bool(row["is_cadunico"]),
                         "is_esocial": bool(row["is_esocial"]),
+                        "is_seguro_defeso": bool(row["is_seguro_defeso"]),
                         "is_cnae_farmacia_ausente": False,
                         **get_par_fields(id_socio),
                     }
@@ -609,7 +615,8 @@ def sync_network(cnpj: str) -> None:
             "id", "label", "type", "network_level", "razao_social", "nome_socio", "nome_fantasia",
             "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
             "municipio", "uf", "situacao_rf", "classification_version",
-            "is_falecido", "is_cadunico", "is_esocial", "is_cnae_farmacia_ausente",
+            "is_falecido", "is_cadunico", "is_esocial", "is_seguro_defeso",
+            "is_cnae_farmacia_ausente",
             "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
             "par_ultima_instauracao", "par_ultima_conclusao"
         ]
@@ -621,6 +628,7 @@ def sync_network(cnpj: str) -> None:
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_esocial": pl.Boolean,
+            "is_seguro_defeso": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
             "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
             "par_primeira_instauracao": pl.Date, "par_ultima_instauracao": pl.Date,
@@ -645,7 +653,8 @@ def sync_network(cnpj: str) -> None:
         # ── Salva Parquets de Expansão (On-Demand) ──────────────────────────
         n3_node_columns = [
             "id", "label", "type", "network_level", "nome_socio", "municipio", "uf",
-            "is_falecido", "is_cadunico", "is_esocial", "is_cnae_farmacia_ausente",
+            "is_falecido", "is_cadunico", "is_esocial", "is_seguro_defeso",
+            "is_cnae_farmacia_ausente",
             "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
             "par_ultima_instauracao", "par_ultima_conclusao"
         ]
@@ -653,6 +662,7 @@ def sync_network(cnpj: str) -> None:
             "id": pl.Utf8, "label": pl.Utf8, "type": pl.Utf8, "network_level": pl.Utf8, "nome_socio": pl.Utf8,
             "municipio": pl.Utf8, "uf": pl.Utf8, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_esocial": pl.Boolean,
+            "is_seguro_defeso": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
             "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
             "par_primeira_instauracao": pl.Date, "par_ultima_instauracao": pl.Date,
@@ -707,6 +717,7 @@ def sync_network(cnpj: str) -> None:
                         "is_falecido": False,
                         "is_cadunico": False,
                         "is_esocial": False,
+                        "is_seguro_defeso": False,
                         "is_cnae_farmacia_ausente": bool(cnae_info.get("is_cnae_farmacia_ausente", False)),
                         **get_par_fields(cnpj_ext),
                     }
@@ -737,7 +748,8 @@ def sync_network(cnpj: str) -> None:
             "id", "label", "type", "network_level", "razao_social", "nome_socio", "nome_fantasia",
             "id_cnae_principal", "cnae_principal", "id_cnae_secundario", "cnae_secundario",
             "municipio", "uf", "situacao_rf", "classification_version",
-            "is_falecido", "is_cadunico", "is_esocial", "is_cnae_farmacia_ausente",
+            "is_falecido", "is_cadunico", "is_esocial", "is_seguro_defeso",
+            "is_cnae_farmacia_ausente",
             "is_par", "qtd_processos_par", "par_situacoes", "par_primeira_instauracao",
             "par_ultima_instauracao", "par_ultima_conclusao"
         ]
@@ -748,6 +760,7 @@ def sync_network(cnpj: str) -> None:
             "municipio": pl.Utf8, "uf": pl.Utf8, "situacao_rf": pl.Utf8,
             "classification_version": pl.Int16, "is_falecido": pl.Boolean, "is_cadunico": pl.Boolean,
             "is_esocial": pl.Boolean,
+            "is_seguro_defeso": pl.Boolean,
             "is_cnae_farmacia_ausente": pl.Boolean,
             "is_par": pl.Boolean, "qtd_processos_par": pl.Int32, "par_situacoes": pl.Utf8,
             "par_primeira_instauracao": pl.Date, "par_ultima_instauracao": pl.Date,

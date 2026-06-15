@@ -31,6 +31,10 @@ defineProps({
     <span class="legend-label">eSocial</span>
   </div>
   <div class="legend-item">
+    <span class="legend-seguro-defeso-ring"></span>
+    <span class="legend-label">Seguro Defeso</span>
+  </div>
+  <div class="legend-item">
     <span class="legend-deceased-cross"></span>
     <span class="legend-label">Falecido</span>
   </div>
@@ -83,6 +87,16 @@ defineProps({
   border: 3px solid var(--status-success);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--status-success) 18%, transparent);
   background: color-mix(in srgb, var(--status-success) 20%, transparent);
+  flex-shrink: 0;
+}
+
+.legend-seguro-defeso-ring {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 3px solid var(--status-info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-info) 30%, transparent);
+  background: color-mix(in srgb, var(--status-info) 18%, transparent);
   flex-shrink: 0;
 }
 

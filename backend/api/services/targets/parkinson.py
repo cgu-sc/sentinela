@@ -44,12 +44,6 @@ _TARGETS = {
         patologia="DIABETES",
         regra_clinica="IDADE_MENOR_20",
     ),
-    "hipertensao_menor_20": ClinicalTargetConfig(
-        key="hipertensao_menor_20",
-        label="Hipertensao em menores de 20 anos",
-        patologia="HIPERTENSÃO",
-        regra_clinica="IDADE_MENOR_20",
-    ),
 }
 
 _CLINICO_REQUIRED = {
@@ -584,7 +578,3 @@ def get_parkinson_menor_50(**kwargs) -> ClinicalTargetResponse:
 
 def get_diabetes_menor_20(**kwargs) -> ClinicalTargetResponse:
     return _get_clinical_target(_TARGETS["diabetes_menor_20"], **kwargs)
-
-
-def get_hipertensao_menor_20(**kwargs) -> ClinicalTargetResponse:
-    return _get_clinical_target(_TARGETS["hipertensao_menor_20"], **kwargs)

@@ -63,7 +63,6 @@ export const API_ENDPOINTS = {
   analyticsIndicadoresAnaliseCnpjs: `${BASE_URL}/api/v1/analytics/indicadores-analise/cnpjs`,
   targetParkinsonMenor50: `${BASE_URL}/api/v1/targets/parkinson-menor-50`,
   targetDiabetesMenor20: `${BASE_URL}/api/v1/targets/diabetes-menor-20`,
-  targetHipertensaoMenor20: `${BASE_URL}/api/v1/targets/hipertensao-menor-20`,
   analyticsClientPerf: `${BASE_URL}/api/v1/analytics/client-perf`,
   cacheRefresh: `${BASE_URL}/api/v1/cache/refresh`,
   cacheStatus: `${BASE_URL}/api/v1/cache/status`,

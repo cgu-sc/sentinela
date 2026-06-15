@@ -352,6 +352,10 @@ def get_cnpj_bootstrap(
         total_municipio=_optional_int(risco.get("total_municipio"), "total_municipio"),
     )
 
+    cadastro_payload = dict(cadastro_row)
+    cadastro_payload["is_cnae_incompativel_farmaceutico"] = is_cnae_incompativel
+    cadastro_payload["is_cnae_farmacia_ausente"] = is_cnae_incompativel
+
     return CnpjBootstrapResponse(
         status=CnpjAccessStatusSchema(
             cnpj=clean_cnpj,
@@ -363,9 +367,7 @@ def get_cnpj_bootstrap(
             uf=cadastro_row.get("uf"),
         ),
         cadastro=DadosFarmaciaSchema(
-            **cadastro_row,
-            is_cnae_incompativel_farmaceutico=is_cnae_incompativel,
-            is_cnae_farmacia_ausente=is_cnae_incompativel,
+            **cadastro_payload,
             cnaes_secundarios=get_cnaes_secundarios_farmacia(clean_cnpj),
         ),
         cnpj_data=cnpj_data,

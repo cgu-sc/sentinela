@@ -732,9 +732,9 @@ const openIntegrityDialog = () => {
 }
 
 .integrity-preview--critico {
-  color: var(--risk-critical);
-  border-color: color-mix(in srgb, var(--risk-critical) 30%, transparent);
-  background: color-mix(in srgb, var(--risk-critical) 9%, transparent);
+  color: var(--risk-high);
+  border-color: color-mix(in srgb, var(--risk-high) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-high) 9%, transparent);
 }
 
 .integrity-preview--atencao {

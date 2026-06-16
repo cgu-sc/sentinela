@@ -23,6 +23,7 @@ const showClinicalDialog = ref(false);
 const showGenericIndicatorDialog = ref(false);
 const selectedGenericIndicatorKey = ref(null);
 const loadingGenericIndicatorKey = ref(null);
+const loadingSpecialIndicatorKey = ref(null);
 
 const formattedPeriod = computed(() => {
   const [start, end] = filterStore.periodo ?? [];
@@ -76,16 +77,41 @@ function normalizeCnpj(value) {
   return String(value ?? '').replace(/\D/g, '');
 }
 
-function openGeographicDialog() {
+async function openGeographicDialog() {
   const cnpj = normalizeCnpj(route.params.cnpj);
   if (!cnpj) return;
-  showGeographicDialog.value = true;
+  const [start, end] = filterStore.periodo ?? [];
+  const inicio = start ? toLocalISO(start) : null;
+  const fim = end ? toLocalISO(end) : null;
+  loadingSpecialIndicatorKey.value = 'dispersao_geografica';
+  try {
+    await Promise.all([
+      cnpjDetailStore.fetchGeograficoOrigemUf(cnpj, inicio, fim),
+      cnpjDetailStore.fetchGeograficoBenchmarkLocal(cnpj, inicio, fim),
+    ]);
+    showGeographicDialog.value = true;
+  } finally {
+    if (loadingSpecialIndicatorKey.value === 'dispersao_geografica') {
+      loadingSpecialIndicatorKey.value = null;
+    }
+  }
 }
 
-function openClinicalDialog() {
+async function openClinicalDialog() {
   const cnpj = normalizeCnpj(route.params.cnpj);
   if (!cnpj) return;
-  showClinicalDialog.value = true;
+  const [start, end] = filterStore.periodo ?? [];
+  const inicio = start ? toLocalISO(start) : null;
+  const fim = end ? toLocalISO(end) : null;
+  loadingSpecialIndicatorKey.value = 'incompatibilidade_patologica';
+  try {
+    await cnpjDetailStore.fetchIncompatibilidadePatologica(cnpj, inicio, fim);
+    showClinicalDialog.value = true;
+  } finally {
+    if (loadingSpecialIndicatorKey.value === 'incompatibilidade_patologica') {
+      loadingSpecialIndicatorKey.value = null;
+    }
+  }
 }
 
 function canDetailIndicator(key, indicadorData = null) {
@@ -99,11 +125,11 @@ function canDetailIndicator(key, indicadorData = null) {
 
 function openIndicatorDetail(key) {
   if (key === 'dispersao_geografica') {
-    openGeographicDialog();
+    void openGeographicDialog();
     return;
   }
   if (key === 'incompatibilidade_patologica') {
-    openClinicalDialog();
+    void openClinicalDialog();
     return;
   }
   if (GENERIC_INDICATOR_DETAIL_KEYS.includes(key)) {
@@ -364,7 +390,7 @@ function riscoTextStyle(indicadorData) {
     />
 
     <transition name="ind-overlay-fade">
-      <div v-if="loadingGenericIndicatorKey" class="ind-loading-overlay" aria-live="polite" aria-busy="true">
+      <div v-if="loadingGenericIndicatorKey || loadingSpecialIndicatorKey" class="ind-loading-overlay" aria-live="polite" aria-busy="true">
         <div class="ind-loading-overlay__box">
           <i class="pi pi-spin pi-spinner" />
           <span>Carregando detalhamento...</span>

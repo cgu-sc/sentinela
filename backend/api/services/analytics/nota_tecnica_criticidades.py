@@ -647,11 +647,11 @@ def _format_risco_regional(value: Any) -> str:
 
 def _indicador_valor_farmacia_header(formato: str) -> str:
     if formato == "val":
-        return "Valor farmácia"
+        return "Valor Farmácia"
     if formato in {"pct", "pct3"}:
-        return "Percentual farmácia"
+        return "Percentual Farmácia"
     if formato == "dec":
-        return "Índice farmácia"
+        return "Índice Farmácia"
     raise RuntimeError(f"Formato de indicador critico nao mapeado para cabecalho da Nota Tecnica: {formato}")
 
 
@@ -847,35 +847,36 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         p_title,
         f'Tabela {tabela_num} - Enquadramento regional da farmácia auditada no indicador {context["indicador_label"]}',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
     table = doc.add_table(rows=2, cols=7)
     table.style = 'Table Grid'
+    metric_col_width = Inches(0.89)
     _set_table_fixed_widths(
         table,
-        [Inches(1.65), Inches(1.05), Inches(1.15), Inches(0.85), Inches(0.75), Inches(0.95), Inches(0.60)],
+        [Inches(1.65), metric_col_width, metric_col_width, metric_col_width, metric_col_width, metric_col_width, metric_col_width],
     )
 
     headers = [
         "Indicador",
         (
-            "Percentual do valor"
+            "Percentual Do Valor"
             if context["indicador_key"] == "dispersao_geografica"
             else _indicador_valor_farmacia_header(context["formato"])
         ),
-        "Mediana região",
-        "Risco vs. região",
-        "Posição região",
-        "Núm. Farmácias Reg.",
-        "Percentil reg.",
+        "Mediana Região",
+        "Risco Vs. Região",
+        "Posição Região",
+        "Farmácias Região",
+        "Percentil Região",
     ]
     for idx, header in enumerate(headers):
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=7, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     values = [
@@ -892,7 +893,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
         _cell_bg(cell, 'F8FAFC')
-        _run(para, value, color='0F172A', size=7)
+        _run(para, value, color='0F172A', size=9)
 
     for row in table.rows:
         for cell in row.cells:
@@ -909,7 +910,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
         p_foot,
         f'Fonte: Sentinela, a partir da matriz de risco consolidada. Posição e percentil calculados pelo valor do indicador entre as farmácias com dado válido na região de saúde ID {context["id_regiao_saude"]}.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -929,7 +930,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
         p_title,
         f'Tabela {tabela_num} - Indicadores classificados como críticos na matriz de risco do Sentinela',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -942,7 +943,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='FFFFFF', size=7, bold=True)
+        _run(para, header, color='FFFFFF', size=9, bold=True)
         _cell_bg(cell, '1E293B')
 
     for row_idx, row in enumerate(rows, start=1):
@@ -961,10 +962,10 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
             if col_idx == 4:
                 _cell_bg(cell, 'FEE2E2')
-                _run(para, value, color='991B1B', size=7, bold=True)
+                _run(para, value, color='991B1B', size=9, bold=True)
             elif col_idx == 3:
                 _cell_bg(cell, 'FEF2F2')
-                _run(para, value, color='991B1B', size=7, bold=True)
+                _run(para, value, color='991B1B', size=9, bold=True)
             else:
                 _cell_bg(cell, fill)
                 if col_idx == 0 and row.get("bookmark"):
@@ -973,12 +974,12 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
                         value,
                         row["bookmark"],
                         color='1D4ED8',
-                        size=7,
+                        size=9,
                         bold=True,
                         underline=False,
                     )
                 else:
-                    _run(para, value, color='0F172A', size=7, bold=col_idx == 1)
+                    _run(para, value, color='0F172A', size=9, bold=col_idx == 1)
 
     for row in table.rows:
         for cell in row.cells:
@@ -995,7 +996,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
         p_foot,
         'Fonte: Sentinela, a partir da matriz de risco consolidada. O risco regional corresponde ao multiplicador entre o indicador da farmácia e a mediana dos estabelecimentos de sua região de saúde.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -1210,7 +1211,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
         p_title,
         f'Tabela {tabela_num} - Dispensa\u00e7\u00f5es anuais de medicamentos para {item["objeto"]} no per\u00edodo selecionado',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -1235,7 +1236,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=7, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     for row_idx, row in enumerate(evolucao_anual, start=1):
@@ -1256,7 +1257,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
         for col_idx, value in enumerate(values):
             para = table.rows[row_idx].cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=7, bold=col_idx in (2, 5, 7))
+            _run(para, value, color='0F172A', size=9, bold=col_idx in (2, 5, 7))
 
     for row in table.rows:
         for cell in row.cells:
@@ -1273,7 +1274,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
         p_foot,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -1297,7 +1298,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
         p_title,
         f'Tabela {tabela_num} - Comparativo municipal de valores incompatíveis no recorte de {item["titulo"]}, {_format_periodo_anos_item(item)}',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -1313,7 +1314,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=6, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     for row_idx, row in enumerate(resumo, start=1):
@@ -1326,7 +1327,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
         for col_idx, value in enumerate(values):
             para = table.rows[row_idx].cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=7, bold=row_idx == 1 or col_idx in (2, 3))
+            _run(para, value, color='0F172A', size=9, bold=row_idx == 1 or col_idx in (2, 3))
 
     for row in table.rows:
         for cell in row.cells:
@@ -1343,7 +1344,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
         p_foot,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica. Valores consolidados para o período selecionado.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -1366,7 +1367,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
         p_title,
         f'Tabela {tabela_num} - Farmácias do município com maior valor incompatível no recorte de {item["titulo"]}, {_format_periodo_anos_item(item)}',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -1382,7 +1383,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=6, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     for row_idx, row in enumerate(top20, start=1):
@@ -1396,7 +1397,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
         for col_idx, value in enumerate(values):
             para = table.rows[row_idx].cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 2 else WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=6.5, bold=bool(row["is_alvo"]) or col_idx in (3, 4))
+            _run(para, value, color='0F172A', size=9, bold=bool(row["is_alvo"]) or col_idx in (3, 4))
 
     for row in table.rows:
         for cell in row.cells:
@@ -1413,7 +1414,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
         p_foot,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica. Ranking ordenado pelo valor incompatível consolidado no período selecionado.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -1513,7 +1514,7 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
         p_title,
         f'Tabela {tabela_num} - Memória de cálculo da comparação epidemiológica de doença de Parkinson',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -1559,14 +1560,14 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=7, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     for row_idx, row in enumerate(rows, start=1):
         for col_idx, value in enumerate(row):
             para = table.rows[row_idx].cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx == 1 else WD_ALIGN_PARAGRAPH.LEFT
-            _run(para, value, color='0F172A', size=7, bold=col_idx == 1)
+            _run(para, value, color='0F172A', size=9, bold=col_idx == 1)
 
     for row in table.rows:
         for cell in row.cells:
@@ -1583,7 +1584,7 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
         p_foot,
         'Fonte: Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -2733,7 +2734,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
         p_title,
         f'Tabela {tabela_num} - Distribuição das autorizações por UF de residência do paciente vinculadas à Farmácia {razao_social}.',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -2761,7 +2762,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
         cell = table.rows[0].cells[idx]
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=6.8, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(cell, 'E2E8F0')
 
     for row_idx, row in enumerate(rows_tabela, start=1):
@@ -2780,7 +2781,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
             para = cell.paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
             _cell_bg(cell, fill)
-            _run(para, value, color='0F172A', size=6.8, bold=col_idx in (2, 3))
+            _run(para, value, color='0F172A', size=9, bold=col_idx in (2, 3))
 
     for row in table.rows:
         for cell in row.cells:
@@ -2797,7 +2798,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
         p_foot,
         'Fonte: Sentinela, a partir das autorizações registradas no SAV/PFPB e da UF de residência do beneficiário constante na base de CPFs da Receita Federal do Brasil, utilizada no indicador geográfico.',
         color='64748B',
-        size=7,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 

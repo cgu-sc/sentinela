@@ -942,7 +942,8 @@ def generate_nota_tecnica(
 
     # 1. ASSUNTO
     _format_main_heading(doc.add_heading('1. ASSUNTO', level=1))
-    doc.add_paragraph(f'A presente Nota Técnica (NT), de caráter investigativo e sigiloso, tem como objetivo apresentar indícios de irregularidades na atuação da Farmácia {razao_social} (CNPJ {cnpj_fmt}), credenciada junto ao Programa Farmácia Popular do Brasil (PFPB), do Ministério da Saúde (MS), para a dispensação gratuita de medicamentos aos cidadãos.')
+    p_assunto = doc.add_paragraph()
+    _run(p_assunto, f'A presente Nota Técnica (NT), de caráter investigativo e sigiloso, tem como objetivo apresentar indícios de irregularidades na atuação da Farmácia {razao_social} (CNPJ {cnpj_fmt}), credenciada junto ao Programa Farmácia Popular do Brasil (PFPB), do Ministério da Saúde (MS), para a dispensação gratuita de medicamentos aos cidadãos.', color='0F172A', size=10)
 
     # 2. REFERÊNCIAS
     h2 = _format_main_heading(doc.add_heading('2. REFERÊNCIAS', level=1))
@@ -954,7 +955,8 @@ def generate_nota_tecnica(
         'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/legislacao '
         f'(acessado em {date.today().strftime("%d/%m/%Y")}).',
     )
-    doc.add_paragraph('As principais referências normativas e técnicas utilizadas nesta análise incluem:')
+    p_ref_intro = doc.add_paragraph()
+    _run(p_ref_intro, 'As principais referências normativas e técnicas utilizadas nesta análise incluem:', color='0F172A', size=10)
     ref_list = [
         'Lei nº 10.858, de 06.05.2004, que instituiu o Programa Farmácia Popular do Brasil (PFPB);',
         'Decreto nº 5.090, de 20.05.2004, que regulamentou o PFPB;',
@@ -966,7 +968,9 @@ def generate_nota_tecnica(
         'Relatório de Apuração CGU nº 823121, publicado em 04.01.2024;',
         'Portaria GM/MS nº 6.613, de 13.02.2025, que extinguiu a modalidade de copagamento do Programa.',
     ]
-    for ref in ref_list: doc.add_paragraph(ref, style='List Bullet')
+    for ref in ref_list:
+        p_ref = doc.add_paragraph(style='List Bullet')
+        _run(p_ref, ref, color='0F172A', size=10)
 
     # ── 6. Seção 3: Introdução (Sem rodapé específico) ──────────────────
     sec_intro = doc.add_section()
@@ -978,21 +982,21 @@ def generate_nota_tecnica(
     # 3. INTRODUÇÃO
     _format_main_heading(doc.add_heading('3. INTRODUÇÃO', level=1))
     p_intro_contexto = doc.add_paragraph()
-    _run(p_intro_contexto, 'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia ', color='0F172A', size=11)
-    _run(p_intro_contexto, razao_social, color='334155', size=11, bold=True)
-    _run(p_intro_contexto, f' (CNPJ {cnpj_fmt}), no período de ', color='0F172A', size=11)
-    _run(p_intro_contexto, periodo_txt, color='334155', size=11, bold=True)
-    _run(p_intro_contexto, '.', color='0F172A', size=11)
+    _run(p_intro_contexto, 'No âmbito dos trabalhos de monitoramento e avaliação dos gastos do Ministério da Saúde com o Programa Farmácia Popular do Brasil, a presente Nota Técnica (NT) trata de indícios de fraudes cometidas pela Farmácia ', color='0F172A', size=10)
+    _run(p_intro_contexto, razao_social, color='334155', size=10, bold=True)
+    _run(p_intro_contexto, f' (CNPJ {cnpj_fmt}), no período de ', color='0F172A', size=10)
+    _run(p_intro_contexto, periodo_txt, color='334155', size=10, bold=True)
+    _run(p_intro_contexto, '.', color='0F172A', size=10)
     
     p_intro = doc.add_paragraph()
-    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, sintetizada no item 4 dessa NT e consignada no Relatório de Auditoria nº 823121 (', color='0F172A', size=11)
+    _run(p_intro, 'A partir da metodologia desenvolvida pela CGU, sintetizada no item 4 dessa NT e consignada no Relatório de Auditoria nº 823121 (', color='0F172A', size=10)
     _add_external_hyperlink(
         p_intro,
         'Acesse aqui',
         'https://cgugovbr.sharepoint.com/:b:/r/sites/intracgu-sc/Documentos%20Compartilhados/Sentinela/Relat%C3%B3rio_PFPB.pdf?csf=1&web=1&e=MBdcS8',
-        size=11,
+        size=10,
     )
-    _run(p_intro, f'), foi identificada, conforme item 6 e detalhamento contido no ANEXO {anexo_memoria_num} desta NT, ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=11)
+    _run(p_intro, f'), foi identificada, conforme item 6 e detalhamento contido no ANEXO {anexo_memoria_num} desta NT, ausência significativa de estoque compatível com as vendas (distribuições) de medicamentos realizadas à população, denominada pela CGU como “vendas sem comprovação”, o que sugere a possibilidade de fraudes cometidas pelo estabelecimento por meio do registro fictício de dispensações de medicamentos.', color='0F172A', size=10)
     
     snippets = [f'[Subitem 6.1] evolução atípica das transferências do Programa e das possíveis “vendas sem comprovação” realizadas pela Farmácia {razao_social}']
     criticidade_start = 1
@@ -1007,26 +1011,29 @@ def generate_nota_tecnica(
     
     if len(snippets) <= 4:
         texto_snippets = ("; ".join(snippets[:-1]) + "; e " + snippets[-1]) if len(snippets) > 1 else snippets[0]
-        doc.add_paragraph(f'Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”, como: {texto_snippets}.')
+        p_snippets_intro = doc.add_paragraph()
+        _run(p_snippets_intro, f'Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”, como: {texto_snippets}.', color='0F172A', size=10)
     else:
-        doc.add_paragraph('Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”. Em síntese, destacam-se:')
+        p_snippets_intro = doc.add_paragraph()
+        _run(p_snippets_intro, 'Além disso, a presente NT revela criticidades que corroboram o achado principal de “vendas sem comprovação”. Em síntese, destacam-se:', color='0F172A', size=10)
         for snippet in snippets:
             p_snippet = doc.add_paragraph(style='List Bullet')
             p_snippet.paragraph_format.space_after = Pt(2)
-            _run(p_snippet, f'{snippet}.', color='0F172A', size=9)
+            _run(p_snippet, f'{snippet}.', color='0F172A', size=10)
     if crm_evidencias_comp:
         if len(snippets) > 4:
             doc.add_paragraph()
-        doc.add_paragraph(
-            f'Adicionalmente, o ANEXO {anexo_crm_num} desta Nota Técnica traz evidências complementares relacionadas ao uso de CRMs no SAV, incluindo volume diário atípico de prescrições por CRM, volume de autorizações em horário anômalo, concentração temporal de autorizações vinculadas a um mesmo CRM, episódios de autorizações concentradas envolvendo múltiplos CRMs e CRMs de interesse com alertas operacionais associados ao estabelecimento, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.'
-        )
-    doc.add_paragraph('A NT traz ainda, em seu item 5, análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.')
+        p_crm_intro = doc.add_paragraph()
+        _run(p_crm_intro, f'Adicionalmente, o ANEXO {anexo_crm_num} desta Nota Técnica traz evidências complementares relacionadas ao uso de CRMs no SAV, incluindo volume diário atípico de prescrições por CRM, volume de autorizações em horário anômalo, concentração temporal de autorizações vinculadas a um mesmo CRM, episódios de autorizações concentradas envolvendo múltiplos CRMs e CRMs de interesse com alertas operacionais associados ao estabelecimento, relevantes para a compreensão dos padrões de prescrição e dispensação observados no estabelecimento auditado.', color='0F172A', size=10)
+    p_item5_intro = doc.add_paragraph()
+    _run(p_item5_intro, 'A NT traz ainda, em seu item 5, análise da empresa em relação aos seus sócios, capital social, porte, situação cadastral junto à Receita Federal do Brasil e ao PFPB, bem como da compatibilidade entre o número de empregados e o volume de recursos recebidos do MS.', color='0F172A', size=10)
 
     fontes = ['Cadastro Nacional de Pessoas Jurídicas (CNPJ) e Cadastro de Pessoa Física (CPF) da Receita Federal do Brasil', 'Sistema de Escrituração Digital das Obrigações Fiscais, Previdenciárias e Trabalhistas (eSocial)', 'Sistema Integrado de Administração Financeira do Governo Federal (SIAFI)']
     if 'polimedicamento' in criticos or 'teto' in criticos: fontes.append('dados demográficos oficiais fornecidos pelo Instituto Brasileiro de Geografia e Estatística (IBGE)')
     if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
     fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
-    doc.add_paragraph(f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.')
+    p_fontes = doc.add_paragraph()
+    _run(p_fontes, f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.', color='0F172A', size=10)
 
     nota_pfpb_2 = (
         'Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, '
@@ -1113,34 +1120,40 @@ def generate_nota_tecnica(
     sec_42.left_margin = Inches(0.7); sec_42.right_margin = Inches(0.7)
 
     doc.add_heading('4.2. Sobre a metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', level=2)
-    doc.add_paragraph('O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a capilaridade de mais de 30 mil estabelecimentos credenciados.')
+    p_42_intro = doc.add_paragraph()
+    _run(p_42_intro, 'O crescimento exponencial do PFPB, com gastos que saltaram de R$ 34,7 milhões em 2006 para patamares próximos a R$ 6 bilhões em 2025, impôs desafios complexos ao controle governamental, dada a capilaridade de mais de 30 mil estabelecimentos credenciados.', color='0F172A', size=10)
     p_sent = doc.add_paragraph()
-    _run(p_sent, 'Para enfrentar essa realidade, a CGU elaborou o ', color='0F172A', size=11)
-    _run(p_sent, 'Relatório de Apuração nº 823121', color='334155', size=11, bold=True)
-    _run(p_sent, ' (', color='0F172A', size=11)
+    _run(p_sent, 'Para enfrentar essa realidade, a CGU elaborou o ', color='0F172A', size=10)
+    _run(p_sent, 'Relatório de Apuração nº 823121', color='334155', size=10, bold=True)
+    _run(p_sent, ' (', color='0F172A', size=10)
     _add_external_hyperlink(
         p_sent,
         'Acesse aqui',
         'https://cgugovbr.sharepoint.com/:b:/r/sites/intracgu-sc/Documentos%20Compartilhados/Sentinela/Relat%C3%B3rio_PFPB.pdf?csf=1&web=1&e=MBdcS8',
-        size=11,
+        size=10,
     )
-    _run(p_sent, '), fundamentado no desenvolvimento do ', color='0F172A', size=11)
-    _run(p_sent, 'Sentinela', color='0F172A', size=11)
-    _run(p_sent, ', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.', color='0F172A', size=11)
-    p_cgu = doc.add_paragraph('De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Caso isso ocorra, a farmácia estaria praticando uma “venda sem comprovação”')
+    _run(p_sent, '), fundamentado no desenvolvimento do ', color='0F172A', size=10)
+    _run(p_sent, 'Sentinela', color='0F172A', size=10)
+    _run(p_sent, ', uma ferramenta de tecnologia da informação que automatiza o cruzamento de dados, em larga escala, do SAV com outras bases de informações.', color='0F172A', size=10)
+    p_cgu = doc.add_paragraph()
+    _run(p_cgu, 'De forma sintética, a premissa central de controle adotada pela CGU, apresentada de forma detalhada no referido relatório, é de natureza lógica e contábil: um estabelecimento não pode dispensar medicamentos que não adquiriu formalmente. Caso isso ocorra, a farmácia estaria praticando uma “venda sem comprovação”', color='0F172A', size=10)
     _footnote_ref(doc, p_cgu, 7, nota_cgu_7)
-    p_cgu.add_run(', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.')
-    doc.add_paragraph('Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir dessa informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, em razão da inexistência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base de Notas Fiscais Eletrônicas (NF-e) da Receita Federal do Brasil, utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e de suas compras posteriores com as vendas realizadas no âmbito do Programa.')
-    p_cutoff = doc.add_paragraph('A metodologia técnica do Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ')
+    _run(p_cgu, ', ou seja, uma distribuição de medicamentos para cidadãos, cobrada do Ministério da Saúde, sem comprovação de suas aquisições.', color='0F172A', size=10)
+    p_42_regra = doc.add_paragraph()
+    _run(p_42_regra, 'Para a aferição da regularidade das dispensações realizadas pelas farmácias, é necessário estimar um estoque inicial dos medicamentos para que seja possível, a partir dessa informação e de suas compras posteriores, verificar a compatibilidade de suas vendas no âmbito do PFPB. Dada a limitação do SAV, em razão da inexistência de informação disponível sobre o estoque inicial de medicamentos de cada drogaria credenciada pelo MS, a CGU desenvolveu metodologia que confronta as informações de vendas de medicamentos enviadas pelas farmácias ao Ministério da Saúde com as informações de suas compras contidas na base de Notas Fiscais Eletrônicas (NF-e) da Receita Federal do Brasil, utilizada tanto para estimar seus estoques iniciais quanto para aferir a compatibilidade destes e de suas compras posteriores com as vendas realizadas no âmbito do Programa.', color='0F172A', size=10)
+    p_cutoff = doc.add_paragraph()
+    _run(p_cutoff, 'A metodologia técnica do Sentinela foi desenhada de forma conservadora para garantir a robustez dos achados. O sistema utiliza a técnica de ', color='0F172A', size=10)
     p_cutoff.add_run('cut-off').italic = True
-    p_cutoff.add_run(', estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo “virtual” favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia que fazem parte do rol do PFPB foram vendidos somente para clientes que fizeram uso do Programa. Assim, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.')
+    _run(p_cutoff, ', estimando o estoque inicial como a soma das duas últimas compras anteriores à primeira venda registrada de cada medicamento. A partir desse ponto, o algoritmo realiza um balanço diário de entradas e saídas, considerando apenas as vendas do PFPB como débito no estoque e ignorando vendas privadas para o público geral, o que gera um saldo “virtual” favorável à farmácia. Em outras palavras, o conservadorismo da metodologia da CGU se ampara no fato de considerar, para os cálculos de estoque, que todos os medicamentos adquiridos pela farmácia que fazem parte do rol do PFPB foram vendidos somente para clientes que fizeram uso do Programa. Assim, a metodologia não leva em conta a possibilidade real de que parte desses medicamentos tenha sido vendida para clientes comuns, que desembolsaram recursos próprios para suas aquisições.', color='0F172A', size=10)
 
     p_gtin = doc.add_paragraph()
-    _run(p_gtin, 'Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 5/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ', color='0F172A', size=11)
-    _run(p_gtin, 'GTIN/EAN', color='334155', size=11, bold=True)
-    _run(p_gtin, '. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.', color='0F172A', size=11)
-    doc.add_paragraph('Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.')
-    doc.add_paragraph(f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.')
+    _run(p_gtin, 'Juridicamente, o controle sustenta-se na Portaria de Consolidação GM/MS nº 5/2017, que obriga a guarda das notas fiscais de aquisição por dez anos, e no Ajuste SINIEF nº 16/2010, que exige a identificação do produto pelo código ', color='0F172A', size=10)
+    _run(p_gtin, 'GTIN/EAN', color='334155', size=10, bold=True)
+    _run(p_gtin, '. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.', color='0F172A', size=10)
+    p_42_fim1 = doc.add_paragraph()
+    _run(p_42_fim1, 'Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.', color='0F172A', size=10)
+    p_42_fim2 = doc.add_paragraph()
+    _run(p_42_fim2, f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.', color='0F172A', size=10)
 
     # ── Seção 5 intro (sem rodapé) ────────────────────────────────────────
     sec_5_intro = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -1153,16 +1166,20 @@ def generate_nota_tecnica(
     doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)
     ultimo_mes_sav = _build_ultimo_mes_sav_context(cnpj, data_inicio, data_fim)
     situacao_pfpb = "ATIVA" if cnpj_data.get("is_conexao_ativa") else "INATIVA"
-    p_sav_5 = doc.add_paragraph(
+    p_sav_5 = doc.add_paragraph()
+    _run(
+        p_sav_5,
         f'Informações extraídas do SAV, relativas ao período de {periodo_txt}, apontam que a Farmácia {razao_social} '
-        'se encontra “'
+        'se encontra “',
+        color='0F172A',
+        size=10,
     )
-    _run(p_sav_5, situacao_pfpb, bold=True)
-    _run(p_sav_5, '” no Programa Farmácia Popular do Brasil, tendo realizado vendas totais de ')
-    _run(p_sav_5, f'R$ {_format_decimal_pt(ultimo_mes_sav["total"], 2)}', underline=True)
-    _run(p_sav_5, ' em ')
-    _run(p_sav_5, ultimo_mes_sav["mes_formatado"], underline=True)
-    _run(p_sav_5, ', último mês com movimentação disponível para a farmácia na base de dados.')
+    _run(p_sav_5, situacao_pfpb, color='0F172A', size=10, bold=True)
+    _run(p_sav_5, '” no Programa Farmácia Popular do Brasil, tendo realizado vendas totais de ', color='0F172A', size=10)
+    _run(p_sav_5, f'R$ {_format_decimal_pt(ultimo_mes_sav["total"], 2)}', color='0F172A', size=10, underline=True)
+    _run(p_sav_5, ' em ', color='0F172A', size=10)
+    _run(p_sav_5, ultimo_mes_sav["mes_formatado"], color='0F172A', size=10, underline=True)
+    _run(p_sav_5, ', último mês com movimentação disponível para a farmácia na base de dados.', color='0F172A', size=10)
 
     # ── Seção de informações cadastrais ────────────────────────────────────
     sec_51 = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -1424,7 +1441,13 @@ def generate_nota_tecnica(
     # Seção 7 sem rodapé herdado da seção 6.
     _start_section(doc)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
-    doc.add_paragraph(f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela, a seguir, sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela. Na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.')
+    p_criticidades_intro = doc.add_paragraph()
+    _run(
+        p_criticidades_intro,
+        f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela, a seguir, sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela. Na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.',
+        color='0F172A',
+        size=10,
+    )
     indicadores_criticos_quadro = _build_indicadores_criticos_quadro(cnpj, data_inicio, data_fim)
     if indicadores_criticos_quadro:
         tabela_num += 1

@@ -161,14 +161,14 @@ def _write_date_cell_with_weekend_marker(cell, value: Any, formatter: Callable[[
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(0)
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, formatter(value), color="0F172A", size=6.8)
+    _run(p, formatter(value), color="0F172A", size=9)
 
     parsed_date = _as_date_for_weekend_marker(value)
     if parsed_date is None or parsed_date.weekday() < 5:
         return
 
     p.add_run().add_break()
-    _run(p, "(fim de semana)", color="64748B", size=6.8)
+    _run(p, "(fim de semana)", color="64748B", size=9)
 
 
 def _vez_ou_vezes(value: float) -> str:
@@ -438,14 +438,14 @@ def _plural(value: int, singular: str, plural: str) -> str:
     return singular if value == 1 else plural
 
 
-def _crm_table_header(table, headers: list[str], widths: list[Any]):
+def _crm_table_header(table, headers: list[str], widths: list[Any], *, size: float = 7.0):
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_fixed_widths(table, widths)
     for idx, header in enumerate(headers):
         cell = table.rows[0].cells[idx]
         _cell_bg(cell, "E2E8F0")
-        _write_cell(cell, header, size=7.0, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _write_cell(cell, header, size=size, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
 
 def _crm_alertas_contexto_labels(row: dict[str, Any]) -> list[str]:
@@ -1185,12 +1185,12 @@ def _add_crm_intensiva_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais médicos com volume médio diário superior a 30 prescrições.", color="334155", size=8, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais médicos com volume médio diário superior a 30 prescrições.", color="334155", size=12, bold=True)
 
     headers = ["CRM/UF", "Nome", "Tipo", "Presc./dia local", "Presc./dia Brasil", "Autorizações", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
     widths = [Inches(0.74), Inches(1.72), Inches(0.74), Inches(0.84), Inches(0.84), Inches(0.89), Inches(1.23)]
-    _crm_table_header(table, headers, widths)
+    _crm_table_header(table, headers, widths, size=9.0)
 
     for row in rows:
         cells = table.add_row().cells
@@ -1207,7 +1207,7 @@ def _add_crm_intensiva_complementar_text(
         ]
         for idx, value in enumerate(values):
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 2) else None
-            _write_cell(cells[idx], value, size=6.8, align=align)
+            _write_cell(cells[idx], value, size=9.0, align=align)
 
 
 def _add_crm_unico_complementar_text(
@@ -1269,12 +1269,12 @@ def _add_crm_unico_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas para um único CRM.", color="334155", size=8, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas para um único CRM.", color="334155", size=12, bold=True)
 
     headers = ["Início", "Fim", "Médico/CRM", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
-    widths = [Inches(1.05), Inches(1.05), Inches(2.82), Inches(0.48), Inches(0.55), Inches(0.68), Inches(0.67)]
-    _crm_table_header(table, headers, widths)
+    widths = [Inches(1.05), Inches(1.05), Inches(2.62), Inches(0.48), Inches(0.55), Inches(0.68), Inches(0.87)]
+    _crm_table_header(table, headers, widths, size=9.0)
 
     for row in rows:
         cells = table.add_row().cells
@@ -1299,12 +1299,12 @@ def _add_crm_unico_complementar_text(
         p_medico.alignment = WD_ALIGN_PARAGRAPH.LEFT
         p_medico.paragraph_format.space_before = Pt(0)
         p_medico.paragraph_format.space_after = Pt(0)
-        _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=6.8)
-        _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=5.8)
+        _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=9)
+        _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=9)
 
         for col_idx, value in enumerate(values, start=3):
             align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
-            _write_cell(cells[col_idx], value, size=6.8, align=align)
+            _write_cell(cells[col_idx], value, size=9.0, align=align)
 
 
 def _add_crms_multiplos_complementar_text(
@@ -1363,12 +1363,12 @@ def _add_crms_multiplos_complementar_text(
     if eventos:
         title = doc.add_paragraph()
         _format_crm_table_title(title)
-        _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="334155", size=8, bold=True)
+        _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="334155", size=12, bold=True)
 
         headers = ["Início", "Fim", "CRMs", "CRM mais usado", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
-        widths = [Inches(0.99), Inches(0.99), Inches(0.47), Inches(0.99), Inches(0.67), Inches(0.65), Inches(0.89), Inches(1.35)]
-        _crm_table_header(table, headers, widths)
+        widths = [Inches(0.99), Inches(0.99), Inches(0.47), Inches(0.99), Inches(0.87), Inches(0.65), Inches(0.89), Inches(1.15)]
+        _crm_table_header(table, headers, widths, size=9.0)
         for evento in eventos:
             cells = table.add_row().cells
             crm_principal = str(evento.get("crm_principal") or "N/d")
@@ -1394,7 +1394,7 @@ def _add_crms_multiplos_complementar_text(
             ]
             for col_idx, value in enumerate(values, start=2):
                 align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (2, 4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER
-                _write_cell(cells[col_idx], value, size=6.8, align=align)
+                _write_cell(cells[col_idx], value, size=9.0, align=align)
 
 
 def _add_crm_volume_horario_complementar_text(
@@ -1484,12 +1484,12 @@ def _add_crm_volume_horario_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais horários com volume anômalo de autorizações.", color="334155", size=8, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais horários com volume anômalo de autorizações.", color="334155", size=12, bold=True)
 
     headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Multiplicador"]
     table = doc.add_table(rows=1, cols=len(headers))
     widths = [Inches(0.99), Inches(0.74), Inches(1.23), Inches(0.74), Inches(1.33), Inches(1.97)]
-    _crm_table_header(table, headers, widths)
+    _crm_table_header(table, headers, widths, size=9.0)
 
     for row in rows:
         cells = table.add_row().cells
@@ -1503,7 +1503,7 @@ def _add_crm_volume_horario_complementar_text(
         ]
         for idx, value in enumerate(values, start=1):
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER
-            _write_cell(cells[idx], value, size=6.8, align=align)
+            _write_cell(cells[idx], value, size=9.0, align=align)
 
 
 def _add_principais_crms_contexto_text(
@@ -1536,7 +1536,7 @@ def _add_principais_crms_contexto_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais CRMs do estabelecimento por valor autorizado.", color="334155", size=8, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais CRMs do estabelecimento por valor autorizado.", color="334155", size=12, bold=True)
 
     headers = [
         "Médico/CRM",
@@ -1555,7 +1555,7 @@ def _add_principais_crms_contexto_text(
         Inches(0.62),
         Inches(1.00),
     ]
-    _crm_table_header(table, headers, widths)
+    _crm_table_header(table, headers, widths, size=9.0)
 
     for row in rows:
         cells = table.add_row().cells
@@ -1582,8 +1582,8 @@ def _add_principais_crms_contexto_text(
         p_medico.alignment = WD_ALIGN_PARAGRAPH.LEFT
         p_medico.paragraph_format.space_before = Pt(0)
         p_medico.paragraph_format.space_after = Pt(0)
-        _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=6.6)
-        _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=5.7)
+        _run(p_medico, _title_case_pt(row.get("no_medico") or "Não localizado"), color="0F172A", size=9)
+        _run(p_medico, f"\nCRM {crm_uf}", color="64748B", size=9)
 
         for col_idx, value in enumerate(values, start=1):
             align = (
@@ -1595,7 +1595,7 @@ def _add_principais_crms_contexto_text(
                 if col_idx == 5
                 else None
             )
-            _write_cell(cells[col_idx], value, size=6.6, align=align)
+            _write_cell(cells[col_idx], value, size=9.0, align=align)
 
 
 def _add_crm_evidencias_complementares_body(
@@ -1725,7 +1725,7 @@ def _add_hhi_crm_text(
         title,
         f"Tabela {tabela_num} - Médicos/CRMs com maiores valores pagos pelo PFPB em vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="334155",
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -1746,7 +1746,7 @@ def _add_hhi_crm_text(
     for idx, header in enumerate(headers):
         cell = table.rows[0].cells[idx]
         _cell_bg(cell, "E2E8F0")
-        _write_cell(cell, header, size=7.0, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _write_cell(cell, header, size=9.0, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER)
 
     for row in hhi_crm_comp["top_crms"]:
         cells = table.add_row().cells
@@ -1765,7 +1765,7 @@ def _add_hhi_crm_text(
         ]
         for idx, value in enumerate(values):
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 2) else None
-            _write_cell(cells[idx], value, size=7.0, align=align)
+            _write_cell(cells[idx], value, size=9.0, align=align)
 
     fonte = doc.add_paragraph()
     _format_crm_table_footnote(fonte)
@@ -1773,7 +1773,7 @@ def _add_hhi_crm_text(
         fonte,
         "Fonte: Consulta ao CFM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",
         color="475569",
-        size=8,
+        size=10,
         italic=True,
     )
 

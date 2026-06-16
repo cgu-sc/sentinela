@@ -41,7 +41,7 @@ def _format_quadro_footnote(paragraph, *, space_before: float = 5, space_after: 
         paragraph,
         space_before=space_before,
         space_after=space_after,
-        alignment=WD_ALIGN_PARAGRAPH.JUSTIFY,
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
 
 
@@ -95,7 +95,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         p_title,
         'Quadro 06 - Ingressos societários próximos a semestres com aumento atípico das transferências',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -113,7 +113,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=8, bold=True)
+        _run(para, header, color='0F172A', size=10, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(socios_volume_atipico, start=1):
@@ -142,7 +142,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in (1, 2, 3, 4) else WD_ALIGN_PARAGRAPH.LEFT
-            _run(para, value, color='0F172A', size=8, bold=col_idx == 3 and taxa is not None)
+            _run(para, value, color='0F172A', size=10, bold=col_idx == 3 and taxa is not None)
 
     for row in table.rows:
         for cell in row.cells:
@@ -156,7 +156,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         p_foot,
         'Fonte: Sentinela, a partir do quadro societário cadastral e da evolução semestral das transferências do PFPB. A distância temporal considera o mesmo semestre de entrada e até dois semestres posteriores.',
         color='64748B',
-        size=8,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -169,7 +169,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
         p_title,
         'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -178,8 +178,8 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
     _set_table_fixed_widths(table, [Inches(4.63), Inches(2.37)])
 
     hdr_cells = table.rows[0].cells
-    _run(hdr_cells[0].paragraphs[0], 'Métrica', bold=True)
-    _run(hdr_cells[1].paragraphs[0], 'Valor', bold=True)
+    _run(hdr_cells[0].paragraphs[0], 'Métrica', color='0F172A', size=10, bold=True)
+    _run(hdr_cells[1].paragraphs[0], 'Valor', color='0F172A', size=10, bold=True)
     for cell in hdr_cells:
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         _cell_bg(cell, 'E2E8F0')
@@ -193,10 +193,10 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
 
     for idx, (label, value) in enumerate(rows, start=1):
         cells = table.rows[idx].cells
-        _run(cells[0].paragraphs[0], label, color='475569', size=9)
+        _run(cells[0].paragraphs[0], label, color='475569', size=10)
         value_para = cells[1].paragraphs[0]
         value_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(value_para, value, color='0F172A', size=9, bold=True)
+        _run(value_para, value, color='0F172A', size=10, bold=True)
 
     for row in table.rows:
         for cell in row.cells:
@@ -206,7 +206,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, f'Fonte: Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=8)
+    _run(p_foot, f'Fonte: Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=10)
     _keep_small_table_together(p_title, table, [p_foot])
 
 
@@ -535,14 +535,14 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         c0 = row.cells[0]
         _cell_bg(c0, 'F8FAFC')
         p0 = c0.paragraphs[0]
-        _run(p0, label, color='475569', size=9, bold=True)
+        _run(p0, label, color='475569', size=10, bold=True)
         p0.paragraph_format.space_before = Pt(2)
         p0.paragraph_format.space_after = Pt(2)
 
         # Estilo Valor
         c1 = row.cells[1]
         p1 = c1.paragraphs[0]
-        _run(p1, str(value) if value else '—', color='0F172A', size=9)
+        _run(p1, str(value) if value else '—', color='0F172A', size=10)
         p1.paragraph_format.space_before = Pt(2)
         p1.paragraph_format.space_after = Pt(2)
 
@@ -628,7 +628,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=9, bold=True)
+        _run(para, header, color='0F172A', size=10, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(rows_data, start=1):
@@ -644,7 +644,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=9)
+            _run(para, value, color='0F172A', size=10)
 
     for row in table.rows:
         for cell in row.cells:
@@ -687,7 +687,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=9, bold=True)
+        _run(para, header, color='0F172A', size=10, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(rows_data, start=1):
@@ -704,7 +704,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 3 else WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=9)
+            _run(para, value, color='0F172A', size=10)
 
     for row in table.rows:
         for cell in row.cells:
@@ -734,35 +734,35 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=8, bold=True)
+    _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=12, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
     table.style = 'Table Grid'
     _set_table_fixed_widths(table, [Inches(3.35), Inches(1.82), Inches(1.83)])
     
     hdr_cells = table.rows[0].cells
-    _run(hdr_cells[0].paragraphs[0], 'Situação', bold=True)
-    _run(hdr_cells[1].paragraphs[0], 'Valor em R$', bold=True)
-    _run(hdr_cells[2].paragraphs[0], 'Quantidades de Medicamentos', bold=True)
+    _run(hdr_cells[0].paragraphs[0], 'Situação', color='0F172A', size=10, bold=True)
+    _run(hdr_cells[1].paragraphs[0], 'Valor em R$', color='0F172A', size=10, bold=True)
+    _run(hdr_cells[2].paragraphs[0], 'Quantidades de Medicamentos', color='0F172A', size=10, bold=True)
     
     for cell in hdr_cells:
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         _cell_bg(cell, 'E2E8F0')
 
     r1 = table.rows[1].cells
-    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia', color='475569', size=9)
-    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=9, bold=True)
-    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'), color='0F172A', size=9, bold=True)
+    _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia', color='475569', size=10)
+    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=10, bold=True)
+    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'), color='0F172A', size=10, bold=True)
     
     r2 = table.rows[2].cells
-    _run(r2[0].paragraphs[0], 'Valor de dispensações sem comprovação (R$)', color='475569', size=9)
-    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=9, bold=True)
-    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'), color='0F172A', size=9, bold=True)
+    _run(r2[0].paragraphs[0], 'Valor de dispensações sem comprovação (R$)', color='475569', size=10)
+    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=10, bold=True)
+    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'), color='0F172A', size=10, bold=True)
 
     r3 = table.rows[3].cells
-    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação', color='475569', size=9)
-    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=9, bold=True)
-    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=9, bold=True)
+    _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação', color='475569', size=10)
+    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=10, bold=True)
+    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=10, bold=True)
     
     for row in table.rows[1:]:
         row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -776,6 +776,5 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=8)
+    _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=10)
     _keep_small_table_together(p_title, table, [p_foot])

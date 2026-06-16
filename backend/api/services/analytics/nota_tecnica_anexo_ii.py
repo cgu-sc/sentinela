@@ -227,7 +227,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         Inches(0.72),
         Inches(0.78),
         Inches(0.82),
-        Inches(3.55),
+        Inches(3.05),
     ]
 
     for idx, detalhe in enumerate(detalhes, start=1):
@@ -241,7 +241,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
             p_title,
             f"Quadro {anexo_num}.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
             color="334155",
-            size=8,
+            size=12,
             bold=True,
         )
 
@@ -249,7 +249,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         table.style = "Table Grid"
         table.autofit = False
         _set_table_fixed_widths(table, widths)
-        _add_table_header(table, headers, widths, size=7.6)
+        _add_table_header(table, headers, widths, size=9)
 
         for item in rows:
             has_irregular = float(item.get("valor_irregular") or 0.0) > 0
@@ -270,7 +270,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
                 values,
                 widths,
                 alignments=["center"] * 9 + ["left"],
-                sizes=[7.3] * 9 + [6.9],
+                sizes=[9] * 10,
                 color="0F172A",
                 fill="FEF2F2" if has_irregular else None,
             )
@@ -279,7 +279,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         _row_cant_split(subtotal_row)
         label_cell = subtotal_row.cells[0].merge(subtotal_row.cells[4])
         _cell_bg(label_cell, "F8FAFC")
-        _write_cell(label_cell, "Subtotal do GTIN", size=7.7, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.RIGHT)
+        _write_cell(label_cell, "Subtotal do GTIN", size=9, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.RIGHT)
         subtotal_values = [
             f'{int(detalhe.get("vendas") or 0):,}'.replace(",", "."),
             f'{int(detalhe.get("vendas_irregular") or 0):,}'.replace(",", "."),
@@ -290,7 +290,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         for offset, value in enumerate(subtotal_values, start=5):
             cell = subtotal_row.cells[offset]
             _cell_bg(cell, "F8FAFC")
-            _write_cell(cell, value, size=7.7, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.CENTER)
+            _write_cell(cell, value, size=9, bold=True, color="475569", align=WD_ALIGN_PARAGRAPH.CENTER)
         if timing:
             timing.mark(f"anexo {anexo_num} detalhe GTIN {idx} ({len(rows)} linhas)")
 
@@ -340,7 +340,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title = doc.add_paragraph()
     _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title, f"Quadro {anexo_num}.1 - Resumo geral da memória de cálculo", color="334155", size=8, bold=True)
+    _run(p_title, f"Quadro {anexo_num}.1 - Resumo geral da memória de cálculo", color="334155", size=12, bold=True)
 
     summary_headers = [
         "Total de medicamentos dispensados",
@@ -349,12 +349,12 @@ def _add_anexo_ii_memoria_calculo(
         "Valor sem comprovação",
         "Percentual sem comprovação",
     ]
-    summary_widths = [Inches(1.65), Inches(1.85), Inches(2.0), Inches(1.8), Inches(1.8)]
+    summary_widths = [Inches(1.75), Inches(1.95), Inches(2.10), Inches(1.90), Inches(1.85)]
     summary_table = doc.add_table(rows=2, cols=len(summary_headers))
     summary_table.style = "Table Grid"
     summary_table.autofit = False
     _set_table_fixed_widths(summary_table, summary_widths)
-    _add_table_header(summary_table, summary_headers, summary_widths, size=7.4)
+    _add_table_header(summary_table, summary_headers, summary_widths, size=9)
 
     summary_values = [
         f'{int(summary.get("total_vendas") or 0):,}'.replace(",", "."),
@@ -367,13 +367,13 @@ def _add_anexo_ii_memoria_calculo(
     _row_cant_split(row)
     for idx, value in enumerate(summary_values):
         _set_cell_width(row.cells[idx], summary_widths[idx])
-        _write_cell(row.cells[idx], value, size=7.5, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
+        _write_cell(row.cells[idx], value, size=9, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
     if timing:
         timing.mark(f"anexo {anexo_num} resumo geral")
 
     p_title2 = doc.add_paragraph()
     _format_block_title(p_title2, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title2, f"Quadro {anexo_num}.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=8, bold=True)
+    _run(p_title2, f"Quadro {anexo_num}.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=12, bold=True)
 
     headers = [
         "GTIN",
@@ -401,7 +401,7 @@ def _add_anexo_ii_memoria_calculo(
     table.style = "Table Grid"
     table.autofit = False
     _set_table_fixed_widths(table, widths)
-    _add_table_header(table, headers, widths)
+    _add_table_header(table, headers, widths, size=9)
 
     if consolidados:
         for item in consolidados:
@@ -420,7 +420,7 @@ def _add_anexo_ii_memoria_calculo(
             ]
             for idx, value in enumerate(values):
                 cell = row.cells[idx]
-                _write_cell(cell, value, size=6.7, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
+                _write_cell(cell, value, size=9, color="0F172A", align=WD_ALIGN_PARAGRAPH.CENTER)
     else:
         row = table.add_row()
         _row_cant_split(row)
@@ -428,7 +428,7 @@ def _add_anexo_ii_memoria_calculo(
         _write_cell(
             merged,
             "Não foram identificados medicamentos com vendas sem comprovação na memória de cálculo disponível.",
-            size=7.2,
+            size=9,
             color="475569",
             align=WD_ALIGN_PARAGRAPH.CENTER,
         )
@@ -441,7 +441,7 @@ def _add_anexo_ii_memoria_calculo(
         p_foot,
         "Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.",
         color="64748B",
-        size=8,
+        size=10,
     )
 
     _add_anexo_ii_detalhamento(doc, detalhes, timing=timing, anexo_num=anexo_num)

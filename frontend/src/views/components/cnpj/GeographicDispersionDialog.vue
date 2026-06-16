@@ -4,6 +4,8 @@ import { storeToRefs } from 'pinia';
 import Dialog from 'primevue/dialog';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
+import TabView from 'primevue/tabview';
+import TabPanel from 'primevue/tabpanel';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { MapChart } from 'echarts/charts';
@@ -31,7 +33,14 @@ const filterStore = useFilterStore();
 const cnpjDetailStore = useCnpjDetailStore();
 const { formatCurrencyFull, formatNumberFull, formatPercent, toLocalISO } = useFormatting();
 const { chartTheme } = useChartTheme();
-const { geograficoOrigemUfData, geograficoOrigemUfLoading, geograficoOrigemUfError } = storeToRefs(cnpjDetailStore);
+const {
+  geograficoOrigemUfData,
+  geograficoOrigemUfLoading,
+  geograficoOrigemUfError,
+  geograficoBenchmarkData,
+  geograficoBenchmarkLoading,
+  geograficoBenchmarkError,
+} = storeToRefs(cnpjDetailStore);
 
 const mapReady = ref(false);
 const mapKey = ref(0);
@@ -51,7 +60,7 @@ const periodoLabel = computed(() => {
   const start = periodoInicio.value;
   const end = periodoFim.value;
   if (!start || !end) return 'Período atual';
-  return `${start.split('-').reverse().join('/')} a ${end.split('-').reverse().join('/')}`;
+  return `${start.slice(5, 7)}/${start.slice(0, 4)} a ${end.slice(5, 7)}/${end.slice(0, 4)}`;
 });
 
 onMounted(async () => {
@@ -76,7 +85,10 @@ watch(
   () => [props.modelValue, props.cnpj, periodoInicio.value, periodoFim.value],
   async ([visible, cnpj]) => {
     if (!visible || !cnpj) return;
-    await cnpjDetailStore.fetchGeograficoOrigemUf(cnpj, periodoInicio.value, periodoFim.value);
+    await Promise.all([
+      cnpjDetailStore.fetchGeograficoOrigemUf(cnpj, periodoInicio.value, periodoFim.value),
+      cnpjDetailStore.fetchGeograficoBenchmarkLocal(cnpj, periodoInicio.value, periodoFim.value),
+    ]);
   },
   { immediate: true },
 );
@@ -86,6 +98,34 @@ const rows = computed(() => geograficoOrigemUfData.value?.rows ?? []);
 const rowClass = (row) => ({
   'geo-table-home-uf': row?.uf_paciente === geograficoOrigemUfData.value?.uf_farmacia,
 });
+
+const benchmarkRowClass = (row) => ({
+  'geo-benchmark-target': row?.is_alvo,
+});
+
+const benchmarkMunicipioRows = computed(() => geograficoBenchmarkData.value?.municipio?.rows ?? []);
+const benchmarkRegiaoRows = computed(() => geograficoBenchmarkData.value?.regiao_saude?.rows ?? []);
+
+const benchmarkMunicipioLabel = computed(() => geograficoBenchmarkData.value?.municipio?.label ?? 'Município');
+const benchmarkRegiaoLabel = computed(() => geograficoBenchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
+
+const benchmarkErrorMessage = computed(() => geograficoBenchmarkError.value);
+
+const statusClass = (status) => {
+  if (status === 'CRITICO') return 'geo-status geo-status--critico';
+  if (status === 'ATENCAO') return 'geo-status geo-status--atencao';
+  if (status === 'NORMAL') return 'geo-status geo-status--normal';
+  return 'geo-status geo-status--sem-dados';
+};
+
+const statusLabel = (status) => {
+  if (status === 'CRITICO') return 'CRÍTICO';
+  if (status === 'ATENCAO') return 'ATENÇÃO';
+  if (status === 'NORMAL') return 'NORMAL';
+  return 'SEM DADOS';
+};
+
+const estabelecimentoLabel = (row) => row?.nome_fantasia || row?.razao_social || row?.cnpj || '—';
 
 const activeScale = computed(() => GEOGRAPHIC_DISTRIBUTION_SCALE);
 
@@ -289,7 +329,7 @@ const close = () => emit('update:modelValue', false);
               stripedRows
               size="small"
               scrollable
-              scrollHeight="520px"
+              scrollHeight="420px"
               class="geo-table"
             >
               <Column field="uf_paciente" header="UF" style="width: 90px" />
@@ -319,6 +359,136 @@ const close = () => emit('update:modelValue', false);
             </DataTable>
           </section>
         </div>
+
+        <section class="geo-benchmark-card">
+          <div class="panel-title">Comparação com estabelecimentos do território</div>
+          <div v-if="geograficoBenchmarkLoading" class="geo-benchmark-state">
+            Carregando comparação territorial...
+          </div>
+          <div v-else-if="benchmarkErrorMessage" class="geo-error geo-benchmark-state">
+            {{ benchmarkErrorMessage }}
+          </div>
+          <TabView v-else-if="geograficoBenchmarkData" class="geo-benchmark-tabs">
+            <TabPanel>
+              <template #header>
+                <span>Município</span>
+              </template>
+              <div class="geo-scope-label">{{ benchmarkMunicipioLabel }}</div>
+              <DataTable
+                :value="benchmarkMunicipioRows"
+                :rowClass="benchmarkRowClass"
+                stripedRows
+                size="small"
+                scrollable
+                scrollHeight="260px"
+                class="geo-table geo-benchmark-table"
+              >
+                <Column header="ESTABELECIMENTO" style="min-width: 260px">
+                  <template #body="{ data }">
+                    <div class="geo-estab-cell">
+                      <span>{{ estabelecimentoLabel(data) }}</span>
+                      <small>{{ data.cnpj }}</small>
+                    </div>
+                  </template>
+                </Column>
+                <Column field="municipio" header="MUNICÍPIO/UF" style="width: 150px">
+                  <template #body="{ data }">
+                    {{ data.municipio || '—' }}/{{ data.uf || '—' }}
+                  </template>
+                </Column>
+                <Column field="percentual_outra_uf" header="% FORA DA UF" style="width: 130px">
+                  <template #body="{ data }">
+                    {{ data.percentual_outra_uf == null ? '—' : formatPercent(data.percentual_outra_uf) }}
+                  </template>
+                </Column>
+                <Column field="valor_outra_uf" header="VALOR FORA DA UF" style="width: 165px">
+                  <template #body="{ data }">
+                    {{ formatCurrencyFull(data.valor_outra_uf ?? 0) }}
+                  </template>
+                </Column>
+                <Column field="valor_total" header="VALOR TOTAL" style="width: 150px">
+                  <template #body="{ data }">
+                    {{ formatCurrencyFull(data.valor_total ?? 0) }}
+                  </template>
+                </Column>
+                <Column field="qtd_vendas_outra_uf" header="AUTORIZAÇÕES" style="width: 140px">
+                  <template #body="{ data }">
+                    {{ formatNumberFull(data.qtd_vendas_outra_uf ?? 0) }}
+                  </template>
+                </Column>
+                <Column field="risco_regiao" header="RISCO REGIÃO" style="width: 130px">
+                  <template #body="{ data }">
+                    {{ data.risco_regiao == null ? '—' : `${data.risco_regiao.toFixed(1)}x` }}
+                  </template>
+                </Column>
+                <Column field="status" header="STATUS" style="width: 120px">
+                  <template #body="{ data }">
+                    <span :class="statusClass(data.status)">{{ statusLabel(data.status) }}</span>
+                  </template>
+                </Column>
+              </DataTable>
+            </TabPanel>
+            <TabPanel>
+              <template #header>
+                <span>Região de Saúde</span>
+              </template>
+              <div class="geo-scope-label">{{ benchmarkRegiaoLabel }}</div>
+              <DataTable
+                :value="benchmarkRegiaoRows"
+                :rowClass="benchmarkRowClass"
+                stripedRows
+                size="small"
+                scrollable
+                scrollHeight="260px"
+                class="geo-table geo-benchmark-table"
+              >
+                <Column header="ESTABELECIMENTO" style="min-width: 260px">
+                  <template #body="{ data }">
+                    <div class="geo-estab-cell">
+                      <span>{{ estabelecimentoLabel(data) }}</span>
+                      <small>{{ data.cnpj }}</small>
+                    </div>
+                  </template>
+                </Column>
+                <Column field="municipio" header="MUNICÍPIO/UF" style="width: 150px">
+                  <template #body="{ data }">
+                    {{ data.municipio || '—' }}/{{ data.uf || '—' }}
+                  </template>
+                </Column>
+                <Column field="percentual_outra_uf" header="% FORA DA UF" style="width: 130px">
+                  <template #body="{ data }">
+                    {{ data.percentual_outra_uf == null ? '—' : formatPercent(data.percentual_outra_uf) }}
+                  </template>
+                </Column>
+                <Column field="valor_outra_uf" header="VALOR FORA DA UF" style="width: 165px">
+                  <template #body="{ data }">
+                    {{ formatCurrencyFull(data.valor_outra_uf ?? 0) }}
+                  </template>
+                </Column>
+                <Column field="valor_total" header="VALOR TOTAL" style="width: 150px">
+                  <template #body="{ data }">
+                    {{ formatCurrencyFull(data.valor_total ?? 0) }}
+                  </template>
+                </Column>
+                <Column field="qtd_vendas_outra_uf" header="AUTORIZAÇÕES" style="width: 140px">
+                  <template #body="{ data }">
+                    {{ formatNumberFull(data.qtd_vendas_outra_uf ?? 0) }}
+                  </template>
+                </Column>
+                <Column field="risco_regiao" header="RISCO REGIÃO" style="width: 130px">
+                  <template #body="{ data }">
+                    {{ data.risco_regiao == null ? '—' : `${data.risco_regiao.toFixed(1)}x` }}
+                  </template>
+                </Column>
+                <Column field="status" header="STATUS" style="width: 120px">
+                  <template #body="{ data }">
+                    <span :class="statusClass(data.status)">{{ statusLabel(data.status) }}</span>
+                  </template>
+                </Column>
+              </DataTable>
+            </TabPanel>
+          </TabView>
+        </section>
       </template>
     </div>
   </Dialog>
@@ -328,15 +498,15 @@ const close = () => emit('update:modelValue', false);
 .geo-shell {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.65rem;
 }
 
 .geo-hero {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(170px, 0.75fr);
   align-items: stretch;
-  gap: 1rem;
-  padding-bottom: 0.25rem;
+  gap: 0.75rem;
+  padding-bottom: 0;
 }
 
 .geo-kpis {
@@ -379,12 +549,13 @@ const close = () => emit('update:modelValue', false);
 .geo-grid {
   display: grid;
   grid-template-columns: 1.35fr 0.95fr;
-  gap: 1rem;
-  min-height: 620px;
+  gap: 0.8rem;
+  min-height: 500px;
 }
 
 .geo-map-panel,
-.geo-table-panel {
+.geo-table-panel,
+.geo-benchmark-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -401,7 +572,7 @@ const close = () => emit('update:modelValue', false);
 
 .geo-chart {
   flex: 1;
-  min-height: 520px;
+  min-height: 420px;
   width: 100%;
 }
 
@@ -416,6 +587,105 @@ const close = () => emit('update:modelValue', false);
 
 .geo-error {
   color: var(--risk-indicator-critical);
+}
+
+.geo-benchmark-card {
+  gap: 0.6rem;
+  min-height: 390px;
+}
+
+.geo-benchmark-state {
+  min-height: 290px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.geo-scope-label {
+  margin: 0.15rem 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.geo-estab-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.geo-estab-cell span {
+  color: var(--text-color);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.geo-estab-cell small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.geo-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.8rem;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.geo-status--critico {
+  color: var(--risk-indicator-critical);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 12%, transparent);
+}
+
+.geo-status--atencao {
+  color: var(--risk-indicator-warning);
+  background: color-mix(in srgb, var(--risk-indicator-warning) 13%, transparent);
+}
+
+.geo-status--normal {
+  color: var(--risk-indicator-normal);
+  background: color-mix(in srgb, var(--risk-indicator-normal) 12%, transparent);
+}
+
+.geo-status--sem-dados {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+}
+
+:deep(.geo-dialog.p-dialog .p-dialog-content) {
+  padding-top: 0.45rem;
+}
+
+:deep(.geo-dialog.p-dialog .p-dialog-header) {
+  padding-bottom: 0.45rem;
+}
+
+:deep(.geo-benchmark-tabs .p-tabview-nav) {
+  background: transparent;
+  border-color: var(--card-border);
+}
+
+:deep(.geo-benchmark-tabs .p-tabview-panels) {
+  padding: 0.55rem 0 0;
+  background: transparent;
+  min-height: 310px;
+}
+
+:deep(.geo-benchmark-tabs .p-tabview-nav-link) {
+  background: transparent;
+  color: var(--text-color);
+  border-color: var(--card-border);
+  padding: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 :deep(.geo-table .p-datatable-thead > tr > th) {
@@ -459,7 +729,17 @@ const close = () => emit('update:modelValue', false);
   color: var(--text-color);
 }
 
+:deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-target > td),
+:deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-target:nth-child(even) > td) {
+  background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
+  color: var(--text-color);
+}
+
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf > td:first-child) {
+  box-shadow: inset 3px 0 0 var(--primary-color);
+}
+
+:deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-target > td:first-child) {
   box-shadow: inset 3px 0 0 var(--primary-color);
 }
 

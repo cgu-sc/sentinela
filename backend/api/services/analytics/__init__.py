@@ -49,7 +49,7 @@ from .indicadores import (
     get_indicadores_analise_cnpjs,
 )
 from .clinico import get_incompatibilidade_patologica_data
-from .geografico import get_geografico_origem_uf
+from .geografico import get_geografico_benchmark_local, get_geografico_origem_uf
 from .regional import (
     get_cnpj_lookup,
     get_metric_percentiles,
@@ -82,6 +82,7 @@ class AnalyticsService:
     get_indicadores_analise_cnpjs = staticmethod(get_indicadores_analise_cnpjs)
     get_incompatibilidade_patologica_data = staticmethod(get_incompatibilidade_patologica_data)
     get_geografico_origem_uf = staticmethod(get_geografico_origem_uf)
+    get_geografico_benchmark_local = staticmethod(get_geografico_benchmark_local)
     get_falecidos_data = staticmethod(get_falecidos_data)
     get_timeline_cpf = staticmethod(get_timeline_cpf)
     get_fator_risco_data = staticmethod(get_fator_risco_data)

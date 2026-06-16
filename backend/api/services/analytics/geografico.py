@@ -6,9 +6,13 @@ from fastapi import HTTPException
 
 from data_cache import get_df_perfil_estabelecimento, scan_geografico_origem_uf
 from ...schemas.analytics import (
+    GeograficoBenchmarkResponse,
+    GeograficoBenchmarkRowSchema,
+    GeograficoBenchmarkScopeSchema,
     GeograficoOrigemUfResponse,
     GeograficoOrigemUfRowSchema,
 )
+from .matriz_risco_dinamica import build_dynamic_matriz_risco
 
 LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT = 5.0
 
@@ -142,6 +146,149 @@ def _row_schema(row: dict) -> GeograficoOrigemUfRowSchema:
         percentual_sobre_total=float(row["percentual_sobre_total"] or 0),
         percentual_sobre_outra_uf=(
             float(percentual_outra_uf) if percentual_outra_uf is not None else None
+        ),
+    )
+
+
+def _status_dispersao(row: dict) -> str:
+    if int(row.get("flag_dispersao_geografica_critico") or 0) == 1:
+        return "CRITICO"
+    if int(row.get("flag_dispersao_geografica_atencao") or 0) == 1:
+        return "ATENCAO"
+    if row.get("pct_geografico") is None:
+        return "SEM DADOS"
+    return "NORMAL"
+
+
+def _benchmark_row_schema(row: dict, cnpj_alvo: str) -> GeograficoBenchmarkRowSchema:
+    return GeograficoBenchmarkRowSchema(
+        cnpj=str(row["cnpj"]),
+        razao_social=row.get("razao_social"),
+        nome_fantasia=row.get("nome_fantasia"),
+        municipio=row.get("no_municipio"),
+        uf=row.get("uf"),
+        percentual_outra_uf=(
+            float(row["pct_geografico"]) if row.get("pct_geografico") is not None else None
+        ),
+        valor_total=float(row.get("geografico_valor_total") or 0),
+        valor_outra_uf=float(row.get("geografico_valor_outra_uf") or 0),
+        qtd_vendas_outra_uf=int(row.get("geografico_qtd_vendas_outra_uf") or 0),
+        mediana_regiao=(
+            float(row["med_geografico_reg"]) if row.get("med_geografico_reg") is not None else None
+        ),
+        mediana_uf=(
+            float(row["med_geografico_uf"]) if row.get("med_geografico_uf") is not None else None
+        ),
+        risco_regiao=(
+            float(row["risco_geografico_reg"]) if row.get("risco_geografico_reg") is not None else None
+        ),
+        risco_uf=(
+            float(row["risco_geografico_uf"]) if row.get("risco_geografico_uf") is not None else None
+        ),
+        status=_status_dispersao(row),
+        is_alvo=str(row["cnpj"]) == cnpj_alvo,
+    )
+
+
+def _benchmark_scope_schema(
+    *,
+    escopo: str,
+    label: str,
+    rows_df: pl.DataFrame,
+    cnpj_alvo: str,
+) -> GeograficoBenchmarkScopeSchema:
+    rows = [
+        _benchmark_row_schema(row, cnpj_alvo)
+        for row in rows_df.iter_rows(named=True)
+    ]
+    return GeograficoBenchmarkScopeSchema(
+        escopo=escopo,
+        label=label,
+        total_estabelecimentos=len(rows),
+        rows=rows,
+    )
+
+
+def get_geografico_benchmark_local(
+    cnpj: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+) -> GeograficoBenchmarkResponse:
+    clean_cnpj = _clean_cnpj(cnpj)
+    if len(clean_cnpj) != 14:
+        raise HTTPException(status_code=422, detail="CNPJ deve conter 14 digitos.")
+
+    perfil = get_df_perfil_estabelecimento()
+    perfil_required = [
+        "id_cnpj",
+        "cnpj",
+        "razao_social",
+        "no_municipio",
+        "uf",
+        "id_ibge7",
+        "id_regiao_saude",
+    ]
+    _require_columns(perfil, perfil_required, "perfil_estabelecimento")
+    perfil_target = perfil.filter(pl.col("cnpj") == clean_cnpj).select(perfil_required)
+    if perfil_target.is_empty():
+        raise HTTPException(status_code=404, detail="CNPJ nao encontrado no perfil de estabelecimentos.")
+
+    target = perfil_target.row(0, named=True)
+    id_ibge7 = int(target["id_ibge7"])
+    id_regiao_saude = str(target["id_regiao_saude"])
+    municipio_label = f'{target["no_municipio"]}/{target["uf"]}'
+    regiao_label = f'Regiao de Saude {id_regiao_saude}/{target["uf"]}'
+
+    matriz = build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
+    matriz_required = [
+        "id_cnpj",
+        "pct_geografico",
+        "med_geografico_reg",
+        "med_geografico_uf",
+        "risco_geografico_reg",
+        "risco_geografico_uf",
+        "geografico_valor_total",
+        "geografico_valor_outra_uf",
+        "geografico_qtd_vendas_outra_uf",
+        "flag_dispersao_geografica_atencao",
+        "flag_dispersao_geografica_critico",
+    ]
+    _require_columns(matriz, matriz_required, "matriz_risco_dinamica")
+
+    base = (
+        matriz.select(matriz_required)
+        .join(perfil.select(perfil_required), on="id_cnpj", how="inner")
+        .with_columns([
+            pl.col("id_regiao_saude").cast(pl.Utf8),
+            pl.col("id_ibge7").cast(pl.Int64),
+            pl.col("pct_geografico").cast(pl.Float64),
+            pl.col("geografico_valor_outra_uf").cast(pl.Float64),
+        ])
+        .sort(
+            ["pct_geografico", "geografico_valor_outra_uf", "cnpj"],
+            descending=[True, True, False],
+            nulls_last=True,
+        )
+    )
+
+    municipio_df = base.filter(pl.col("id_ibge7") == id_ibge7)
+    regiao_df = base.filter(pl.col("id_regiao_saude") == id_regiao_saude)
+
+    return GeograficoBenchmarkResponse(
+        cnpj=clean_cnpj,
+        periodo_inicio=data_inicio,
+        periodo_fim=data_fim,
+        municipio=_benchmark_scope_schema(
+            escopo="municipio",
+            label=municipio_label,
+            rows_df=municipio_df,
+            cnpj_alvo=clean_cnpj,
+        ),
+        regiao_saude=_benchmark_scope_schema(
+            escopo="regiao_saude",
+            label=regiao_label,
+            rows_df=regiao_df,
+            cnpj_alvo=clean_cnpj,
         ),
     )
 

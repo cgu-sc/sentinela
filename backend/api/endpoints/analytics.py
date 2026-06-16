@@ -16,6 +16,7 @@ from ..schemas.analytics import (
     SociosResponse, IntegrityAlertsResponse, NetworkResponse,
     CnpjBootstrapResponse,
     GeograficoOrigemUfResponse,
+    GeograficoBenchmarkResponse,
     ClinicoIncompatibilidadeResponse,
 )
 from ..services.analytics import AnalyticsService
@@ -338,6 +339,19 @@ def get_geografico_origem_uf(
 ):
     """Retorna a distribuicao financeira por UF de residencia do beneficiario."""
     return AnalyticsService.get_geografico_origem_uf(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+
+@router.get("/cnpj/{cnpj}/geografico/benchmark-local", response_model=GeograficoBenchmarkResponse)
+def get_geografico_benchmark_local(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna comparação municipal e regional do indicador de dispersao interestadual."""
+    return AnalyticsService.get_geografico_benchmark_local(
+        cnpj,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
 
 @router.get("/cnpj/{cnpj}/clinico/incompatibilidades", response_model=ClinicoIncompatibilidadeResponse)
 def get_incompatibilidade_patologica(

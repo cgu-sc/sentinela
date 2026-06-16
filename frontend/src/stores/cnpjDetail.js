@@ -164,6 +164,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     geograficoOrigemUfLoadedKey: null,
     geograficoOrigemUfRequestKey: null,
     geograficoOrigemUfError: null,
+    geograficoBenchmarkData: null,
+    geograficoBenchmarkLoading: false,
+    geograficoBenchmarkLoadedKey: null,
+    geograficoBenchmarkRequestKey: null,
+    geograficoBenchmarkError: null,
 
     // ── Incompatibilidade Patológica ─────────────────────────────────────────
     incompatibilidadePatologicaData: null,
@@ -712,6 +717,44 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async fetchGeograficoBenchmarkLocal(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      const requestKey = `${clean}|${inicio || ''}|${fim || ''}`;
+      if (!clean) return null;
+      if (this.geograficoBenchmarkLoadedKey === requestKey && this.geograficoBenchmarkData) {
+        return this.geograficoBenchmarkData;
+      }
+      if (this.geograficoBenchmarkRequestKey === requestKey) return null;
+
+      this.geograficoBenchmarkLoading = true;
+      this.geograficoBenchmarkRequestKey = requestKey;
+      this.geograficoBenchmarkError = null;
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+        const { data } = await axios.get(API_ENDPOINTS.analyticsGeograficoBenchmarkLocal(clean), { params });
+        if (this.geograficoBenchmarkRequestKey !== requestKey) return null;
+        if (!data?.municipio?.rows || !data?.regiao_saude?.rows) {
+          throw new Error('Contrato invalido em geografico/benchmark-local: municipio.rows e regiao_saude.rows obrigatorios.');
+        }
+        this.geograficoBenchmarkData = data;
+        this.geograficoBenchmarkLoadedKey = requestKey;
+        return data;
+      } catch (e) {
+        if (this.geograficoBenchmarkRequestKey !== requestKey) return null;
+        console.error('Erro ao buscar benchmark geografico local:', e);
+        this.geograficoBenchmarkError = e?.response?.data?.detail || ERROR_MSG;
+        return null;
+      } finally {
+        if (this.geograficoBenchmarkRequestKey === requestKey) {
+          this.geograficoBenchmarkLoading = false;
+          this.geograficoBenchmarkRequestKey = null;
+        }
+      }
+    },
+
     async fetchIncompatibilidadePatologica(cnpj, inicio = null, fim = null) {
       const clean = normalizeCnpj(cnpj);
       if (!clean) return null;
@@ -1209,6 +1252,11 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.geograficoOrigemUfLoadedKey = null;
       this.geograficoOrigemUfRequestKey = null;
       this.geograficoOrigemUfError = null;
+      this.geograficoBenchmarkData = null;
+      this.geograficoBenchmarkLoading = false;
+      this.geograficoBenchmarkLoadedKey = null;
+      this.geograficoBenchmarkRequestKey = null;
+      this.geograficoBenchmarkError = null;
 
       this.incompatibilidadePatologicaData = null;
       this.incompatibilidadePatologicaLoading = false;

@@ -287,6 +287,39 @@ class GeograficoOrigemUfResponse(BaseModel):
     rows: List[GeograficoOrigemUfRowSchema]
 
 
+class GeograficoBenchmarkRowSchema(BaseModel):
+    cnpj: str
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
+    percentual_outra_uf: Optional[float] = None
+    valor_total: float
+    valor_outra_uf: float
+    qtd_vendas_outra_uf: int
+    mediana_regiao: Optional[float] = None
+    mediana_uf: Optional[float] = None
+    risco_regiao: Optional[float] = None
+    risco_uf: Optional[float] = None
+    status: str
+    is_alvo: bool = False
+
+
+class GeograficoBenchmarkScopeSchema(BaseModel):
+    escopo: Literal["municipio", "regiao_saude"]
+    label: str
+    total_estabelecimentos: int
+    rows: List[GeograficoBenchmarkRowSchema]
+
+
+class GeograficoBenchmarkResponse(BaseModel):
+    cnpj: str
+    periodo_inicio: Optional[date] = None
+    periodo_fim: Optional[date] = None
+    municipio: GeograficoBenchmarkScopeSchema
+    regiao_saude: GeograficoBenchmarkScopeSchema
+
+
 class ClinicoEvolucaoAnualSchema(BaseModel):
     ano_base: int
     qtd_cpfs_distintos: int

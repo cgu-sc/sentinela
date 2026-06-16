@@ -70,7 +70,7 @@ def _add_movimentacao_sem_funcionario_table(
         p_title,
         'Quadro 01-C - Síntese da movimentação após o último mês com trabalhador ativo',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -95,16 +95,16 @@ def _add_movimentacao_sem_funcionario_table(
         _cell_bg(cell, 'E2E8F0')
         para = cell.paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=8.5)
+        _run(para, header, color='0F172A', size=9)
 
     for row_idx, (label, value) in enumerate(rows, start=1):
         label_para = table.rows[row_idx].cells[0].paragraphs[0]
         label_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        _run(label_para, label, color='0F172A', size=8.5)
+        _run(label_para, label, color='0F172A', size=9)
 
         value_para = table.rows[row_idx].cells[1].paragraphs[0]
         value_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(value_para, value, color='0F172A', size=8.5)
+        _run(value_para, value, color='0F172A', size=9)
 
     for row in table.rows:
         for cell in row.cells:

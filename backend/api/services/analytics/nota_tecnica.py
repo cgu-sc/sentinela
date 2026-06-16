@@ -727,13 +727,15 @@ def generate_nota_tecnica(
     # 3. Documento e margens
     doc = Document()
     style_normal: Any = doc.styles['Normal']
+    style_normal.font.name = 'Calibri'
     style_normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    
+
     # Aplica o tema Grafite Médio (Slate 700) para as Seções/Títulos
     heading_sizes = {1: 13, 2: 12, 3: 11}
     for i in range(1, 4):
         try:
             style_heading: Any = doc.styles[f'Heading {i}']
+            style_heading.font.name = 'Calibri'
             style_heading.font.size = Pt(heading_sizes[i])
             style_heading.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
             if i == 2:

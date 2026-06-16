@@ -185,6 +185,30 @@ def _tbl_no_borders(tbl):
     tblPr.append(tblBorders)
 
 
+def _set_table_open_borders(tbl, *, color: str = '0F172A', sz: str = '4'):
+    """Aplica bordas apenas horizontais (topo, cabecalho, linhas, base), sem bordas laterais/verticais."""
+    tblEl = tbl._tbl
+    tblPr = tblEl.find(qn('w:tblPr'))
+    if tblPr is None:
+        tblPr = OxmlElement('w:tblPr')
+        tblEl.insert(0, tblPr)
+    for existing in tblPr.findall(qn('w:tblBorders')):
+        tblPr.remove(existing)
+    tblBorders = OxmlElement('w:tblBorders')
+    horizontal = {'top', 'bottom', 'insideH'}
+    for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        el = OxmlElement(f'w:{side}')
+        if side in horizontal:
+            el.set(qn('w:val'), 'single')
+            el.set(qn('w:sz'), sz)
+            el.set(qn('w:space'), '0')
+            el.set(qn('w:color'), color)
+        else:
+            el.set(qn('w:val'), 'none')
+        tblBorders.append(el)
+    tblPr.append(tblBorders)
+
+
 def _row_cant_split(row):
     """Evita que uma linha da tabela seja quebrada entre paginas pelo Word."""
     trPr = row._tr.get_or_add_trPr()
@@ -275,6 +299,7 @@ def _run(para, text: str, *, color: str = '0F172A', size: float = 10, bold=False
     run.bold = bold
     run.italic = italic
     run.underline = underline
+    run.font.name = 'Calibri'
     run.font.size = Pt(size)
     run.font.color.rgb = _rgb(color)
     return run

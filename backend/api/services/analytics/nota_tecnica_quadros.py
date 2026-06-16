@@ -11,8 +11,10 @@ from .nota_tecnica_docx_utils import (
     _format_block_footnote,
     _format_block_title,
     _keep_small_table_together,
+    _repeat_table_header,
     _run,
     _set_table_fixed_widths,
+    _set_table_open_borders,
 )
 from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
 from .nota_tecnica_formatters import (
@@ -39,7 +41,7 @@ def _format_quadro_footnote(paragraph, *, space_before: float = 5, space_after: 
         paragraph,
         space_before=space_before,
         space_after=space_after,
-        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+        alignment=WD_ALIGN_PARAGRAPH.JUSTIFY,
     )
 
 
@@ -216,17 +218,18 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
         p_title,
         f'Tabela {tabela_num} - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
     rows_data = gtin_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=6)
-    table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
         [Inches(0.82), Inches(2.28), Inches(0.96), Inches(0.96), Inches(1.16), Inches(0.92)],
     )
+    _set_table_open_borders(table)
+    _repeat_table_header(table.rows[0])
 
     headers = [
         'GTIN',
@@ -239,42 +242,42 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=8, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
-        _run(cells[0].paragraphs[0], item["gtin"], color='0F172A', size=8)
+        _run(cells[0].paragraphs[0], item["gtin"], color='0F172A', size=9)
         _run(
             cells[1].paragraphs[0],
             _title_case_pt(item["descricao"]),
             color='0F172A',
-            size=8,
+            size=9,
         )
         cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
         _run(
             cells[2].paragraphs[0],
             _format_patologia_pt(item["patologia"]),
             color='0F172A',
-            size=8,
+            size=9,
         )
         cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[3].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=8)
+        _run(cells[3].paragraphs[0], f'{item["qtd_sem_comprovacao"]:,}'.replace(',', '.'), color='0F172A', size=9)
         cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        _run(cells[4].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color='0F172A', size=8)
+        _run(cells[4].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color='0F172A', size=9)
         cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[5].paragraphs[0], f'{_format_decimal_pt(item["pct_sem_comprovacao"], 2)}%', color='0F172A', size=8)
+        _run(cells[5].paragraphs[0], f'{_format_decimal_pt(item["pct_sem_comprovacao"], 2)}%', color='0F172A', size=9)
 
     total_cells = table.rows[-1].cells
     total_cells[0].merge(total_cells[2])
-    _run(total_cells[0].paragraphs[0], 'TOTAIS', color='0F172A', size=8, bold=True)
+    _run(total_cells[0].paragraphs[0], 'TOTAIS', color='0F172A', size=9, bold=True)
     total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     total_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(total_cells[3].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=8, bold=True)
+    _run(total_cells[3].paragraphs[0], f'{gtin_comp["total_qtd"]:,}'.replace(',', '.'), color='0F172A', size=9, bold=True)
     total_cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    _run(total_cells[4].paragraphs[0], f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='0F172A', size=8, bold=True)
+    _run(total_cells[4].paragraphs[0], f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='0F172A', size=9, bold=True)
     total_cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(total_cells[5].paragraphs[0], f'{_format_decimal_pt(gtin_comp["total_pct_sem_comprovacao"], 2)}%', color='0F172A', size=8, bold=True)
+    _run(total_cells[5].paragraphs[0], f'{_format_decimal_pt(gtin_comp["total_pct_sem_comprovacao"], 2)}%', color='0F172A', size=9, bold=True)
     for cell in total_cells:
         _cell_bg(cell, 'F8FAFC')
 
@@ -286,7 +289,7 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, f'Fonte: informações sobre as dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=8)
+    _run(p_foot, f'Fonte: informações sobre as dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=10)
 
 
 def _add_quadro_evolucao_financeira(
@@ -308,15 +311,16 @@ def _add_quadro_evolucao_financeira(
         p_title,
         f'Tabela {tabela_num} - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
     _add_bookmark(p_title, "tabela_evolucao_financeira")
 
     rows_data = evolucao_comp["rows"]
     table = doc.add_table(rows=len(rows_data) + 2, cols=6)
-    table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(1.04), Inches(1.18), Inches(1.18), Inches(1.28), Inches(1.04), Inches(1.28)])
+    _set_table_fixed_widths(table, [Inches(1.04), Inches(1.18), Inches(1.18), Inches(1.28), Inches(1.04), Inches(1.38)])
+    _set_table_open_borders(table)
+    _repeat_table_header(table.rows[0])
 
     headers = [
         'Semestre',
@@ -329,7 +333,7 @@ def _add_quadro_evolucao_financeira(
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=8, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(rows_data, start=1):
@@ -337,17 +341,17 @@ def _add_quadro_evolucao_financeira(
         has_aumento_atipico = item.get("volume_atipico") and item.get("taxa_crescimento_pct") is not None
         has_sem_comprovacao_relevante = item["irregular"] >= VOLUME_ATIPICO_AUMENTO_MINIMO
         cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[0].paragraphs[0], item.get("semestre_fmt") or item["semestre"], color='0F172A', size=8)
+        _run(cells[0].paragraphs[0], item.get("semestre_fmt") or item["semestre"], color='0F172A', size=9)
         for col_idx, key in enumerate(("total", "regular", "irregular"), start=1):
             cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color='0F172A', size=8)
+            _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color='0F172A', size=9)
         cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         pct_color = '334155' if item["pct_irregular"] >= 50 else '0F172A'
         _run(
             cells[4].paragraphs[0],
             f'{_format_decimal_pt(item["pct_irregular"], 2)}%',
             color=pct_color,
-            size=8,
+            size=9,
             bold=item["pct_irregular"] >= 50,
         )
         cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -356,17 +360,17 @@ def _add_quadro_evolucao_financeira(
                 cells[5].paragraphs[0],
                 f'+{_format_decimal_pt(item["taxa_crescimento_pct"], 2)}%',
                 color='991B1B',
-                size=8,
+                size=9,
                 bold=True,
             )
         else:
-            _run(cells[5].paragraphs[0], '-', color='64748B', size=8)
+            _run(cells[5].paragraphs[0], '-', color='64748B', size=9)
         if has_aumento_atipico or has_sem_comprovacao_relevante:
             for cell in cells:
                 _cell_bg(cell, 'FEE2E2')
 
     total_cells = table.rows[-1].cells
-    _run(total_cells[0].paragraphs[0], 'TOTAL', color='0F172A', size=8, bold=True)
+    _run(total_cells[0].paragraphs[0], 'TOTAL', color='0F172A', size=9, bold=True)
     total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
     totals = [
         f'R$ {_format_decimal_pt(evolucao_comp["total"], 2)}',
@@ -377,7 +381,7 @@ def _add_quadro_evolucao_financeira(
     ]
     for col_idx, value in enumerate(totals, start=1):
         total_cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT if col_idx < 4 else WD_ALIGN_PARAGRAPH.CENTER
-        _run(total_cells[col_idx].paragraphs[0], value, color='0F172A', size=8, bold=True)
+        _run(total_cells[col_idx].paragraphs[0], value, color='0F172A', size=9, bold=True)
     for cell in total_cells:
         _cell_bg(cell, 'F8FAFC')
 
@@ -393,7 +397,7 @@ def _add_quadro_evolucao_financeira(
         p_foot,
         'Fonte: Sistema Sentinela, com base nas dispensações registradas no SAV/PFPB e nas notas fiscais eletrônicas de aquisição de medicamentos.',
         color='64748B',
-        size=8,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -409,13 +413,14 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         p_title,
         f'Tabela {tabela_num} - Medicamentos associados aos semestres com aumento atípico de volume financeiro',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
-    table = doc.add_table(rows=len(medicamentos_aumento_atipico) + 1, cols=7)
-    table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(0.94), Inches(0.84), Inches(1.97), Inches(0.69), Inches(0.84), Inches(0.99), Inches(0.73)])
+    table = doc.add_table(rows=len(medicamentos_aumento_atipico) + 1, cols=6)
+    _set_table_fixed_widths(table, [Inches(1.06), Inches(0.95), Inches(2.24), Inches(0.78), Inches(0.95), Inches(1.12)])
+    _set_table_open_borders(table)
+    _repeat_table_header(table.rows[0])
 
     headers = [
         'Semestre',
@@ -424,12 +429,11 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         'Valor anterior',
         'Valor no semestre',
         'Aumento no semestre',
-        'Sem comprovação',
     ]
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=7, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     semestre_block_index: dict[str, int] = {}
@@ -437,7 +441,6 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
 
     for row_idx, item in enumerate(medicamentos_aumento_atipico, start=1):
         cells = table.rows[row_idx].cells
-        is_demais = bool(item.get("is_demais"))
         semestre_key = str(item.get("semestre_fmt") or item.get("semestre") or "")
         if semestre_key not in semestre_block_index:
             semestre_block_index[semestre_key] = next_block_index
@@ -446,15 +449,15 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         text_color = '0F172A'
         increase_color = '334155'
         cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[0].paragraphs[0], item["semestre_fmt"], color='334155', size=7, bold=True)
+        _run(cells[0].paragraphs[0], item["semestre_fmt"], color='334155', size=9, bold=True)
         _cell_bg(cells[0], semestre_bg)
         cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[1].paragraphs[0], item["gtin"], color=text_color, size=7)
-        _run(cells[2].paragraphs[0], item["descricao"], color=text_color, size=7)
+        _run(cells[1].paragraphs[0], item["gtin"], color=text_color, size=9)
+        _run(cells[2].paragraphs[0], item["descricao"], color=text_color, size=9)
 
         for col_idx, key in enumerate(("valor_anterior", "valor_atual"), start=3):
             cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color=text_color, size=7)
+            _run(cells[col_idx].paragraphs[0], f'R$ {_format_decimal_pt(item[key], 2)}', color=text_color, size=9)
 
         cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
         aumento_txt = f'R$ {_format_decimal_pt(item["aumento_valor"], 2)}'
@@ -464,11 +467,9 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
             cells[5].paragraphs[0],
             aumento_txt,
             color=increase_color,
-            size=7,
+            size=9,
             bold=True,
         )
-        cells[6].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        _run(cells[6].paragraphs[0], f'R$ {_format_decimal_pt(item["valor_sem_comprovacao"], 2)}', color=text_color, size=7)
 
     for row in table.rows:
         for cell in row.cells:
@@ -482,7 +483,7 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         p_foot,
         'Fonte: Sentinela, a partir da evolução mensal por GTIN. O percentual indicado no campo “Aumento no semestre” representa o crescimento do GTIN em relação ao semestre anterior e é exibido apenas quando o valor anterior é superior a R$ 1,00. GTINs com participação individual menor ou igual a 0,1% no aumento positivo do semestre são consolidados em uma linha agregada.',
         color='64748B',
-        size=8,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -491,8 +492,8 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='334155', size=8, bold=True)
-    _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=8)
+    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='334155', size=12, bold=True)
+    _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=12)
 
     tbl = doc.add_table(rows=0, cols=2)
     tbl.style = 'Table Grid'
@@ -534,14 +535,14 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         c0 = row.cells[0]
         _cell_bg(c0, 'F8FAFC')
         p0 = c0.paragraphs[0]
-        _run(p0, label, color='475569', size=8, bold=True)
+        _run(p0, label, color='475569', size=9, bold=True)
         p0.paragraph_format.space_before = Pt(2)
         p0.paragraph_format.space_after = Pt(2)
 
         # Estilo Valor
         c1 = row.cells[1]
         p1 = c1.paragraphs[0]
-        _run(p1, str(value) if value else '—', color='0F172A', size=8)
+        _run(p1, str(value) if value else '—', color='0F172A', size=9)
         p1.paragraph_format.space_before = Pt(2)
         p1.paragraph_format.space_after = Pt(2)
 
@@ -566,7 +567,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     _format_quadro_footnote(p_fonte)
     dt_extracao = data.get('data_processamento')
     dt_extracao_txt = dt_extracao.strftime('%d/%m/%Y') if dt_extracao else date.today().strftime('%d/%m/%Y')
-    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='94A3B8', size=7, italic=True)
+    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='94A3B8', size=10, italic=True)
 
     # ── Quadro Societário Atual ──────────────────────────────────────────
     p_socio_intro = doc.add_paragraph()
@@ -611,7 +612,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         p_title,
         f'Quadro 01-A - Vínculos trabalhistas identificados durante o ano no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -627,7 +628,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=8, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(rows_data, start=1):
@@ -643,7 +644,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=8)
+            _run(para, value, color='0F172A', size=9)
 
     for row in table.rows:
         for cell in row.cells:
@@ -657,7 +658,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         p_foot,
         f'Fonte: Sentinela, a partir de dados do eSocial. Data de carga mais recente da base eSocial disponível: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
         color='64748B',
-        size=8,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 
@@ -674,7 +675,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
         p_title,
         f'Quadro 01-B - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='334155',
-        size=8,
+        size=12,
         bold=True,
     )
 
@@ -686,7 +687,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     for idx, header in enumerate(headers):
         para = table.rows[0].cells[idx].paragraphs[0]
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(para, header, color='0F172A', size=8, bold=True)
+        _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
     for row_idx, item in enumerate(rows_data, start=1):
@@ -703,7 +704,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 3 else WD_ALIGN_PARAGRAPH.CENTER
-            _run(para, value, color='0F172A', size=8)
+            _run(para, value, color='0F172A', size=9)
 
     for row in table.rows:
         for cell in row.cells:
@@ -725,7 +726,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
         p_foot,
         f'Fonte: Sentinela, a partir de dados do eSocial. {escopo}',
         color='64748B',
-        size=8,
+        size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
 

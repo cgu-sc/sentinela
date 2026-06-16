@@ -411,7 +411,7 @@ watch(
     activePerfSession.value = perfSession;
     logCnpjPerf(perfSession, "bootstrap_started");
 
-    const { inicio, fim } = getApiParams();
+    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
     let access = null;
     try {
       const bootstrap = await cnpjDetailStore.fetchBootstrap(newCnpj, inicio, fim);
@@ -427,7 +427,7 @@ watch(
 
     if (newCnpj) {
       await Promise.all([
-        cnpjDetailStore.fetchIntegrityAlerts(newCnpj),
+        cnpjDetailStore.fetchIntegrityAlerts(newCnpj, inicio, fim, volumeAtipicoPercentual),
         loadActiveTabData(perfSession, "initial"),
       ]);
     }
@@ -452,13 +452,19 @@ watch(
     if (!cnpj.value) return;
     if (cnpjDetailStore.cnpjAccessStatus !== "valid") return;
     if (filterStore.isAnimating) return;
-    const { inicio, fim } = getApiParams();
+    const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
     const perfSession = activePerfSession.value;
     logCnpjPerf(perfSession, "period_bootstrap_dispatched", {
       inicio,
       fim,
     });
     cnpjDetailStore.fetchBootstrap(cnpj.value, inicio, fim)
+      .then(() => cnpjDetailStore.fetchIntegrityAlerts(
+        cnpj.value,
+        inicio,
+        fim,
+        volumeAtipicoPercentual,
+      ))
       .then(() => loadActiveTabData(perfSession, "period_change"))
       .then(() => {
         if (activePerfSession.value?.sessionId !== perfSession?.sessionId) return;

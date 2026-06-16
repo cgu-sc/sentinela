@@ -87,9 +87,19 @@ def get_socios_farmacia(cnpj: str):
     return AnalyticsService.get_socios_farmacia(cnpj)
 
 @router.get("/cnpj/{cnpj}/alertas-integridade", response_model=IntegrityAlertsResponse)
-def get_integrity_alerts(cnpj: str):
+def get_integrity_alerts(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+    volume_atipico_limite: Optional[float] = Query(None),
+):
     """Retorna alertas de integridade do estabelecimento e de seus vinculos diretos."""
-    return AnalyticsService.get_integrity_alerts(cnpj)
+    return AnalyticsService.get_integrity_alerts(
+        cnpj,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        volume_atipico_limite=volume_atipico_limite,
+    )
 
 @router.get("/cnpj/{cnpj}/network", response_model=NetworkResponse)
 def get_teia_grafo_nivel2(

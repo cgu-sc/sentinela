@@ -1,6 +1,9 @@
 from datetime import date, datetime
 
+import polars as pl
+
 from ...schemas.analytics import IntegrityAlertSchema, IntegrityAlertsResponse
+from data_cache import get_df_perfil_estabelecimento
 from .farmacia import get_dados_farmacia
 from .financeiro import get_evolucao_financeira
 from .socios import get_socios_farmacia
@@ -80,8 +83,16 @@ def _build_alerta_idade_socio(
 def _build_alerta_volume_atipico(
     *,
     cadastro,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    volume_atipico_limite: float | None = None,
 ) -> IntegrityAlertSchema | None:
-    evolucao = get_evolucao_financeira(cadastro.cnpj)
+    evolucao = get_evolucao_financeira(
+        cadastro.cnpj,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        volume_atipico_limite=volume_atipico_limite,
+    )
     semestres = list(getattr(evolucao, "semestres", None) or [])
     if not semestres:
         return None
@@ -107,13 +118,23 @@ def _build_alerta_volume_atipico(
     )
 
 
-def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
+def get_integrity_alerts(
+    cnpj: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    volume_atipico_limite: float | None = None,
+) -> IntegrityAlertsResponse:
     cadastro = get_dados_farmacia(cnpj)
     socios_response = get_socios_farmacia(cnpj)
     alertas: list[IntegrityAlertSchema] = []
     data_referencia_socios = _as_date(socios_response.data_processamento)
 
-    alerta_volume_atipico = _build_alerta_volume_atipico(cadastro=cadastro)
+    alerta_volume_atipico = _build_alerta_volume_atipico(
+        cadastro=cadastro,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        volume_atipico_limite=volume_atipico_limite,
+    )
     if alerta_volume_atipico is not None:
         alertas.append(alerta_volume_atipico)
 
@@ -136,7 +157,30 @@ def get_integrity_alerts(cnpj: str) -> IntegrityAlertsResponse:
             )
         )
 
-    if cadastro.is_dispersao_uf_nao_vizinha:
+    alerta_uf_nao_vizinha = {
+        "is_dispersao_uf_nao_vizinha": cadastro.is_dispersao_uf_nao_vizinha,
+        "pct_dispersao_uf_nao_vizinha": cadastro.pct_dispersao_uf_nao_vizinha,
+        "valor_dispersao_uf_nao_vizinha": cadastro.valor_dispersao_uf_nao_vizinha,
+    }
+    if data_inicio is not None or data_fim is not None:
+        from .geografico import calcular_alerta_uf_nao_vizinha
+
+        perfil_df = get_df_perfil_estabelecimento()
+        for coluna in ("cnpj", "id_cnpj", "uf"):
+            if coluna not in perfil_df.columns:
+                raise RuntimeError(f"Perfil consolidado sem coluna obrigatoria para alerta geografico: {coluna}.")
+        perfil = perfil_df.filter(pl.col("cnpj") == cadastro.cnpj)
+        if perfil.is_empty():
+            raise RuntimeError("Perfil consolidado ausente para calcular alerta geografico por periodo.")
+        perfil_row = perfil.select(["id_cnpj", "uf"]).row(0, named=True)
+        alerta_uf_nao_vizinha = calcular_alerta_uf_nao_vizinha(
+            id_cnpj=int(perfil_row["id_cnpj"]),
+            uf_farmacia=str(perfil_row["uf"]),
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        )
+
+    if alerta_uf_nao_vizinha["is_dispersao_uf_nao_vizinha"]:
         alertas.append(
             IntegrityAlertSchema(
                 tipo="cnpj_dispersao_uf_nao_vizinha",

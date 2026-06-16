@@ -816,30 +816,38 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchIntegrityAlerts(cnpj) {
+    async fetchIntegrityAlerts(cnpj, inicio = null, fim = null, volumeAtipicoPercentual = null) {
       const clean = normalizeCnpj(cnpj);
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}|vol:${volumeAtipicoPercentual ?? ''}`;
       if (
         !clean
-        || this.integrityAlertsLoaded === clean
-        || this.integrityAlertsRequestKey === clean
+        || this.integrityAlertsLoaded === key
+        || this.integrityAlertsRequestKey === key
       ) return;
 
       this.integrityAlertsLoading = true;
-      this.integrityAlertsRequestKey = clean;
+      this.integrityAlertsRequestKey = key;
       this.integrityAlertsError = null;
 
       try {
-        const { data } = await axios.get(API_ENDPOINTS.analyticsIntegrityAlerts(clean));
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+        if (volumeAtipicoPercentual != null) {
+          params.volume_atipico_limite = volumeAtipicoPercentual;
+        }
+
+        const { data } = await axios.get(API_ENDPOINTS.analyticsIntegrityAlerts(clean), { params });
         assertIntegrityAlerts(data);
-        if (this.integrityAlertsRequestKey !== clean) return;
+        if (this.integrityAlertsRequestKey !== key) return;
         this.integrityAlertsData = data;
-        this.integrityAlertsLoaded = clean;
+        this.integrityAlertsLoaded = key;
       } catch (e) {
-        if (this.integrityAlertsRequestKey !== clean) return;
+        if (this.integrityAlertsRequestKey !== key) return;
         console.error('Erro ao buscar alertas de integridade:', e);
         this.integrityAlertsError = e?.response?.data?.detail || e?.message || ERROR_MSG;
       } finally {
-        if (this.integrityAlertsRequestKey === clean) {
+        if (this.integrityAlertsRequestKey === key) {
           this.integrityAlertsLoading = false;
           this.integrityAlertsRequestKey = null;
         }

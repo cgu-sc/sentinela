@@ -209,6 +209,26 @@ def _set_table_open_borders(tbl, *, color: str = '0F172A', sz: str = '4'):
     tblPr.append(tblBorders)
 
 
+def _set_table_grid_borders(tbl, *, color: str = 'CBD5E1', sz: str = '4'):
+    """Aplica grade completa na tabela, incluindo bordas laterais e verticais."""
+    tblEl = tbl._tbl
+    tblPr = tblEl.find(qn('w:tblPr'))
+    if tblPr is None:
+        tblPr = OxmlElement('w:tblPr')
+        tblEl.insert(0, tblPr)
+    for existing in tblPr.findall(qn('w:tblBorders')):
+        tblPr.remove(existing)
+    tblBorders = OxmlElement('w:tblBorders')
+    for side in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        el = OxmlElement(f'w:{side}')
+        el.set(qn('w:val'), 'single')
+        el.set(qn('w:sz'), sz)
+        el.set(qn('w:space'), '0')
+        el.set(qn('w:color'), color)
+        tblBorders.append(el)
+    tblPr.append(tblBorders)
+
+
 def _row_cant_split(row):
     """Evita que uma linha da tabela seja quebrada entre paginas pelo Word."""
     trPr = row._tr.get_or_add_trPr()

@@ -240,7 +240,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
         _run(
             p_title,
-            f"Tabela {anexo_num}.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
+            f"Tabela 3.{idx} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
             color="334155",
             size=12,
             bold=True,
@@ -341,7 +341,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title = doc.add_paragraph()
     _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title, f"Tabela {anexo_num}.1 - Resumo geral da memória de cálculo", color="334155", size=12, bold=True)
+    _run(p_title, "Tabela 1 - Resumo geral da memória de cálculo", color="334155", size=12, bold=True)
 
     summary_headers = [
         "Total de medicamentos dispensados",
@@ -374,7 +374,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title2 = doc.add_paragraph()
     _format_block_title(p_title2, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title2, f"Tabela {anexo_num}.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=12, bold=True)
+    _run(p_title2, "Tabela 2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=12, bold=True)
 
     headers = [
         "GTIN",

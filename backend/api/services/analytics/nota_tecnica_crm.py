@@ -30,6 +30,7 @@ from .nota_tecnica_docx_utils import (
     _format_block_title,
     _run,
     _set_table_fixed_widths,
+    _set_table_grid_borders,
     _write_cell,
 )
 from .nota_tecnica_formatters import _format_decimal_pt, _title_case_pt
@@ -442,6 +443,7 @@ def _crm_table_header(table, headers: list[str], widths: list[Any], *, size: flo
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_fixed_widths(table, widths)
+    _set_table_grid_borders(table)
     for idx, header in enumerate(headers):
         cell = table.rows[0].cells[idx]
         _cell_bg(cell, "E2E8F0")

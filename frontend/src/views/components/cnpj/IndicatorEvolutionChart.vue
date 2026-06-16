@@ -237,7 +237,7 @@ const chartOptions = computed(() => ({
 
 .indicator-evolution-chart {
   width: 100%;
-  height: 260px;
+  height: 350px;
   margin-top: 0.45rem;
 }
 </style>

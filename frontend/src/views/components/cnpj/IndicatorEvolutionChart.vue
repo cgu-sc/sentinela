@@ -65,8 +65,7 @@ function formatValue(value) {
 const palette = computed(() => ({
   farmacia: chartDataColors.value.red,
   regiao: PALETTE.indigo[500],
-  uf: PALETTE.slate[500],
-  brasil: PALETTE.slate[400],
+  uf: PALETTE.amber[500],
   mark: chartDataColors.value.red,
   markFill: hexToRgba(chartDataColors.value.red, 0.10),
   text: chartTheme.value.text,
@@ -129,7 +128,6 @@ const chartOptions = computed(() => ({
     palette.value.farmacia,
     palette.value.regiao,
     palette.value.uf,
-    palette.value.brasil,
   ],
   grid: {
     left: 46,
@@ -193,11 +191,6 @@ const chartOptions = computed(() => ({
       lineStyle: { opacity: 0.72, type: 'dashed' },
       itemStyle: { opacity: 0.72 },
       z: 2,
-    }),
-    buildLine('Brasil', 'brasil', palette.value.brasil, 1.6, {
-      lineStyle: { opacity: 0.72, type: 'dotted' },
-      itemStyle: { opacity: 0.72 },
-      z: 1,
     }),
   ],
 }));

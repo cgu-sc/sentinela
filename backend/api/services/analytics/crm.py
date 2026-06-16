@@ -19,7 +19,6 @@ from data_cache import (
     get_localidades_df,
     get_df_bench_crm_regiao,
     get_df_bench_crm_br,
-    scan_crm_prescricoes_brasil_semestre,
     get_df_dados_farmacia,
     get_df_perfil_estabelecimento,
     get_cache_dir,
@@ -229,44 +228,6 @@ def _filter_competencia(df: pl.DataFrame, comp_ini: int | None, comp_fim: int | 
     if comp_fim:
         df = df.filter(pl.col("competencia").cast(pl.Int32) <= comp_fim)
     return df
-
-
-def _competencia_to_semestre_key(competencia: int) -> int:
-    ano = competencia // 100
-    mes = competencia % 100
-    semestre = 1 if mes <= 6 else 2
-    return ano * 10 + semestre
-
-
-def _build_crm_brasil_semestre_summary(
-    comp_ini: int | None,
-    comp_fim: int | None,
-    id_medicos: list[str],
-) -> pl.DataFrame:
-    id_medicos_validos = sorted({str(id_medico) for id_medico in id_medicos if id_medico is not None})
-    if not id_medicos_validos:
-        raise RuntimeError("Nao ha CRMs validos para consultar o cache Brasil/Semestre.")
-
-    df_brasil = scan_crm_prescricoes_brasil_semestre().filter(
-        pl.col("id_medico").is_in(id_medicos_validos)
-    )
-    if comp_ini:
-        df_brasil = df_brasil.filter(pl.col("chave_semestre") >= _competencia_to_semestre_key(comp_ini))
-    if comp_fim:
-        df_brasil = df_brasil.filter(pl.col("chave_semestre") <= _competencia_to_semestre_key(comp_fim))
-
-    summary = (
-        df_brasil
-        .group_by("id_medico")
-        .agg([
-            pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
-            pl.sum("dias_ativos_brasil").alias("dias_ativos_brasil"),
-        ])
-        .collect()
-    )
-    if summary.is_empty():
-        raise RuntimeError("Cache de prescricoes CRM Brasil/Semestre sem dados para os CRMs e periodo solicitados.")
-    return summary
 
 
 def _count_rows_by_medico(df: pl.DataFrame) -> dict[str, int]:
@@ -563,11 +524,12 @@ def get_crm_data(
         ).dt.day().alias("dias_competencia")
     ])
 
-    df_med = (
-        df.group_by("id_medico")
+    df_med_mes = (
+        df.group_by(["id_medico", "competencia"])
         .agg([
             pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
             pl.sum("nu_prescricoes_mes").alias("nu_prescricoes"),
+            pl.max("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
             pl.sum("dias_competencia").alias("_dias_ativos"),  # dias reais do mÃ©dico
             pl.col("no_medico").drop_nulls().first().alias("no_medico"),
             pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
@@ -585,27 +547,42 @@ def get_crm_data(
             (pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("nu_prescricoes_dia"),
         ])
     )
-    id_medicos_brasil = df_med.select("id_medico").drop_nulls().unique().to_series().to_list()
-    df_med = df_med.join(
-        _build_crm_brasil_semestre_summary(comp_ini, comp_fim, id_medicos_brasil),
-        on="id_medico",
-        how="left",
-    )
-
-    missing_brasil = df_med.filter(
+    missing_brasil = df_med_mes.filter(
         pl.col("nu_prescricoes_total_brasil").is_null()
-        | pl.col("dias_ativos_brasil").is_null()
-        | (pl.col("dias_ativos_brasil") <= 0)
+        | (pl.col("nu_prescricoes_total_brasil") <= 0)
+        | pl.col("_dias_ativos").is_null()
+        | (pl.col("_dias_ativos") <= 0)
     )
     if not missing_brasil.is_empty():
         ids = ", ".join(str(row["id_medico"]) for row in missing_brasil.select("id_medico").head(10).iter_rows(named=True))
-        raise RuntimeError(f"Cache CRM Brasil/Semestre sem cobertura para CRM(s): {ids}.")
+        raise RuntimeError(f"Cache CRM mensal sem cobertura Brasil para CRM(s): {ids}.")
+
+    df_med = (
+        df_med_mes.group_by("id_medico")
+        .agg([
+            pl.sum("vl_total_prescricoes").alias("vl_total_prescricoes"),
+            pl.sum("nu_prescricoes").alias("nu_prescricoes"),
+            pl.sum("nu_prescricoes_total_brasil").alias("nu_prescricoes_total_brasil"),
+            pl.sum("_dias_ativos").alias("_dias_ativos"),
+            pl.col("no_medico").drop_nulls().first().alias("no_medico"),
+            pl.max("flag_crm_invalido").alias("flag_crm_invalido"),
+            pl.max("flag_prescricao_antes_registro").alias("flag_prescricao_antes_registro"),
+            pl.max("alerta_concentracao_multiplos_crms").alias("alerta_concentracao_multiplos_crms"),
+            pl.max("alerta_concentracao_unico_crm").alias("alerta_concentracao_unico_crm"),
+            pl.max("alerta_distancia_geografica").alias("alerta_distancia_geografica"),
+            pl.max("alerta5_geografico").alias("alerta5_geografico"),
+            pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
+            pl.col("dt_inscricao_crm").drop_nulls().first().alias("dt_inscricao_crm"),
+            pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
+        ])
+        .with_columns([
+            (pl.col("nu_prescricoes").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("nu_prescricoes_dia"),
+            (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / pl.col("_dias_ativos")).round(2).alias("prescricoes_dia_total_brasil"),
+        ])
+    )
 
     df_med = (
         df_med
-        .with_columns([
-            (pl.col("nu_prescricoes_total_brasil").cast(pl.Float64) / pl.col("dias_ativos_brasil")).round(2).alias("prescricoes_dia_total_brasil"),
-        ])
         .with_columns([
             (pl.col("nu_prescricoes_dia") > 30).cast(pl.Int8).alias("flag_robo"),
             (

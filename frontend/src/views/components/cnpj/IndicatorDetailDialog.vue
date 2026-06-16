@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import Dialog from 'primevue/dialog';
 import DataTable from 'primevue/datatable';
@@ -10,6 +10,8 @@ import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { INDICATOR_DETAIL_CONFIG } from '@/config/indicatorDetailConfig';
+import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
+import IndicatorEvolutionChart from './IndicatorEvolutionChart.vue';
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -25,8 +27,16 @@ const {
   indicadorBenchmarkDataByKey,
   indicadorBenchmarkLoadingByKey,
   indicadorBenchmarkErrorByKey,
+  indicadorEvolucaoBenchmarkDataByKey,
+  indicadorEvolucaoBenchmarkLoadingByKey,
+  indicadorEvolucaoBenchmarkErrorByKey,
 } = storeToRefs(cnpjDetailStore);
-const { formatCurrencyFull, formatNumberFull, formatPercent, toLocalISO } = useFormatting();
+const {
+  formatCurrencyFull,
+  formatNumberFull,
+  formatPercent,
+  toLocalISO,
+} = useFormatting();
 
 const config = computed(() => INDICATOR_DETAIL_CONFIG[props.indicatorKey] ?? null);
 
@@ -45,13 +55,26 @@ const requestKey = computed(() => (
 ));
 
 const benchmarkData = computed(() => indicadorBenchmarkDataByKey.value[requestKey.value] ?? null);
+const evolutionData = computed(() => indicadorEvolucaoBenchmarkDataByKey.value[requestKey.value] ?? null);
 const benchmarkLoading = computed(() => Boolean(indicadorBenchmarkLoadingByKey.value[requestKey.value]));
-const benchmarkError = computed(() => indicadorBenchmarkErrorByKey.value[requestKey.value] ?? null);
-const canRenderDialog = computed(() => !!config.value && !!benchmarkData.value && !benchmarkLoading.value);
+const evolutionLoading = computed(() => Boolean(indicadorEvolucaoBenchmarkLoadingByKey.value[requestKey.value]));
+const benchmarkError = computed(() => (
+  indicadorBenchmarkErrorByKey.value[requestKey.value]
+  ?? indicadorEvolucaoBenchmarkErrorByKey.value[requestKey.value]
+  ?? null
+));
+const canRenderDialog = computed(() => (
+  !!config.value
+  && !!benchmarkData.value
+  && !!evolutionData.value
+  && !benchmarkLoading.value
+  && !evolutionLoading.value
+));
 
 const dialogTitle = computed(() => config.value?.title ?? 'Detalhamento do Indicador');
 const municipioRows = computed(() => benchmarkData.value?.municipio?.rows ?? []);
 const regiaoRows = computed(() => benchmarkData.value?.regiao_saude?.rows ?? []);
+const copiedKey = ref(null);
 const municipioLabel = computed(() => benchmarkData.value?.municipio?.label ?? 'Município');
 const regiaoLabel = computed(() => benchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
 
@@ -66,13 +89,32 @@ const formatValueByType = (value, format) => {
 const formatIndicatorValue = (value) => formatValueByType(value, config.value?.valueFormat ?? 'pct');
 const formatKpiValue = (kpi) => formatValueByType(kpi?.value, kpi?.formato);
 const formatFinancialValue = (value) => (value == null ? '—' : formatCurrencyFull(value));
+const hasFinancialColumn = computed(() => Boolean(config.value?.financialLabel));
 
-const statusClass = (status) => {
-  if (status === 'CRITICO') return 'indicator-status indicator-status--critico';
-  if (status === 'ATENCAO') return 'indicator-status indicator-status--atencao';
-  if (status === 'NORMAL') return 'indicator-status indicator-status--normal';
-  return 'indicator-status indicator-status--sem-dados';
-};
+function formatCompactFinancialValue(value) {
+  if (value == null) return '—';
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return '—';
+
+  const absValue = Math.abs(numericValue);
+  const compactRules = [
+    { limit: 1_000_000_000, divisor: 1_000_000_000, suffix: 'bi' },
+    { limit: 1_000_000, divisor: 1_000_000, suffix: 'mi' },
+    { limit: 1_000, divisor: 1_000, suffix: 'k' },
+  ];
+  const rule = compactRules.find(item => absValue >= item.limit);
+
+  if (!rule) return formatCurrencyFull(numericValue);
+
+  const scaledValue = numericValue / rule.divisor;
+  const formattedValue = scaledValue.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Math.abs(scaledValue) < 10 ? 1 : 0,
+  });
+
+  return `R$ ${formattedValue}${rule.suffix}`;
+}
 
 const statusLabel = (status) => {
   if (status === 'CRITICO') return 'CRÍTICO';
@@ -81,15 +123,37 @@ const statusLabel = (status) => {
   return 'SEM DADOS';
 };
 
+const riskStatusClass = (status) => {
+  if (status === 'CRITICO') return 'status-danger';
+  if (status === 'ATENCAO') return 'status-warn';
+  if (status === 'NORMAL') return 'status-success';
+  return 'status-secondary';
+};
+
 const rowClass = (row) => ({
   'indicator-benchmark-target': row?.is_alvo,
 });
+
+function copyAndSignal(text, key) {
+  if (!text) return;
+  navigator.clipboard.writeText(text);
+  copiedKey.value = key;
+  setTimeout(() => {
+    if (copiedKey.value === key) copiedKey.value = null;
+  }, 2000);
+}
 
 watch(
   () => [props.modelValue, props.cnpj, props.indicatorKey, periodoInicio.value, periodoFim.value],
   async ([visible, cnpj, indicatorKey]) => {
     if (!visible || !cnpj || !indicatorKey || !config.value) return;
     await cnpjDetailStore.fetchIndicadorBenchmarkLocal(
+      cnpj,
+      indicatorKey,
+      periodoInicio.value,
+      periodoFim.value,
+    );
+    await cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(
       cnpj,
       indicatorKey,
       periodoInicio.value,
@@ -123,6 +187,11 @@ watch(
           </div>
         </div>
 
+        <IndicatorEvolutionChart
+          :data="evolutionData"
+          :valueLabel="config.valueLabel"
+        />
+
         <section class="indicator-benchmark-card">
           <div class="indicator-card-title">Comparação com estabelecimentos do território</div>
           <TabView class="indicator-benchmark-tabs">
@@ -137,35 +206,91 @@ watch(
                 class="indicator-table"
                 size="small"
               >
-                <Column header="ESTABELECIMENTO" style="min-width: 250px">
+                <Column header="ESTABELECIMENTO" headerClass="col-name" bodyClass="col-name">
                   <template #body="{ data }">
-                    <div class="indicator-estab-cell">
-                      <span>{{ data.razao_social || data.cnpj }}</span>
-                      <small>{{ data.cnpj }}</small>
+                    <div class="razao-block">
+                      <span
+                        class="razao-social-cell"
+                        v-tooltip.top="data.razao_social"
+                      >{{ data.razao_social ?? '—' }}</span>
+                      <span class="cnpj-row">
+                        <span
+                          v-tooltip.top="data.is_matriz ? 'Matriz' : 'Filial'"
+                          :class="data.is_matriz ? 'tipo-badge matriz' : 'tipo-badge filial'"
+                        >
+                          <i :class="data.is_matriz ? 'pi pi-home' : 'pi pi-building'" />
+                        </span>
+                        <span class="cnpj-text">{{ data.cnpj }}</span>
+                        <i
+                          :class="['pi', copiedKey === data.cnpj + '-cnpj' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']"
+                          v-tooltip.top="'Copiar CNPJ'"
+                          @click.stop="copyAndSignal(data.cnpj, data.cnpj + '-cnpj')"
+                        />
+                      </span>
                     </div>
                   </template>
                 </Column>
-                <Column header="MUNICÍPIO/UF" style="min-width: 150px">
-                  <template #body="{ data }">{{ data.municipio }}/{{ data.uf }}</template>
-                </Column>
-                <Column :header="config.valueLabel.toUpperCase()" style="width: 120px">
-                  <template #body="{ data }">{{ formatIndicatorValue(data.valor) }}</template>
-                </Column>
-                <Column :header="config.financialLabel.toUpperCase()" style="width: 150px">
-                  <template #body="{ data }">{{ formatFinancialValue(data.valor_financeiro) }}</template>
-                </Column>
-                <Column header="MEDIANA REGIÃO" style="width: 130px">
-                  <template #body="{ data }">{{ formatIndicatorValue(data.mediana_regiao) }}</template>
-                </Column>
-                <Column header="RISCO REGIÃO" style="width: 115px">
-                  <template #body="{ data }">{{ data.risco_regiao == null ? '—' : `${Number(data.risco_regiao).toFixed(1)}x` }}</template>
-                </Column>
-                <Column field="status" header="STATUS" style="width: 116px">
+                <Column header="MUNICÍPIO" headerClass="col-location" bodyClass="col-location">
                   <template #body="{ data }">
-                    <span :class="statusClass(data.status)">{{ statusLabel(data.status) }}</span>
+                    <div class="loc-block">
+                      <span
+                        class="municipio-text"
+                        v-tooltip.top="data.municipio"
+                      >{{ data.municipio ?? '—' }}</span>
+                      <span class="uf-tag">{{ data.uf }}</span>
+                    </div>
                   </template>
                 </Column>
-                <Column header="CONEXÃO MS" style="width: 108px">
+                <Column header="VALOR MOVIMENTADO" headerClass="col-movement" bodyClass="col-movement">
+                  <template #body="{ data }">{{ formatFinancialValue(data.valor_movimentado) }}</template>
+                </Column>
+                <Column header="NÃO COMPROVAÇÃO" headerClass="col-noncomp" bodyClass="col-noncomp">
+                  <template #body="{ data }">
+                    <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
+                      <span
+                        class="noncomp-value"
+                        :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+                        v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
+                      >
+                        {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
+                      </span>
+                      <span v-if="data.percentual_nao_comprovacao != null" class="noncomp-percent">
+                        {{ Number(data.percentual_nao_comprovacao).toFixed(2) }}%
+                      </span>
+                    </div>
+                  </template>
+                </Column>
+                <Column :header="config.valueLabel.toUpperCase()" headerClass="col-indicator" bodyClass="col-indicator">
+                  <template #body="{ data }">{{ formatIndicatorValue(data.valor) }}</template>
+                </Column>
+                <Column v-if="hasFinancialColumn" :header="config.financialLabel.toUpperCase()" headerClass="col-financial" bodyClass="col-financial">
+                  <template #body="{ data }">{{ formatFinancialValue(data.valor_financeiro) }}</template>
+                </Column>
+                <Column header="MEDIANA REGIÃO" headerClass="col-median" bodyClass="col-median">
+                  <template #body="{ data }">{{ formatIndicatorValue(data.mediana_regiao) }}</template>
+                </Column>
+                <Column header="RISCO" headerClass="col-risk" bodyClass="col-risk">
+                  <template #body="{ data }">
+                    <div class="risk-cell" :class="{ muted: data.risco_regiao == null }">
+                      <span
+                        v-if="data.risco_regiao != null"
+                        class="risk-value"
+                        :class="riskStatusClass(data.status)"
+                      >
+                        {{ Number(data.risco_regiao).toFixed(1) }}x
+                      </span>
+                      <span v-else>—</span>
+                      <span
+                        v-if="data.status"
+                        class="risk-status"
+                        :class="riskStatusClass(data.status)"
+                      >
+                        {{ statusLabel(data.status) }}
+                      </span>
+                    </div>
+                  </template>
+                </Column>
+                <Column header="CONEXÃO MS" headerClass="col-ms" bodyClass="col-ms">
                   <template #body="{ data }">
                     <span :class="data.is_conexao_ativa ? 'ms-status ms-status--ativo' : 'ms-status ms-status--inativo'">
                       {{ data.is_conexao_ativa ? 'SIM' : 'NÃO' }}
@@ -186,35 +311,91 @@ watch(
                 class="indicator-table"
                 size="small"
               >
-                <Column header="ESTABELECIMENTO" style="min-width: 250px">
+                <Column header="ESTABELECIMENTO" headerClass="col-name" bodyClass="col-name">
                   <template #body="{ data }">
-                    <div class="indicator-estab-cell">
-                      <span>{{ data.razao_social || data.cnpj }}</span>
-                      <small>{{ data.cnpj }}</small>
+                    <div class="razao-block">
+                      <span
+                        class="razao-social-cell"
+                        v-tooltip.top="data.razao_social"
+                      >{{ data.razao_social ?? '—' }}</span>
+                      <span class="cnpj-row">
+                        <span
+                          v-tooltip.top="data.is_matriz ? 'Matriz' : 'Filial'"
+                          :class="data.is_matriz ? 'tipo-badge matriz' : 'tipo-badge filial'"
+                        >
+                          <i :class="data.is_matriz ? 'pi pi-home' : 'pi pi-building'" />
+                        </span>
+                        <span class="cnpj-text">{{ data.cnpj }}</span>
+                        <i
+                          :class="['pi', copiedKey === data.cnpj + '-cnpj' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']"
+                          v-tooltip.top="'Copiar CNPJ'"
+                          @click.stop="copyAndSignal(data.cnpj, data.cnpj + '-cnpj')"
+                        />
+                      </span>
                     </div>
                   </template>
                 </Column>
-                <Column header="MUNICÍPIO/UF" style="min-width: 150px">
-                  <template #body="{ data }">{{ data.municipio }}/{{ data.uf }}</template>
-                </Column>
-                <Column :header="config.valueLabel.toUpperCase()" style="width: 120px">
-                  <template #body="{ data }">{{ formatIndicatorValue(data.valor) }}</template>
-                </Column>
-                <Column :header="config.financialLabel.toUpperCase()" style="width: 150px">
-                  <template #body="{ data }">{{ formatFinancialValue(data.valor_financeiro) }}</template>
-                </Column>
-                <Column header="MEDIANA REGIÃO" style="width: 130px">
-                  <template #body="{ data }">{{ formatIndicatorValue(data.mediana_regiao) }}</template>
-                </Column>
-                <Column header="RISCO REGIÃO" style="width: 115px">
-                  <template #body="{ data }">{{ data.risco_regiao == null ? '—' : `${Number(data.risco_regiao).toFixed(1)}x` }}</template>
-                </Column>
-                <Column field="status" header="STATUS" style="width: 116px">
+                <Column header="MUNICÍPIO" headerClass="col-location" bodyClass="col-location">
                   <template #body="{ data }">
-                    <span :class="statusClass(data.status)">{{ statusLabel(data.status) }}</span>
+                    <div class="loc-block">
+                      <span
+                        class="municipio-text"
+                        v-tooltip.top="data.municipio"
+                      >{{ data.municipio ?? '—' }}</span>
+                      <span class="uf-tag">{{ data.uf }}</span>
+                    </div>
                   </template>
                 </Column>
-                <Column header="CONEXÃO MS" style="width: 108px">
+                <Column header="VALOR MOVIMENTADO" headerClass="col-movement" bodyClass="col-movement">
+                  <template #body="{ data }">{{ formatFinancialValue(data.valor_movimentado) }}</template>
+                </Column>
+                <Column header="NÃO COMPROVAÇÃO" headerClass="col-noncomp" bodyClass="col-noncomp">
+                  <template #body="{ data }">
+                    <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
+                      <span
+                        class="noncomp-value"
+                        :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+                        v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
+                      >
+                        {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
+                      </span>
+                      <span v-if="data.percentual_nao_comprovacao != null" class="noncomp-percent">
+                        {{ Number(data.percentual_nao_comprovacao).toFixed(2) }}%
+                      </span>
+                    </div>
+                  </template>
+                </Column>
+                <Column :header="config.valueLabel.toUpperCase()" headerClass="col-indicator" bodyClass="col-indicator">
+                  <template #body="{ data }">{{ formatIndicatorValue(data.valor) }}</template>
+                </Column>
+                <Column v-if="hasFinancialColumn" :header="config.financialLabel.toUpperCase()" headerClass="col-financial" bodyClass="col-financial">
+                  <template #body="{ data }">{{ formatFinancialValue(data.valor_financeiro) }}</template>
+                </Column>
+                <Column header="MEDIANA REGIÃO" headerClass="col-median" bodyClass="col-median">
+                  <template #body="{ data }">{{ formatIndicatorValue(data.mediana_regiao) }}</template>
+                </Column>
+                <Column header="RISCO" headerClass="col-risk" bodyClass="col-risk">
+                  <template #body="{ data }">
+                    <div class="risk-cell" :class="{ muted: data.risco_regiao == null }">
+                      <span
+                        v-if="data.risco_regiao != null"
+                        class="risk-value"
+                        :class="riskStatusClass(data.status)"
+                      >
+                        {{ Number(data.risco_regiao).toFixed(1) }}x
+                      </span>
+                      <span v-else>—</span>
+                      <span
+                        v-if="data.status"
+                        class="risk-status"
+                        :class="riskStatusClass(data.status)"
+                      >
+                        {{ statusLabel(data.status) }}
+                      </span>
+                    </div>
+                  </template>
+                </Column>
+                <Column header="CONEXÃO MS" headerClass="col-ms" bodyClass="col-ms">
                   <template #body="{ data }">
                     <span :class="data.is_conexao_ativa ? 'ms-status ms-status--ativo' : 'ms-status ms-status--inativo'">
                       {{ data.is_conexao_ativa ? 'SIM' : 'NÃO' }}
@@ -298,26 +479,123 @@ watch(
   color: var(--risk-indicator-critical);
 }
 
-.indicator-estab-cell {
+.razao-block {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.25rem;
   min-width: 0;
+  overflow: hidden;
 }
 
-.indicator-estab-cell span {
+.razao-social-cell {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  font-size: 0.76rem;
   color: var(--text-color);
-  font-weight: 600;
-  line-height: 1.2;
 }
 
-.indicator-estab-cell small {
+.cnpj-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.tipo-badge.matriz {
+  background: color-mix(in srgb, var(--accent-indigo) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-indigo) 35%, transparent);
+  color: var(--accent-indigo);
+}
+
+.tipo-badge.filial {
+  background: color-mix(in srgb, var(--status-secondary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-secondary) 20%, transparent);
+  color: var(--status-secondary);
+}
+
+.cnpj-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.01em;
 }
 
-.ms-status,
-.indicator-status {
+.copy-btn {
+  display: inline-flex;
+  justify-content: center;
+  width: 1.4rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  opacity: 0.4;
+  transition: all 0.2s;
+}
+
+.copy-btn.text-success {
+  color: var(--status-success) !important;
+  opacity: 1 !important;
+}
+
+.copy-btn:hover {
+  opacity: 1 !important;
+  color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.copy-btn:active {
+  transform: scale(0.9);
+}
+
+.loc-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.municipio-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+}
+
+.uf-tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0.05rem 0.3rem;
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  color: var(--primary-color);
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ms-status {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -342,29 +620,97 @@ watch(
   background: color-mix(in srgb, var(--text-muted) 10%, transparent);
 }
 
-.indicator-status {
-  min-width: 5.8rem;
-  padding: 0.16rem 0.5rem;
+.noncomp-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+  line-height: 1.1;
 }
 
-.indicator-status--critico {
-  color: var(--risk-indicator-critical);
-  background: color-mix(in srgb, var(--risk-indicator-critical) 12%, transparent);
-}
-
-.indicator-status--atencao {
-  color: var(--risk-indicator-warning);
-  background: color-mix(in srgb, var(--risk-indicator-warning) 13%, transparent);
-}
-
-.indicator-status--normal {
-  color: var(--risk-indicator-normal);
-  background: color-mix(in srgb, var(--risk-indicator-normal) 12%, transparent);
-}
-
-.indicator-status--sem-dados {
+.noncomp-cell.muted {
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+}
+
+.noncomp-value {
+  color: var(--text-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.noncomp-percent {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.risk-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.risk-value {
+  display: block;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.risk-status {
+  display: block;
+  max-width: 100%;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.risk-value.status-danger,
+.risk-status.status-danger {
+  color: var(--risk-high);
+}
+
+.risk-value.status-warn,
+.risk-status.status-warn {
+  color: var(--risk-medium);
+}
+
+.risk-value.status-success,
+.risk-status.status-success {
+  color: var(--text-muted) !important;
+}
+
+.risk-value.status-secondary,
+.risk-status.status-secondary {
+  color: var(--text-muted);
+}
+
+.high-value-audit {
+  color: var(--risk-high);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.15rem 0.65rem;
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+  border-left: 3px solid var(--risk-high);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 :deep(.indicator-benchmark-tabs .p-tabview-nav) {
@@ -396,11 +742,73 @@ watch(
   border-color: var(--card-border);
 }
 
+:deep(.indicator-table .p-datatable-table) {
+  table-layout: fixed;
+  width: 100%;
+}
+
 :deep(.indicator-table .p-datatable-tbody > tr > td) {
+  overflow: hidden;
   font-size: 0.8rem;
   background: var(--card-bg);
   color: var(--text-color);
   border-color: var(--card-border);
+}
+
+:deep(.indicator-table .col-name) {
+  width: 22%;
+}
+
+:deep(.indicator-table .col-location) {
+  width: 11%;
+}
+
+:deep(.indicator-table .col-movement) {
+  width: 11%;
+  text-align: right;
+}
+
+:deep(.indicator-table .col-noncomp) {
+  width: 11%;
+  text-align: right;
+}
+
+:deep(.indicator-table .col-indicator) {
+  width: 10%;
+  text-align: right;
+}
+
+:deep(.indicator-table .col-financial) {
+  width: 10%;
+  text-align: right;
+}
+
+:deep(.indicator-table .col-median) {
+  width: 10%;
+  text-align: right;
+}
+
+:deep(.indicator-table .col-risk) {
+  width: 10%;
+  text-align: center;
+}
+
+:deep(.indicator-table .col-ms) {
+  width: 8%;
+  text-align: center;
+}
+
+:deep(.indicator-table .col-movement .p-column-header-content),
+:deep(.indicator-table .col-noncomp .p-column-header-content),
+:deep(.indicator-table .col-indicator .p-column-header-content),
+:deep(.indicator-table .col-financial .p-column-header-content),
+:deep(.indicator-table .col-median .p-column-header-content) {
+  justify-content: flex-end;
+}
+
+:deep(.indicator-table .col-risk .p-column-header-content),
+:deep(.indicator-table .col-ms .p-column-header-content) {
+  justify-content: center;
 }
 
 :deep(.indicator-table .p-datatable-tbody > tr:nth-child(even) > td) {

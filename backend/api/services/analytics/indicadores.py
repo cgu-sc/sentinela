@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Literal, Optional, TypeVar
 from datetime import date
 import calendar
 import time
@@ -19,6 +19,7 @@ from .indicator_config import (
 )
 from .matriz_risco_dinamica import (
     MIN_REGIAO_BENCHMARK,
+    build_annual_indicator_benchmark_matriz,
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
 from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
@@ -64,6 +65,9 @@ from ...schemas.analytics import (
     IndicadorBenchmarkRowSchema,
     IndicadorBenchmarkScopeSchema,
     IndicadorBenchmarkResponse,
+    IndicadorEvolucaoBenchmarkPointSchema,
+    IndicadorEvolucaoBenchmarkPeriodoSchema,
+    IndicadorEvolucaoBenchmarkResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -111,18 +115,34 @@ _INDICADOR_BENCHMARK_LOCAL_KEYS = {
     "falecidos",
     "percentual_nao_comprovacao",
     "teto",
+    "polimedicamento",
+    "ticket_medio",
+    "receita_paciente",
+    "per_capita",
+    "alto_custo",
+    "vendas_rapidas",
+    "volume_atipico",
+    "recorrencia_sistemica",
+    "dias_pico",
+    "hhi_crm",
+    "crms_irregulares",
 }
 
 _INDICADOR_BENCHMARK_FORMATOS = {
     "falecidos": "pct3",
     "percentual_nao_comprovacao": "pct",
     "teto": "pct",
-}
-
-_INDICADOR_BENCHMARK_LABELS = {
-    "falecidos": "Vendas p/ Falecidos",
-    "percentual_nao_comprovacao": "Percentual Nao Comprovacao",
-    "teto": "Dispensacao em Teto Maximo",
+    "polimedicamento": "pct",
+    "ticket_medio": "val",
+    "receita_paciente": "val",
+    "per_capita": "val",
+    "alto_custo": "pct",
+    "vendas_rapidas": "pct",
+    "volume_atipico": "dec",
+    "recorrencia_sistemica": "pct",
+    "dias_pico": "pct",
+    "hhi_crm": "dec",
+    "crms_irregulares": "pct",
 }
 
 _INDICADOR_SCOPE_BASE_CACHE: dict[
@@ -140,6 +160,8 @@ _INDICADOR_DATASET_CACHE: dict[tuple[object, ...], tuple[float, tuple[
     str,
 ]]] = {}
 
+_IndicadorCachePayload = TypeVar("_IndicadorCachePayload")
+
 
 def _normalize_cache_text(value: object) -> str | None:
     if value is None:
@@ -153,13 +175,27 @@ def _normalize_cache_text(value: object) -> str | None:
 def _normalize_cache_int(value: object) -> int | None:
     if value is None:
         return None
-    return int(value)
+    if isinstance(value, bool):
+        raise TypeError("Valor booleano invalido para filtro numerico inteiro.")
+    if isinstance(value, (int, str)):
+        return int(value)
+    if isinstance(value, Decimal):
+        return int(value)
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise TypeError("Valor decimal invalido para filtro numerico inteiro.")
+        return int(value)
+    raise TypeError(f"Tipo invalido para filtro numerico inteiro: {type(value).__name__}.")
 
 
 def _normalize_cache_float(value: object) -> float | None:
     if value is None:
         return None
-    return float(value)
+    if isinstance(value, bool):
+        raise TypeError("Valor booleano invalido para filtro numerico decimal.")
+    if isinstance(value, (int, float, Decimal, str)):
+        return float(value)
+    raise TypeError(f"Tipo invalido para filtro numerico decimal: {type(value).__name__}.")
 
 
 def _normalize_cache_bool(value: object) -> bool:
@@ -232,7 +268,11 @@ def _make_indicador_dataset_cache_key(
     )
 
 
-def _prune_indicador_cache(cache: dict[tuple[object, ...], tuple[float, object]], now: float, generation: int) -> None:
+def _prune_indicador_cache(
+    cache: dict[tuple[object, ...], tuple[float, _IndicadorCachePayload]],
+    now: float,
+    generation: int,
+) -> None:
     expired_keys = [
         key
         for key, (created_at, _result) in cache.items()
@@ -251,6 +291,13 @@ def _prune_indicador_cache(cache: dict[tuple[object, ...], tuple[float, object]]
     overflow = len(cache) - _INDICADOR_CACHE_MAX_ENTRIES
     for key in keys_by_age[:overflow]:
         del cache[key]
+
+
+def _cache_generation_from_key(cache_key: tuple[object, ...]) -> int:
+    generation = cache_key[0]
+    if isinstance(generation, bool) or not isinstance(generation, int):
+        raise RuntimeError("Chave de cache de indicadores possui geracao invalida.")
+    return generation
 
 
 def _benchmark_escopo_expr() -> pl.Expr:
@@ -326,6 +373,18 @@ def _indicador_benchmark_row_schema(
 
     if row.get("is_conexao_ativa") is None:
         raise RuntimeError("Campo obrigatorio is_conexao_ativa ausente no benchmark local.")
+    if row.get("is_matriz") is None:
+        raise RuntimeError("Campo obrigatorio is_matriz ausente no benchmark local.")
+
+    valor_movimentado = _optional_float(row.get("valor_total_vendas"))
+    valor_sem_comprovacao = _optional_float(row.get("valor_sem_comprovacao"))
+    percentual_nao_comprovacao = (
+        round((valor_sem_comprovacao / valor_movimentado) * 100, 2)
+        if valor_movimentado is not None
+        and valor_sem_comprovacao is not None
+        and valor_movimentado > 0
+        else None
+    )
 
     return IndicadorBenchmarkRowSchema(
         cnpj=str(row["cnpj"]),
@@ -333,8 +392,12 @@ def _indicador_benchmark_row_schema(
         municipio=row.get("no_municipio"),
         uf=row.get("uf"),
         is_conexao_ativa=bool(row["is_conexao_ativa"]),
+        is_matriz=bool(row["is_matriz"]),
         valor=_optional_float(row.get(value_col)),
         valor_financeiro=valor_financeiro,
+        valor_movimentado=valor_movimentado,
+        valor_sem_comprovacao=valor_sem_comprovacao,
+        percentual_nao_comprovacao=percentual_nao_comprovacao,
         mediana_regiao=_optional_float(row.get(med_reg_col)),
         mediana_uf=_optional_float(row.get(med_uf_col)),
         risco_regiao=_optional_float(row.get(risco_reg_col)),
@@ -351,7 +414,7 @@ def _indicador_benchmark_row_schema(
 
 def _indicador_benchmark_scope_schema(
     *,
-    escopo: str,
+    escopo: Literal["municipio", "regiao_saude"],
     label: str,
     rows_df: pl.DataFrame,
     cnpj_alvo: str,
@@ -643,7 +706,7 @@ def _build_indicador_dataset_cached(
         indicador=indicador,
         filters=filters,
     )
-    generation = dataset_cache_key[0]
+    generation = _cache_generation_from_key(dataset_cache_key)
     now = time.monotonic()
 
     with _INDICADOR_CACHE_LOCK:
@@ -781,6 +844,7 @@ def get_indicador_benchmark_local(
         "id_ibge7",
         "id_regiao_saude",
         "is_conexao_ativa",
+        "is_matriz",
     ]
     _require_columns(perfil, perfil_required, "perfil_estabelecimento")
 
@@ -795,6 +859,8 @@ def get_indicador_benchmark_local(
     matriz = _build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
     matriz_required = [
         "id_cnpj",
+        "valor_total_vendas",
+        "valor_sem_comprovacao",
         value_col,
         med_reg_col,
         med_uf_col,
@@ -878,6 +944,108 @@ def get_indicador_benchmark_local(
             atencao_col=atencao_col,
             critico_col=critico_col,
         ),
+    )
+
+
+def _indicador_periodo_marcado(
+    data_inicio: date | None,
+    data_fim: date | None,
+) -> IndicadorEvolucaoBenchmarkPeriodoSchema:
+    ano_inicio = data_inicio.year if data_inicio else None
+    ano_fim = data_fim.year if data_fim else None
+    if ano_inicio is not None and ano_fim is not None and ano_inicio > ano_fim:
+        ano_inicio, ano_fim = ano_fim, ano_inicio
+
+    anos: list[int] = []
+    if ano_inicio is not None and ano_fim is not None:
+        anos = list(range(ano_inicio, ano_fim + 1))
+    elif ano_inicio is not None:
+        anos = [ano_inicio]
+        ano_fim = ano_inicio
+    elif ano_fim is not None:
+        anos = [ano_fim]
+        ano_inicio = ano_fim
+
+    return IndicadorEvolucaoBenchmarkPeriodoSchema(
+        ano_inicio=ano_inicio,
+        ano_fim=ano_fim,
+        anos=anos,
+    )
+
+
+def get_indicador_evolucao_benchmark(
+    cnpj: str,
+    indicador: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+) -> IndicadorEvolucaoBenchmarkResponse:
+    clean_cnpj = str(cnpj or "").replace(".", "").replace("/", "").replace("-", "")
+    if len(clean_cnpj) != 14:
+        raise HTTPException(status_code=422, detail="CNPJ deve conter 14 digitos.")
+    if indicador not in _INDICADOR_BENCHMARK_LOCAL_KEYS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Indicador '{indicador}' nao possui evolucao anual generica. "
+                f"Valores aceitos: {sorted(_INDICADOR_BENCHMARK_LOCAL_KEYS)}"
+            ),
+        )
+
+    value_col, med_reg_col, med_uf_col, med_br_col, _risco_reg_col, _risco_uf_col, _risco_br_col = INDICATOR_MAPPING[indicador]
+    formato = _INDICADOR_BENCHMARK_FORMATOS[indicador]
+
+    perfil = get_df_perfil_estabelecimento()
+    perfil_required = ["id_cnpj", "cnpj"]
+    _require_columns(perfil, perfil_required, "perfil_estabelecimento")
+
+    target_perfil = perfil.filter(pl.col("cnpj") == clean_cnpj).select(perfil_required)
+    if target_perfil.is_empty():
+        raise HTTPException(status_code=404, detail="CNPJ nao encontrado no perfil de estabelecimentos.")
+
+    id_cnpj_value = target_perfil.row(0, named=True).get("id_cnpj")
+    if id_cnpj_value is None:
+        raise RuntimeError("Perfil do CNPJ alvo sem id_cnpj obrigatorio.")
+
+    matriz = build_annual_indicator_benchmark_matriz()
+    matriz_required = ["id_cnpj", "ano_base", value_col, med_reg_col, med_uf_col, med_br_col]
+    _require_columns(matriz, matriz_required, "matriz_risco_anual")
+
+    serie_df = (
+        matriz
+        .filter(pl.col("id_cnpj") == int(id_cnpj_value))
+        .select(matriz_required)
+        .with_columns([
+            pl.col("ano_base").cast(pl.Int64),
+            pl.col(value_col).cast(pl.Float64),
+            pl.col(med_reg_col).cast(pl.Float64),
+            pl.col(med_uf_col).cast(pl.Float64),
+            pl.col(med_br_col).cast(pl.Float64),
+        ])
+        .sort("ano_base")
+    )
+
+    if serie_df.is_empty():
+        raise RuntimeError("Matriz de risco anual nao possui serie para o CNPJ alvo.")
+
+    series = [
+        IndicadorEvolucaoBenchmarkPointSchema(
+            ano_base=int(row["ano_base"]),
+            farmacia=_optional_float(row.get(value_col)),
+            regiao_saude=_optional_float(row.get(med_reg_col)),
+            uf=_optional_float(row.get(med_uf_col)),
+            brasil=_optional_float(row.get(med_br_col)),
+        )
+        for row in serie_df.to_dicts()
+    ]
+
+    return IndicadorEvolucaoBenchmarkResponse(
+        cnpj=clean_cnpj,
+        indicador=indicador,
+        formato=formato,
+        periodo_inicio=data_inicio,
+        periodo_fim=data_fim,
+        periodo_marcado=_indicador_periodo_marcado(data_inicio, data_fim),
+        series=series,
     )
 
 

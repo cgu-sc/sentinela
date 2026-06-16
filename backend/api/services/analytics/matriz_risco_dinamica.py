@@ -98,6 +98,9 @@ _DYNAMIC_CACHE_TTL_SECONDS = 300
 _DYNAMIC_CACHE_MAX_ENTRIES = 24
 _DYNAMIC_CACHE_LOCK = RLock()
 _DYNAMIC_CACHE: dict[tuple[object, ...], tuple[float, pl.DataFrame]] = {}
+_ANNUAL_BENCHMARK_CACHE_TTL_SECONDS = 300
+_ANNUAL_BENCHMARK_CACHE_LOCK = RLock()
+_ANNUAL_BENCHMARK_CACHE: dict[tuple[object, ...], tuple[float, pl.DataFrame]] = {}
 
 
 def _period_year_bounds(data_inicio: date | None, data_fim: date | None) -> tuple[int | None, int | None]:
@@ -548,6 +551,89 @@ def _compute_dynamic_matriz_risco(
             (pl.col("score_base") + pl.col("pontos_penalidade")).round(2).alias("score_risco_final")
         )
     )
+
+
+def build_annual_indicator_benchmark_matriz(
+    *,
+    perfil_df: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    if perfil_df is None:
+        cache_key = (get_cache_generation(),)
+        now = time.monotonic()
+        with _ANNUAL_BENCHMARK_CACHE_LOCK:
+            cached = _ANNUAL_BENCHMARK_CACHE.get(cache_key)
+            if cached is not None and now - cached[0] <= _ANNUAL_BENCHMARK_CACHE_TTL_SECONDS:
+                return cached[1].clone()
+
+    matriz_raw = get_df_matriz_risco()
+    matriz = matriz_raw.rename({c: c.lower() for c in matriz_raw.columns})
+    if matriz.is_empty():
+        return pl.DataFrame()
+
+    missing_cols = _MATRIX_COMPONENT_COLUMNS - set(matriz.columns)
+    if missing_cols:
+        raise RuntimeError(
+            "matriz_risco.parquet sem colunas obrigatorias para evolucao anual: "
+            + ", ".join(sorted(missing_cols))
+        )
+
+    annual = matriz.with_columns([
+        (
+            pl.col("receita_paciente_total_pacientes_distintos").cast(pl.Float64)
+            * pl.col("receita_paciente_total_meses_ativos").cast(pl.Float64)
+        ).alias("receita_paciente_denominador"),
+        (
+            pl.col("val_hhi_crm").cast(pl.Float64)
+            * pl.col("hhi_valor_total").cast(pl.Float64)
+        ).alias("hhi_valor_ponderado"),
+    ])
+
+    value_exprs = [
+        _metric_ratio_expr(
+            str(spec["numerator"]),
+            str(spec["denominator"]),
+            float(spec["factor"]),
+            INDICATOR_MAPPING[key][0],
+        )
+        for key, spec in _INDICATOR_AGGREGATIONS.items()
+    ]
+    annual = annual.with_columns(value_exprs)
+
+    perfil = perfil_df if perfil_df is not None else get_df_perfil_estabelecimento()
+    perfil_required = {"id_cnpj", "cnpj", "uf", "id_regiao_saude"}
+    missing_perfil = perfil_required - set(perfil.columns)
+    if missing_perfil:
+        raise RuntimeError(
+            "perfil_estabelecimento.parquet sem colunas obrigatorias para evolucao anual: "
+            + ", ".join(sorted(missing_perfil))
+        )
+
+    enriched = annual.join(
+        perfil.select(["id_cnpj", "cnpj", "uf", "id_regiao_saude"]).with_columns([
+            pl.col("id_regiao_saude").cast(pl.Utf8),
+            pl.col("uf").cast(pl.Utf8),
+        ]),
+        on="id_cnpj",
+        how="inner",
+    )
+    enriched = enriched.with_columns(
+        pl.len().over(["ano_base", "id_regiao_saude"]).cast(pl.Int64).alias("_total_regiao_benchmark")
+    )
+
+    median_exprs = []
+    for _key, (c_val, c_mr, c_mu, c_mb, _c_rr, _c_ru, _c_rb) in INDICATOR_MAPPING.items():
+        median_exprs.extend([
+            pl.col(c_val).median().over(["ano_base", "id_regiao_saude"]).alias(c_mr),
+            pl.col(c_val).median().over(["ano_base", "uf"]).alias(c_mu),
+            pl.col(c_val).median().over("ano_base").alias(c_mb),
+        ])
+
+    result = enriched.with_columns(median_exprs).sort(["id_cnpj", "ano_base"])
+    if perfil_df is None:
+        with _ANNUAL_BENCHMARK_CACHE_LOCK:
+            _ANNUAL_BENCHMARK_CACHE.clear()
+            _ANNUAL_BENCHMARK_CACHE[(get_cache_generation(),)] = (time.monotonic(), result.clone())
+    return result
 
 
 def build_dynamic_matriz_risco(

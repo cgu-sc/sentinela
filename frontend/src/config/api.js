@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
   analyticsGtinDetalhamentoMensal: (cnpj, periodo) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/gtin-detalhamento-mensal?periodo=${periodo}`,
   analyticsIndicadores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores`,
   analyticsIndicadorBenchmarkLocal: (cnpj, indicador) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores/${indicador}/benchmark-local`,
+  analyticsIndicadorEvolucaoBenchmark: (cnpj, indicador) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores/${indicador}/evolucao-benchmark`,
   analyticsGeograficoOrigemUf: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/geografico/origem-uf`,
   analyticsGeograficoBenchmarkLocal: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/geografico/benchmark-local`,
   analyticsIncompatibilidadePatologica: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/clinico/incompatibilidades`,

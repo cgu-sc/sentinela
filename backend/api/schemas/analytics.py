@@ -332,8 +332,12 @@ class IndicadorBenchmarkRowSchema(BaseModel):
     municipio: Optional[str] = None
     uf: Optional[str] = None
     is_conexao_ativa: bool
+    is_matriz: bool
     valor: Optional[float] = None
     valor_financeiro: Optional[float] = None
+    valor_movimentado: Optional[float] = None
+    valor_sem_comprovacao: Optional[float] = None
+    percentual_nao_comprovacao: Optional[float] = None
     mediana_regiao: Optional[float] = None
     mediana_uf: Optional[float] = None
     risco_regiao: Optional[float] = None
@@ -357,6 +361,30 @@ class IndicadorBenchmarkResponse(BaseModel):
     kpis: List[IndicadorBenchmarkKpiSchema]
     municipio: IndicadorBenchmarkScopeSchema
     regiao_saude: IndicadorBenchmarkScopeSchema
+
+
+class IndicadorEvolucaoBenchmarkPointSchema(BaseModel):
+    ano_base: int
+    farmacia: Optional[float] = None
+    regiao_saude: Optional[float] = None
+    uf: Optional[float] = None
+    brasil: Optional[float] = None
+
+
+class IndicadorEvolucaoBenchmarkPeriodoSchema(BaseModel):
+    ano_inicio: Optional[int] = None
+    ano_fim: Optional[int] = None
+    anos: List[int]
+
+
+class IndicadorEvolucaoBenchmarkResponse(BaseModel):
+    cnpj: str
+    indicador: str
+    formato: str
+    periodo_inicio: Optional[date] = None
+    periodo_fim: Optional[date] = None
+    periodo_marcado: IndicadorEvolucaoBenchmarkPeriodoSchema
+    series: List[IndicadorEvolucaoBenchmarkPointSchema]
 
 
 class ClinicoEvolucaoAnualSchema(BaseModel):

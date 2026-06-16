@@ -545,7 +545,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   text-overflow: ellipsis;
   display: block;
   max-width: 100%;
-  font-size: 0.88rem;
+  font-size: 0.76rem;
 }
 
 .cnpj-row {
@@ -580,7 +580,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 .cnpj-text {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
   letter-spacing: 0.01em;
 }

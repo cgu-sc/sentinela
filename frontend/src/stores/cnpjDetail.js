@@ -85,11 +85,48 @@ function assertIndicadorBenchmarkLocal(data) {
       throw new Error(`Contrato invalido em indicadores/benchmark-local: ${scopeName}.rows obrigatorio.`);
     }
     scope.rows.forEach((row, index) => {
-      ['cnpj', 'is_conexao_ativa', 'status', 'is_alvo'].forEach((field) => {
+      [
+        'cnpj',
+        'is_conexao_ativa',
+        'is_matriz',
+        'status',
+        'is_alvo',
+        'valor_movimentado',
+        'valor_sem_comprovacao',
+        'percentual_nao_comprovacao',
+      ].forEach((field) => {
+        if (row?.[field] === undefined) {
+          throw new Error(`Contrato invalido em indicadores/benchmark-local: ${scopeName}.rows[${index}].${field} obrigatorio.`);
+        }
+      });
+      ['cnpj', 'is_conexao_ativa', 'is_matriz', 'status', 'is_alvo', 'valor_movimentado', 'valor_sem_comprovacao'].forEach((field) => {
         if (row?.[field] === undefined || row?.[field] === null) {
           throw new Error(`Contrato invalido em indicadores/benchmark-local: ${scopeName}.rows[${index}].${field} obrigatorio.`);
         }
       });
+    });
+  });
+}
+
+function assertIndicadorEvolucaoBenchmark(data) {
+  if (
+    !data
+    || !data.indicador
+    || !data.formato
+    || !data.periodo_marcado
+    || !Array.isArray(data.periodo_marcado.anos)
+    || !Array.isArray(data.series)
+  ) {
+    throw new Error('Contrato invalido em indicadores/evolucao-benchmark.');
+  }
+  data.series.forEach((point, index) => {
+    if (!Number.isInteger(point?.ano_base)) {
+      throw new Error(`Contrato invalido em indicadores/evolucao-benchmark: series[${index}].ano_base obrigatorio.`);
+    }
+    ['farmacia', 'regiao_saude', 'uf', 'brasil'].forEach((field) => {
+      if (point?.[field] === undefined) {
+        throw new Error(`Contrato invalido em indicadores/evolucao-benchmark: series[${index}].${field} obrigatorio.`);
+      }
     });
   });
 }
@@ -179,6 +216,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     indicadorBenchmarkDataByKey: {},
     indicadorBenchmarkLoadingByKey: {},
     indicadorBenchmarkErrorByKey: {},
+    indicadorEvolucaoBenchmarkDataByKey: {},
+    indicadorEvolucaoBenchmarkLoadingByKey: {},
+    indicadorEvolucaoBenchmarkErrorByKey: {},
 
     // ── Dispersão Geográfica por UF ──────────────────────────────────────────
     geograficoOrigemUfData: null,
@@ -745,6 +785,54 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       } finally {
         this.indicadorBenchmarkLoadingByKey = {
           ...this.indicadorBenchmarkLoadingByKey,
+          [requestKey]: false,
+        };
+      }
+    },
+
+    async fetchIndicadorEvolucaoBenchmark(cnpj, indicador, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      const indicatorKey = String(indicador ?? '').trim();
+      if (!clean || !indicatorKey) return null;
+      const requestKey = `${clean}|${indicatorKey}|${inicio || ''}|${fim || ''}`;
+      if (this.indicadorEvolucaoBenchmarkDataByKey[requestKey]) {
+        return this.indicadorEvolucaoBenchmarkDataByKey[requestKey];
+      }
+      if (this.indicadorEvolucaoBenchmarkLoadingByKey[requestKey]) return null;
+
+      this.indicadorEvolucaoBenchmarkLoadingByKey = {
+        ...this.indicadorEvolucaoBenchmarkLoadingByKey,
+        [requestKey]: true,
+      };
+      this.indicadorEvolucaoBenchmarkErrorByKey = {
+        ...this.indicadorEvolucaoBenchmarkErrorByKey,
+        [requestKey]: null,
+      };
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(
+          API_ENDPOINTS.analyticsIndicadorEvolucaoBenchmark(clean, indicatorKey),
+          { params },
+        );
+        assertIndicadorEvolucaoBenchmark(data);
+        this.indicadorEvolucaoBenchmarkDataByKey = {
+          ...this.indicadorEvolucaoBenchmarkDataByKey,
+          [requestKey]: data,
+        };
+        return data;
+      } catch (e) {
+        console.error('Erro ao buscar evolucao anual do indicador:', e);
+        this.indicadorEvolucaoBenchmarkErrorByKey = {
+          ...this.indicadorEvolucaoBenchmarkErrorByKey,
+          [requestKey]: e?.response?.data?.detail || ERROR_MSG,
+        };
+        return null;
+      } finally {
+        this.indicadorEvolucaoBenchmarkLoadingByKey = {
+          ...this.indicadorEvolucaoBenchmarkLoadingByKey,
           [requestKey]: false,
         };
       }
@@ -1319,6 +1407,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.indicadorBenchmarkDataByKey = {};
       this.indicadorBenchmarkLoadingByKey = {};
       this.indicadorBenchmarkErrorByKey = {};
+      this.indicadorEvolucaoBenchmarkDataByKey = {};
+      this.indicadorEvolucaoBenchmarkLoadingByKey = {};
+      this.indicadorEvolucaoBenchmarkErrorByKey = {};
 
       this.geograficoOrigemUfData = null;
       this.geograficoOrigemUfLoading = false;

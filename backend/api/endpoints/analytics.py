@@ -18,6 +18,7 @@ from ..schemas.analytics import (
     GeograficoOrigemUfResponse,
     GeograficoBenchmarkResponse,
     IndicadorBenchmarkResponse,
+    IndicadorEvolucaoBenchmarkResponse,
     ClinicoIncompatibilidadeResponse,
 )
 from ..services.analytics import AnalyticsService
@@ -341,6 +342,21 @@ def get_indicador_benchmark_local(
 ):
     """Retorna comparação municipal e regional para indicadores com detalhamento generico."""
     return AnalyticsService.get_indicador_benchmark_local(
+        cnpj,
+        indicador,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
+
+@router.get("/cnpj/{cnpj}/indicadores/{indicador}/evolucao-benchmark", response_model=IndicadorEvolucaoBenchmarkResponse)
+def get_indicador_evolucao_benchmark(
+    cnpj: str,
+    indicador: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna evolucao anual da farmacia contra regiao, UF e Brasil."""
+    return AnalyticsService.get_indicador_evolucao_benchmark(
         cnpj,
         indicador,
         data_inicio=data_inicio,

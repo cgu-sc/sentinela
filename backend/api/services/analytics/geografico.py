@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Iterable, TypedDict
+from typing import Iterable, Literal, TypedDict
 
 import polars as pl
 from fastapi import HTTPException
@@ -192,7 +192,7 @@ def _benchmark_row_schema(row: dict, cnpj_alvo: str) -> GeograficoBenchmarkRowSc
 
 def _benchmark_scope_schema(
     *,
-    escopo: str,
+    escopo: Literal["municipio", "regiao_saude"],
     label: str,
     rows_df: pl.DataFrame,
     cnpj_alvo: str,

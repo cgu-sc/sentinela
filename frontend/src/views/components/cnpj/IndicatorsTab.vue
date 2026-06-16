@@ -147,8 +147,11 @@ async function loadGenericIndicatorDetail(key) {
     const [start, end] = filterStore.periodo ?? [];
     const inicio = start ? toLocalISO(start) : null;
     const fim = end ? toLocalISO(end) : null;
-    const data = await cnpjDetailStore.fetchIndicadorBenchmarkLocal(cnpj, indicatorKey, inicio, fim);
-    if (!data) return;
+    const [benchmarkData, evolutionData] = await Promise.all([
+      cnpjDetailStore.fetchIndicadorBenchmarkLocal(cnpj, indicatorKey, inicio, fim),
+      cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(cnpj, indicatorKey, inicio, fim),
+    ]);
+    if (!benchmarkData || !evolutionData) return;
     selectedGenericIndicatorKey.value = indicatorKey;
     showGenericIndicatorDialog.value = true;
   } finally {

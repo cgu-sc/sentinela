@@ -115,7 +115,9 @@ def _add_anexo_crm_evidencias(
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
     heading.paragraph_format.space_after = Pt(12)
     heading.paragraph_format.keep_with_next = True
-    tabela_num = _add_crm_evidencias_complementares_body(doc, razao_social, evidencias_comp, tabela_num)
+    # A numeracao de tabelas do anexo e independente da numeracao do corpo da nota
+    # tecnica: reinicia em 0 aqui e nao propaga o contador de volta para o chamador.
+    _add_crm_evidencias_complementares_body(doc, razao_social, evidencias_comp, 0)
     if timing:
         timing.mark(f"anexo {anexo_num} evidencias CRM")
     return tabela_num

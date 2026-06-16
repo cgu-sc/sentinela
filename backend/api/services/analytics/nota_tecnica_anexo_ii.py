@@ -16,6 +16,7 @@ from .nota_tecnica_docx_utils import (
     _run,
     _set_cell_width,
     _set_table_fixed_widths,
+    _set_table_open_borders,
     _write_cell,
 )
 from .nota_tecnica_formatters import _format_decimal_pt, _title_case_pt
@@ -239,14 +240,14 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
         _run(
             p_title,
-            f"Quadro {anexo_num}.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
+            f"Tabela {anexo_num}.{idx + 2} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
             color="334155",
             size=12,
             bold=True,
         )
 
         table = doc.add_table(rows=1, cols=len(headers))
-        table.style = "Table Grid"
+        _set_table_open_borders(table)
         table.autofit = False
         _set_table_fixed_widths(table, widths)
         _add_table_header(table, headers, widths, size=9)
@@ -340,7 +341,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title = doc.add_paragraph()
     _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title, f"Quadro {anexo_num}.1 - Resumo geral da memória de cálculo", color="334155", size=12, bold=True)
+    _run(p_title, f"Tabela {anexo_num}.1 - Resumo geral da memória de cálculo", color="334155", size=12, bold=True)
 
     summary_headers = [
         "Total de medicamentos dispensados",
@@ -351,7 +352,7 @@ def _add_anexo_ii_memoria_calculo(
     ]
     summary_widths = [Inches(1.75), Inches(1.95), Inches(2.10), Inches(1.90), Inches(1.85)]
     summary_table = doc.add_table(rows=2, cols=len(summary_headers))
-    summary_table.style = "Table Grid"
+    _set_table_open_borders(summary_table)
     summary_table.autofit = False
     _set_table_fixed_widths(summary_table, summary_widths)
     _add_table_header(summary_table, summary_headers, summary_widths, size=9)
@@ -373,7 +374,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title2 = doc.add_paragraph()
     _format_block_title(p_title2, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title2, f"Quadro {anexo_num}.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=12, bold=True)
+    _run(p_title2, f"Tabela {anexo_num}.2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=12, bold=True)
 
     headers = [
         "GTIN",
@@ -398,7 +399,7 @@ def _add_anexo_ii_memoria_calculo(
         Inches(0.75),
     ]
     table = doc.add_table(rows=1, cols=len(headers))
-    table.style = "Table Grid"
+    _set_table_open_borders(table)
     table.autofit = False
     _set_table_fixed_widths(table, widths)
     _add_table_header(table, headers, widths, size=9)

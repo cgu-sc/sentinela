@@ -1209,6 +1209,16 @@ def _add_crm_intensiva_complementar_text(
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (3, 4, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER if idx in (0, 2) else None
             _write_cell(cells[idx], value, size=9.0, align=align)
 
+    fonte = doc.add_paragraph()
+    _format_crm_table_footnote(fonte)
+    _run(
+        fonte,
+        "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
+        color="475569",
+        size=10,
+        italic=True,
+    )
+
 
 def _add_crm_unico_complementar_text(
     doc,
@@ -1306,6 +1316,16 @@ def _add_crm_unico_complementar_text(
             align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
             _write_cell(cells[col_idx], value, size=9.0, align=align)
 
+    fonte = doc.add_paragraph()
+    _format_crm_table_footnote(fonte)
+    _run(
+        fonte,
+        "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
+        color="475569",
+        size=10,
+        italic=True,
+    )
+
 
 def _add_crms_multiplos_complementar_text(
     doc,
@@ -1395,6 +1415,16 @@ def _add_crms_multiplos_complementar_text(
             for col_idx, value in enumerate(values, start=2):
                 align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (2, 4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER
                 _write_cell(cells[col_idx], value, size=9.0, align=align)
+
+        fonte = doc.add_paragraph()
+        _format_crm_table_footnote(fonte)
+        _run(
+            fonte,
+            "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
+            color="475569",
+            size=10,
+            italic=True,
+        )
 
 
 def _add_crm_volume_horario_complementar_text(
@@ -1505,6 +1535,16 @@ def _add_crm_volume_horario_complementar_text(
             align = WD_ALIGN_PARAGRAPH.RIGHT if idx in (2, 3, 4, 5) else WD_ALIGN_PARAGRAPH.CENTER
             _write_cell(cells[idx], value, size=9.0, align=align)
 
+    fonte = doc.add_paragraph()
+    _format_crm_table_footnote(fonte)
+    _run(
+        fonte,
+        "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
+        color="475569",
+        size=10,
+        italic=True,
+    )
+
 
 def _add_principais_crms_contexto_text(
     doc,
@@ -1596,6 +1636,16 @@ def _add_principais_crms_contexto_text(
                 else None
             )
             _write_cell(cells[col_idx], value, size=9.0, align=align)
+
+    fonte = doc.add_paragraph()
+    _format_crm_table_footnote(fonte)
+    _run(
+        fonte,
+        "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
+        color="475569",
+        size=10,
+        italic=True,
+    )
 
 
 def _add_crm_evidencias_complementares_body(

@@ -2,17 +2,21 @@ from datetime import date
 from typing import Any
 
 from docx.enum.section import WD_ORIENT, WD_SECTION
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 from .nota_tecnica_docx_utils import (
     _append_table_row_fast,
     _cell_bg,
+    _format_block_footnote,
+    _format_block_title,
     _repeat_table_header,
     _row_cant_split,
     _run,
     _set_cell_width,
     _set_table_fixed_widths,
+    _set_table_open_borders,
     _write_cell,
 )
 from .nota_tecnica_formatters import (
@@ -170,7 +174,7 @@ def _add_anexo_falecidos(
         f'Detalhamento de transações agrupadas por CPF relativas à Farmácia {razao_social} (CNPJ {cnpj_fmt}), '
         f'{falecidos_comp.get("periodo_desc") or "no período analisado"}.',
         color='0F172A',
-        size=9,
+        size=10,
     )
 
     headers = [
@@ -182,13 +186,30 @@ def _add_anexo_falecidos(
         'Dias após óbito',
     ]
     widths = [
-        Inches(2.72), Inches(1.36), Inches(0.92), Inches(1.03), Inches(0.55), Inches(0.42),
+        Inches(2.73), Inches(1.44), Inches(0.94), Inches(1.04), Inches(0.65), Inches(0.50),
     ]
+
+    p_table_title = doc.add_paragraph()
+    _format_block_title(
+        p_table_title,
+        space_before=10,
+        space_after=6,
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+    )
+    _run(
+        p_table_title,
+        'Tabela 1 - Detalhamento de vendas para pessoas falecidas, por CPF',
+        bold=True,
+        color='334155',
+        size=12,
+    )
 
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
     _set_table_fixed_widths(table, widths)
+    _set_table_open_borders(table)
 
     hdr = table.rows[0]
     _repeat_table_header(hdr)
@@ -197,7 +218,7 @@ def _add_anexo_falecidos(
         cell = hdr.cells[idx]
         _set_cell_width(cell, widths[idx])
         _cell_bg(cell, 'E2E8F0')
-        _write_cell(cell, label, size=7.3, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.CENTER)
+        _write_cell(cell, label, size=9, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.CENTER)
     if timing:
         timing.mark(f"anexo {anexo_num} cabecalho tabela")
 
@@ -206,9 +227,9 @@ def _add_anexo_falecidos(
             cpf = str(getattr(t, "cpf", "") or "")
             values = [
                 [
-                    {"text": _title_case_pt(getattr(t, "nome_falecido", None)), "color": "0F172A", "size": 8.2},
+                    {"text": _title_case_pt(getattr(t, "nome_falecido", None)), "color": "0F172A", "size": 9},
                     {"break": True},
-                    {"text": _format_cpf_cnpj(cpf), "color": "64748B", "size": 7.0},
+                    {"text": _format_cpf_cnpj(cpf), "color": "64748B", "size": 9},
                 ],
                 _format_municipio_uf_falecido_cell(grupo),
                 _format_date_pt(getattr(t, "dt_obito", None)),
@@ -221,7 +242,7 @@ def _add_anexo_falecidos(
                 [value or "—" for value in values],
                 widths,
                 alignments=["left", "left", "center", "center", "right", "right"],
-                sizes=[7.4] * len(headers),
+                sizes=[9] * len(headers),
                 color="0F172A",
             )
 
@@ -232,16 +253,16 @@ def _add_anexo_falecidos(
         _write_cell(
             label_cell,
             f'Subtotal - {len(grupo["transacoes"])} autorização(ões)',
-            size=7.4,
+            size=9,
             bold=True,
             color='475569',
             align=WD_ALIGN_PARAGRAPH.RIGHT,
         )
         value_cell = subtotal_row.cells[4]
         _cell_bg(value_cell, 'F8FAFC')
-        _write_cell(value_cell, _format_decimal_pt(grupo["total_valor"], 2), size=7.4, bold=True, color='475569', align=WD_ALIGN_PARAGRAPH.RIGHT)
+        _write_cell(value_cell, _format_decimal_pt(grupo["total_valor"], 2), size=9, bold=True, color='475569', align=WD_ALIGN_PARAGRAPH.RIGHT)
         _cell_bg(subtotal_row.cells[5], 'F8FAFC')
-        _write_cell(subtotal_row.cells[5], '', size=7.4)
+        _write_cell(subtotal_row.cells[5], '', size=9)
         if timing:
             timing.mark(f"anexo {anexo_num} CPF {grupo_idx} ({len(grupo['transacoes'])} transacoes)")
 
@@ -252,15 +273,29 @@ def _add_anexo_falecidos(
     _write_cell(
         total_label,
         f'TOTAL GERAL - {cpfs_distintos} CPF(s) distintos - {total_autorizacoes} autorização(ões)',
-        size=7.6,
+        size=9,
         bold=True,
         color='0F172A',
         align=WD_ALIGN_PARAGRAPH.RIGHT,
     )
     total_value = total_row.cells[4]
     _cell_bg(total_value, 'E2E8F0')
-    _write_cell(total_value, _format_decimal_pt(valor_total, 2), size=7.6, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.RIGHT)
+    _write_cell(total_value, _format_decimal_pt(valor_total, 2), size=9, bold=True, color='0F172A', align=WD_ALIGN_PARAGRAPH.RIGHT)
     _cell_bg(total_row.cells[5], 'E2E8F0')
-    _write_cell(total_row.cells[5], '', size=7.6)
+    _write_cell(total_row.cells[5], '', size=9)
+
+    p_source = doc.add_paragraph()
+    _format_block_footnote(
+        p_source,
+        space_before=5,
+        space_after=18,
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+    )
+    _run(
+        p_source,
+        'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das bases SIRC/SISOBI.',
+        color='64748B',
+        size=10,
+    )
     if timing:
         timing.mark(f"anexo {anexo_num} total geral")

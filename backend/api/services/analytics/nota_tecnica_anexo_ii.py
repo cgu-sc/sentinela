@@ -219,16 +219,16 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         "NF-e consideradas",
     ]
     widths = [
-        Inches(0.74),
-        Inches(0.82),
-        Inches(0.74),
-        Inches(0.62),
-        Inches(0.62),
-        Inches(0.64),
-        Inches(0.72),
         Inches(0.78),
+        Inches(0.86),
+        Inches(0.78),
+        Inches(0.65),
+        Inches(0.65),
+        Inches(0.68),
+        Inches(0.76),
         Inches(0.82),
-        Inches(3.05),
+        Inches(0.86),
+        Inches(3.36),
     ]
 
     for idx, detalhe in enumerate(detalhes, start=1):
@@ -350,7 +350,7 @@ def _add_anexo_ii_memoria_calculo(
         "Valor sem comprovação",
         "Percentual sem comprovação",
     ]
-    summary_widths = [Inches(1.75), Inches(1.95), Inches(2.10), Inches(1.90), Inches(1.85)]
+    summary_widths = [Inches(1.88), Inches(2.08), Inches(2.23), Inches(2.03), Inches(1.98)]
     summary_table = doc.add_table(rows=2, cols=len(summary_headers))
     _set_table_open_borders(summary_table)
     summary_table.autofit = False
@@ -388,15 +388,15 @@ def _add_anexo_ii_memoria_calculo(
         "% do prejuízo total",
     ]
     widths = [
-        Inches(1.0),
-        Inches(2.15),
-        Inches(1.25),
-        Inches(0.75),
-        Inches(0.8),
-        Inches(0.85),
-        Inches(1.0),
-        Inches(1.0),
-        Inches(0.75),
+        Inches(1.05),
+        Inches(2.45),
+        Inches(1.32),
+        Inches(0.78),
+        Inches(0.84),
+        Inches(0.89),
+        Inches(1.05),
+        Inches(1.05),
+        Inches(0.77),
     ]
     table = doc.add_table(rows=1, cols=len(headers))
     _set_table_open_borders(table)

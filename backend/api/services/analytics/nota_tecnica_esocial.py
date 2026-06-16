@@ -87,7 +87,7 @@ def _add_movimentacao_sem_funcionario_table(
 
     table = doc.add_table(rows=len(rows) + 1, cols=2)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(4.29), Inches(2.71)])
+    _set_table_fixed_widths(table, [Inches(4.55), Inches(2.75)])
 
     headers = ("Item verificado", "Resultado")
     for idx, header in enumerate(headers):

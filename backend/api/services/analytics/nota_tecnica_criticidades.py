@@ -853,10 +853,10 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
 
     table = doc.add_table(rows=2, cols=7)
     table.style = 'Table Grid'
-    metric_col_width = Inches(0.89)
+    metric_col_width = Inches(0.95)
     _set_table_fixed_widths(
         table,
-        [Inches(1.65), metric_col_width, metric_col_width, metric_col_width, metric_col_width, metric_col_width, metric_col_width],
+        [Inches(1.60), metric_col_width, metric_col_width, metric_col_width, metric_col_width, metric_col_width, metric_col_width],
     )
 
     headers = [
@@ -936,7 +936,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
 
     table = doc.add_table(rows=len(rows) + 1, cols=5)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(2.65), Inches(1.18), Inches(1.18), Inches(0.94), Inches(1.05)])
+    _set_table_fixed_widths(table, [Inches(2.85), Inches(1.20), Inches(1.20), Inches(0.98), Inches(1.07)])
 
     headers = ["Indicador", "Farmácia", "Mediana região", "Risco região", "Status"]
     for idx, header in enumerate(headers):
@@ -1219,7 +1219,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(0.55), Inches(0.75), Inches(0.82), Inches(0.70), Inches(0.82), Inches(0.92), Inches(0.75), Inches(1.69)],
+        [Inches(0.56), Inches(0.78), Inches(0.84), Inches(0.72), Inches(0.84), Inches(0.96), Inches(0.78), Inches(1.82)],
     )
 
     headers = [
@@ -1306,7 +1306,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(2.90), Inches(0.75), Inches(1.80), Inches(1.55)],
+        [Inches(3.10), Inches(0.78), Inches(1.88), Inches(1.54)],
     )
 
     headers = ["Grupo", "Farm.", "Valor incompatível", "Part. valor mun."]
@@ -1375,7 +1375,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(0.45), Inches(1.20), Inches(2.65), Inches(1.45), Inches(1.25)],
+        [Inches(0.47), Inches(1.25), Inches(2.80), Inches(1.50), Inches(1.28)],
     )
 
     headers = ["Pos.", "CNPJ", "Razão social", "Valor incompatível", "Part. valor mun."]
@@ -1553,7 +1553,7 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
 
     table = doc.add_table(rows=len(rows) + 1, cols=3)
     table.style = 'Table Grid'
-    _set_table_fixed_widths(table, [Inches(2.45), Inches(1.25), Inches(3.35)])
+    _set_table_fixed_widths(table, [Inches(2.55), Inches(1.30), Inches(3.45)])
 
     headers = ["Métrica", "Valor", "Observação"]
     for idx, header in enumerate(headers):
@@ -2742,7 +2742,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
     table.style = 'Table Grid'
     _set_table_fixed_widths(
         table,
-        [Inches(1.02), Inches(1.12), Inches(1.40), Inches(1.20), Inches(1.26)],
+        [Inches(1.18), Inches(1.28), Inches(1.58), Inches(1.55), Inches(1.71)],
     )
     tbl_pr = table._tbl.tblPr
     table_jc = tbl_pr.find(qn('w:jc'))

@@ -60,6 +60,10 @@ from ...schemas.analytics import (
     IndicadorMunicipioRowSchema,
     IndicadorAnaliseResponse,
     IndicadorCnpjPageResponse,
+    IndicadorBenchmarkKpiSchema,
+    IndicadorBenchmarkRowSchema,
+    IndicadorBenchmarkScopeSchema,
+    IndicadorBenchmarkResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
     GtinDetalhamentoMensalResponse,
@@ -101,6 +105,24 @@ _INDICADOR_VALOR_FINANCEIRO_COLS = {
     "dispersao_geografica": "geografico_valor_outra_uf",
     "hhi_crm": "hhi_valor_total",
     "crms_irregulares": "crms_irregulares_valor",
+}
+
+_INDICADOR_BENCHMARK_LOCAL_KEYS = {
+    "falecidos",
+    "percentual_nao_comprovacao",
+    "teto",
+}
+
+_INDICADOR_BENCHMARK_FORMATOS = {
+    "falecidos": "pct3",
+    "percentual_nao_comprovacao": "pct",
+    "teto": "pct",
+}
+
+_INDICADOR_BENCHMARK_LABELS = {
+    "falecidos": "Vendas p/ Falecidos",
+    "percentual_nao_comprovacao": "Percentual Nao Comprovacao",
+    "teto": "Dispensacao em Teto Maximo",
 }
 
 _INDICADOR_SCOPE_BASE_CACHE: dict[
@@ -259,6 +281,130 @@ def _pode_detalhar_indicador(row: dict, key: str) -> bool:
         return False
     valor_financeiro = _valor_financeiro_indicador(row, key)
     return valor_financeiro is not None and valor_financeiro >= CLINICA_VALOR_MINIMO_DETALHAMENTO
+
+
+def _require_columns(df: pl.DataFrame, columns: list[str], source: str) -> None:
+    missing = [col for col in columns if col not in df.columns]
+    if missing:
+        raise RuntimeError(
+            f"Colunas obrigatorias ausentes em {source}: " + ", ".join(missing)
+        )
+
+
+def _status_indicador_benchmark(row: dict, *, value_col: str, atencao_col: str, critico_col: str) -> str:
+    if row.get(value_col) is None:
+        return "SEM DADOS"
+    if int(row.get(critico_col) or 0) == 1:
+        return "CRITICO"
+    if int(row.get(atencao_col) or 0) == 1:
+        return "ATENCAO"
+    return "NORMAL"
+
+
+def _indicador_benchmark_row_schema(
+    row: dict,
+    *,
+    cnpj_alvo: str,
+    indicador: str,
+    value_col: str,
+    med_reg_col: str,
+    med_uf_col: str,
+    risco_reg_col: str,
+    risco_uf_col: str,
+    atencao_col: str,
+    critico_col: str,
+) -> IndicadorBenchmarkRowSchema:
+    valor_financeiro_col = _INDICADOR_VALOR_FINANCEIRO_COLS.get(indicador)
+    valor_financeiro = None
+    if valor_financeiro_col is not None:
+        if valor_financeiro_col not in row:
+            raise RuntimeError(
+                f"Indicador {indicador} sem coluna financeira obrigatoria no benchmark local: "
+                f"{valor_financeiro_col}"
+            )
+        valor_financeiro = _optional_float(row.get(valor_financeiro_col))
+
+    if row.get("is_conexao_ativa") is None:
+        raise RuntimeError("Campo obrigatorio is_conexao_ativa ausente no benchmark local.")
+
+    return IndicadorBenchmarkRowSchema(
+        cnpj=str(row["cnpj"]),
+        razao_social=row.get("razao_social"),
+        municipio=row.get("no_municipio"),
+        uf=row.get("uf"),
+        is_conexao_ativa=bool(row["is_conexao_ativa"]),
+        valor=_optional_float(row.get(value_col)),
+        valor_financeiro=valor_financeiro,
+        mediana_regiao=_optional_float(row.get(med_reg_col)),
+        mediana_uf=_optional_float(row.get(med_uf_col)),
+        risco_regiao=_optional_float(row.get(risco_reg_col)),
+        risco_uf=_optional_float(row.get(risco_uf_col)),
+        status=_status_indicador_benchmark(
+            row,
+            value_col=value_col,
+            atencao_col=atencao_col,
+            critico_col=critico_col,
+        ),
+        is_alvo=str(row["cnpj"]) == cnpj_alvo,
+    )
+
+
+def _indicador_benchmark_scope_schema(
+    *,
+    escopo: str,
+    label: str,
+    rows_df: pl.DataFrame,
+    cnpj_alvo: str,
+    indicador: str,
+    value_col: str,
+    med_reg_col: str,
+    med_uf_col: str,
+    risco_reg_col: str,
+    risco_uf_col: str,
+    atencao_col: str,
+    critico_col: str,
+) -> IndicadorBenchmarkScopeSchema:
+    rows = [
+        _indicador_benchmark_row_schema(
+            row,
+            cnpj_alvo=cnpj_alvo,
+            indicador=indicador,
+            value_col=value_col,
+            med_reg_col=med_reg_col,
+            med_uf_col=med_uf_col,
+            risco_reg_col=risco_reg_col,
+            risco_uf_col=risco_uf_col,
+            atencao_col=atencao_col,
+            critico_col=critico_col,
+        )
+        for row in rows_df.iter_rows(named=True)
+    ]
+    return IndicadorBenchmarkScopeSchema(
+        escopo=escopo,
+        label=label,
+        total_estabelecimentos=len(rows),
+        rows=rows,
+    )
+
+
+def _indicador_benchmark_kpis(
+    target: dict,
+    *,
+    indicador: str,
+    value_col: str,
+    med_reg_col: str,
+    med_uf_col: str,
+    risco_reg_col: str,
+    risco_uf_col: str,
+) -> list[IndicadorBenchmarkKpiSchema]:
+    formato = _INDICADOR_BENCHMARK_FORMATOS[indicador]
+    return [
+        IndicadorBenchmarkKpiSchema(label="Farmacia", value=_optional_float(target.get(value_col)), formato=formato),
+        IndicadorBenchmarkKpiSchema(label="Mediana Regiao", value=_optional_float(target.get(med_reg_col)), formato=formato),
+        IndicadorBenchmarkKpiSchema(label="Mediana UF", value=_optional_float(target.get(med_uf_col)), formato=formato),
+        IndicadorBenchmarkKpiSchema(label="Risco Regiao", value=_optional_float(target.get(risco_reg_col)), formato="risco"),
+        IndicadorBenchmarkKpiSchema(label="Risco UF", value=_optional_float(target.get(risco_uf_col)), formato="risco"),
+    ]
 
 
 def get_indicadores(
@@ -600,6 +746,138 @@ def _build_status_kpis(df: pl.DataFrame) -> IndicadorKpiSummarySchema:
         total_sem_comprovacao=total_sem_comprovacao,
         perc_sem_comprovacao=perc_sem_comprovacao,
         pct_acima_limiar=round(pct_acima_limiar, 2) if pct_acima_limiar is not None else None,
+    )
+
+
+def get_indicador_benchmark_local(
+    cnpj: str,
+    indicador: str,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+) -> IndicadorBenchmarkResponse:
+    clean_cnpj = str(cnpj or "").replace(".", "").replace("/", "").replace("-", "")
+    if len(clean_cnpj) != 14:
+        raise HTTPException(status_code=422, detail="CNPJ deve conter 14 digitos.")
+    if indicador not in _INDICADOR_BENCHMARK_LOCAL_KEYS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Indicador '{indicador}' nao possui benchmark local generico. "
+                f"Valores aceitos: {sorted(_INDICADOR_BENCHMARK_LOCAL_KEYS)}"
+            ),
+        )
+
+    value_col, med_reg_col, med_uf_col, _med_br_col, risco_reg_col, risco_uf_col, _risco_br_col = INDICATOR_MAPPING[indicador]
+    atencao_col, critico_col = _INDICATOR_FLAGS[indicador]
+    valor_financeiro_col = _INDICADOR_VALOR_FINANCEIRO_COLS.get(indicador)
+
+    perfil = get_df_perfil_estabelecimento()
+    perfil_required = [
+        "id_cnpj",
+        "cnpj",
+        "razao_social",
+        "no_municipio",
+        "uf",
+        "id_ibge7",
+        "id_regiao_saude",
+        "is_conexao_ativa",
+    ]
+    _require_columns(perfil, perfil_required, "perfil_estabelecimento")
+
+    perfil_target = perfil.filter(pl.col("cnpj") == clean_cnpj).select(perfil_required)
+    if perfil_target.is_empty():
+        raise HTTPException(status_code=404, detail="CNPJ nao encontrado no perfil de estabelecimentos.")
+
+    target_perfil = perfil_target.row(0, named=True)
+    if target_perfil.get("id_ibge7") is None or target_perfil.get("id_regiao_saude") is None:
+        raise RuntimeError("Perfil do CNPJ alvo sem id_ibge7/id_regiao_saude obrigatorios.")
+
+    matriz = _build_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim)
+    matriz_required = [
+        "id_cnpj",
+        value_col,
+        med_reg_col,
+        med_uf_col,
+        risco_reg_col,
+        risco_uf_col,
+        atencao_col,
+        critico_col,
+    ]
+    if valor_financeiro_col is not None:
+        matriz_required.append(valor_financeiro_col)
+    _require_columns(matriz, matriz_required, "matriz_risco_dinamica")
+
+    base = (
+        matriz.select(matriz_required)
+        .join(perfil.select(perfil_required), on="id_cnpj", how="inner")
+        .with_columns([
+            pl.col("id_regiao_saude").cast(pl.Utf8),
+            pl.col("id_ibge7").cast(pl.Int64),
+            pl.col(value_col).cast(pl.Float64),
+            pl.col(risco_reg_col).cast(pl.Float64),
+        ])
+        .sort(
+            [value_col, risco_reg_col, "cnpj"],
+            descending=[True, True, False],
+            nulls_last=True,
+        )
+    )
+
+    target_df = base.filter(pl.col("cnpj") == clean_cnpj)
+    if target_df.is_empty():
+        raise RuntimeError("Matriz dinamica nao retornou o CNPJ alvo para o benchmark local.")
+    target = target_df.row(0, named=True)
+
+    id_ibge7 = int(target["id_ibge7"])
+    id_regiao_saude = str(target["id_regiao_saude"])
+    municipio_label = f'{target["no_municipio"]}/{target["uf"]}'
+    regiao_label = f'Regiao de Saude {id_regiao_saude}/{target["uf"]}'
+
+    municipio_df = base.filter(pl.col("id_ibge7") == id_ibge7)
+    regiao_df = base.filter(pl.col("id_regiao_saude") == id_regiao_saude)
+
+    return IndicadorBenchmarkResponse(
+        cnpj=clean_cnpj,
+        indicador=indicador,
+        periodo_inicio=data_inicio,
+        periodo_fim=data_fim,
+        kpis=_indicador_benchmark_kpis(
+            target,
+            indicador=indicador,
+            value_col=value_col,
+            med_reg_col=med_reg_col,
+            med_uf_col=med_uf_col,
+            risco_reg_col=risco_reg_col,
+            risco_uf_col=risco_uf_col,
+        ),
+        municipio=_indicador_benchmark_scope_schema(
+            escopo="municipio",
+            label=municipio_label,
+            rows_df=municipio_df,
+            cnpj_alvo=clean_cnpj,
+            indicador=indicador,
+            value_col=value_col,
+            med_reg_col=med_reg_col,
+            med_uf_col=med_uf_col,
+            risco_reg_col=risco_reg_col,
+            risco_uf_col=risco_uf_col,
+            atencao_col=atencao_col,
+            critico_col=critico_col,
+        ),
+        regiao_saude=_indicador_benchmark_scope_schema(
+            escopo="regiao_saude",
+            label=regiao_label,
+            rows_df=regiao_df,
+            cnpj_alvo=clean_cnpj,
+            indicador=indicador,
+            value_col=value_col,
+            med_reg_col=med_reg_col,
+            med_uf_col=med_uf_col,
+            risco_reg_col=risco_reg_col,
+            risco_uf_col=risco_uf_col,
+            atencao_col=atencao_col,
+            critico_col=critico_col,
+        ),
     )
 
 

@@ -17,6 +17,7 @@ from ..schemas.analytics import (
     CnpjBootstrapResponse,
     GeograficoOrigemUfResponse,
     GeograficoBenchmarkResponse,
+    IndicadorBenchmarkResponse,
     ClinicoIncompatibilidadeResponse,
 )
 from ..services.analytics import AnalyticsService
@@ -330,6 +331,21 @@ def get_indicadores(
 ):
     """Retorna os indicadores detalhados para um CNPJ."""
     return AnalyticsService.get_indicadores(cnpj, data_inicio=data_inicio, data_fim=data_fim)
+
+@router.get("/cnpj/{cnpj}/indicadores/{indicador}/benchmark-local", response_model=IndicadorBenchmarkResponse)
+def get_indicador_benchmark_local(
+    cnpj: str,
+    indicador: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna comparação municipal e regional para indicadores com detalhamento generico."""
+    return AnalyticsService.get_indicador_benchmark_local(
+        cnpj,
+        indicador,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
 
 @router.get("/cnpj/{cnpj}/geografico/origem-uf", response_model=GeograficoOrigemUfResponse)
 def get_geografico_origem_uf(

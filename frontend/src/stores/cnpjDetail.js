@@ -75,6 +75,25 @@ function assertIntegrityAlerts(data) {
   });
 }
 
+function assertIndicadorBenchmarkLocal(data) {
+  if (!data || !data.indicador || !Array.isArray(data.kpis) || !data.municipio || !data.regiao_saude) {
+    throw new Error('Contrato invalido em indicadores/benchmark-local.');
+  }
+  ['municipio', 'regiao_saude'].forEach((scopeName) => {
+    const scope = data[scopeName];
+    if (!scope?.label || !Array.isArray(scope.rows)) {
+      throw new Error(`Contrato invalido em indicadores/benchmark-local: ${scopeName}.rows obrigatorio.`);
+    }
+    scope.rows.forEach((row, index) => {
+      ['cnpj', 'is_conexao_ativa', 'status', 'is_alvo'].forEach((field) => {
+        if (row?.[field] === undefined || row?.[field] === null) {
+          throw new Error(`Contrato invalido em indicadores/benchmark-local: ${scopeName}.rows[${index}].${field} obrigatorio.`);
+        }
+      });
+    });
+  });
+}
+
 function assertSocios(data) {
   if (!data || !Array.isArray(data.socios)) {
     throw new Error('Contrato invalido em socios: campo socios obrigatorio.');
@@ -157,6 +176,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     indicadoresLoadingKey: null,
     indicadoresLoadedKey:  null,
     indicadoresError:   null,
+    indicadorBenchmarkDataByKey: {},
+    indicadorBenchmarkLoadingByKey: {},
+    indicadorBenchmarkErrorByKey: {},
 
     // ── Dispersão Geográfica por UF ──────────────────────────────────────────
     geograficoOrigemUfData: null,
@@ -677,6 +699,54 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
           this.indicadoresLoading = false;
           this.indicadoresLoadingKey = null;
         }
+      }
+    },
+
+    async fetchIndicadorBenchmarkLocal(cnpj, indicador, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      const indicatorKey = String(indicador ?? '').trim();
+      if (!clean || !indicatorKey) return null;
+      const requestKey = `${clean}|${indicatorKey}|${inicio || ''}|${fim || ''}`;
+      if (this.indicadorBenchmarkDataByKey[requestKey]) {
+        return this.indicadorBenchmarkDataByKey[requestKey];
+      }
+      if (this.indicadorBenchmarkLoadingByKey[requestKey]) return null;
+
+      this.indicadorBenchmarkLoadingByKey = {
+        ...this.indicadorBenchmarkLoadingByKey,
+        [requestKey]: true,
+      };
+      this.indicadorBenchmarkErrorByKey = {
+        ...this.indicadorBenchmarkErrorByKey,
+        [requestKey]: null,
+      };
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+        const { data } = await axios.get(
+          API_ENDPOINTS.analyticsIndicadorBenchmarkLocal(clean, indicatorKey),
+          { params },
+        );
+        assertIndicadorBenchmarkLocal(data);
+        this.indicadorBenchmarkDataByKey = {
+          ...this.indicadorBenchmarkDataByKey,
+          [requestKey]: data,
+        };
+        return data;
+      } catch (e) {
+        console.error('Erro ao buscar benchmark local do indicador:', e);
+        this.indicadorBenchmarkErrorByKey = {
+          ...this.indicadorBenchmarkErrorByKey,
+          [requestKey]: e?.response?.data?.detail || ERROR_MSG,
+        };
+        return null;
+      } finally {
+        this.indicadorBenchmarkLoadingByKey = {
+          ...this.indicadorBenchmarkLoadingByKey,
+          [requestKey]: false,
+        };
       }
     },
 
@@ -1246,6 +1316,9 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.indicadoresLoadingKey = null;
       this.indicadoresLoadedKey  = null;
       this.indicadoresError   = null;
+      this.indicadorBenchmarkDataByKey = {};
+      this.indicadorBenchmarkLoadingByKey = {};
+      this.indicadorBenchmarkErrorByKey = {};
 
       this.geograficoOrigemUfData = null;
       this.geograficoOrigemUfLoading = false;

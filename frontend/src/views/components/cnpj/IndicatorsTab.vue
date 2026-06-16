@@ -7,8 +7,10 @@ import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStableTabState } from '@/composables/useStableTabState';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
+import { GENERIC_INDICATOR_DETAIL_KEYS } from '@/config/indicatorDetailConfig';
 import ClinicalIncompatibilityDialog from './ClinicalIncompatibilityDialog.vue';
 import GeographicDispersionDialog from './GeographicDispersionDialog.vue';
+import IndicatorDetailDialog from './IndicatorDetailDialog.vue';
 import TabPlaceholder from './TabPlaceholder.vue';
 
 const { formatCurrencyFull, formatarData, toLocalISO } = useFormatting();
@@ -18,6 +20,9 @@ const filterStore = useFilterStore();
 const { indicadoresData, indicadoresLoading, indicadoresLoaded, indicadoresError } = storeToRefs(cnpjDetailStore);
 const showGeographicDialog = ref(false);
 const showClinicalDialog = ref(false);
+const showGenericIndicatorDialog = ref(false);
+const selectedGenericIndicatorKey = ref(null);
+const loadingGenericIndicatorKey = ref(null);
 
 const formattedPeriod = computed(() => {
   const [start, end] = filterStore.periodo ?? [];
@@ -88,6 +93,7 @@ function canDetailIndicator(key, indicadorData = null) {
   if (key === 'incompatibilidade_patologica') {
     return indicadorData?.pode_detalhar === true;
   }
+  if (GENERIC_INDICATOR_DETAIL_KEYS.includes(key)) return true;
   return false;
 }
 
@@ -98,6 +104,31 @@ function openIndicatorDetail(key) {
   }
   if (key === 'incompatibilidade_patologica') {
     openClinicalDialog();
+    return;
+  }
+  if (GENERIC_INDICATOR_DETAIL_KEYS.includes(key)) {
+    loadGenericIndicatorDetail(key);
+  }
+}
+
+async function loadGenericIndicatorDetail(key) {
+  const cnpj = normalizeCnpj(route.params.cnpj);
+  if (!cnpj) return;
+  const indicatorKey = String(key ?? '').trim();
+  if (!indicatorKey) return;
+  loadingGenericIndicatorKey.value = indicatorKey;
+  try {
+    const [start, end] = filterStore.periodo ?? [];
+    const inicio = start ? toLocalISO(start) : null;
+    const fim = end ? toLocalISO(end) : null;
+    const data = await cnpjDetailStore.fetchIndicadorBenchmarkLocal(cnpj, indicatorKey, inicio, fim);
+    if (!data) return;
+    selectedGenericIndicatorKey.value = indicatorKey;
+    showGenericIndicatorDialog.value = true;
+  } finally {
+    if (loadingGenericIndicatorKey.value === indicatorKey) {
+      loadingGenericIndicatorKey.value = null;
+    }
   }
 }
 
@@ -326,6 +357,20 @@ function riscoTextStyle(indicadorData) {
       v-model="showClinicalDialog"
       :cnpj="normalizeCnpj(route.params.cnpj)"
     />
+    <IndicatorDetailDialog
+      v-model="showGenericIndicatorDialog"
+      :cnpj="normalizeCnpj(route.params.cnpj)"
+      :indicator-key="selectedGenericIndicatorKey"
+    />
+
+    <transition name="ind-overlay-fade">
+      <div v-if="loadingGenericIndicatorKey" class="ind-loading-overlay" aria-live="polite" aria-busy="true">
+        <div class="ind-loading-overlay__box">
+          <i class="pi pi-spin pi-spinner" />
+          <span>Carregando detalhamento...</span>
+        </div>
+      </div>
+    </transition>
 
   </div>
 </template>
@@ -362,6 +407,44 @@ function riscoTextStyle(indicadorData) {
 .title-main i {
   font-size: 1rem;
   color: var(--primary-color);
+}
+
+.ind-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-color) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.ind-loading-overlay__box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color) 12%, transparent);
+}
+
+.ind-loading-overlay__box i {
+  font-size: 1rem;
+  color: var(--primary-color);
+}
+
+.ind-overlay-fade-enter-active,
+.ind-overlay-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.ind-overlay-fade-enter-from,
+.ind-overlay-fade-leave-to {
+  opacity: 0;
 }
 
 .title-main span {

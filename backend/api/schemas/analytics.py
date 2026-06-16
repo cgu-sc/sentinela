@@ -320,6 +320,45 @@ class GeograficoBenchmarkResponse(BaseModel):
     regiao_saude: GeograficoBenchmarkScopeSchema
 
 
+class IndicadorBenchmarkKpiSchema(BaseModel):
+    label: str
+    value: Optional[float] = None
+    formato: str
+
+
+class IndicadorBenchmarkRowSchema(BaseModel):
+    cnpj: str
+    razao_social: Optional[str] = None
+    municipio: Optional[str] = None
+    uf: Optional[str] = None
+    is_conexao_ativa: bool
+    valor: Optional[float] = None
+    valor_financeiro: Optional[float] = None
+    mediana_regiao: Optional[float] = None
+    mediana_uf: Optional[float] = None
+    risco_regiao: Optional[float] = None
+    risco_uf: Optional[float] = None
+    status: str
+    is_alvo: bool = False
+
+
+class IndicadorBenchmarkScopeSchema(BaseModel):
+    escopo: Literal["municipio", "regiao_saude"]
+    label: str
+    total_estabelecimentos: int
+    rows: List[IndicadorBenchmarkRowSchema]
+
+
+class IndicadorBenchmarkResponse(BaseModel):
+    cnpj: str
+    indicador: str
+    periodo_inicio: Optional[date] = None
+    periodo_fim: Optional[date] = None
+    kpis: List[IndicadorBenchmarkKpiSchema]
+    municipio: IndicadorBenchmarkScopeSchema
+    regiao_saude: IndicadorBenchmarkScopeSchema
+
+
 class ClinicoEvolucaoAnualSchema(BaseModel):
     ano_base: int
     qtd_cpfs_distintos: int

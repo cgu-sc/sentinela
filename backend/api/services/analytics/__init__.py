@@ -47,6 +47,7 @@ from .indicadores import (
     get_indicadores,
     get_indicadores_analise,
     get_indicadores_analise_cnpjs,
+    get_indicador_benchmark_local,
 )
 from .clinico import get_incompatibilidade_patologica_data
 from .geografico import get_geografico_benchmark_local, get_geografico_origem_uf
@@ -80,6 +81,7 @@ class AnalyticsService:
     get_indicadores = staticmethod(get_indicadores)
     get_indicadores_analise = staticmethod(get_indicadores_analise)
     get_indicadores_analise_cnpjs = staticmethod(get_indicadores_analise_cnpjs)
+    get_indicador_benchmark_local = staticmethod(get_indicador_benchmark_local)
     get_incompatibilidade_patologica_data = staticmethod(get_incompatibilidade_patologica_data)
     get_geografico_origem_uf = staticmethod(get_geografico_origem_uf)
     get_geografico_benchmark_local = staticmethod(get_geografico_benchmark_local)

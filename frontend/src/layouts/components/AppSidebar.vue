@@ -524,6 +524,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- BOTÃO DE FILTROS ATIVOS (ALÇA) -->
+  <button
+    v-if="activeFilterCount > 0"
+    class="sidebar-filter-count-btn"
+    @click="isCollapsed = false"
+    :title="`Existem ${activeFilterCount} filtro(s) ativo(s)`"
+  >
+    <i class="pi pi-filter"></i>
+    <span class="filter-count-badge">{{ activeFilterCount }}</span>
+  </button>
+
   <!-- BOTÃO FLUTUANTE (ALÇA) — Segue a borda da sidebar -->
   <button
     class="sidebar-float-btn"
@@ -1399,10 +1410,50 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+/* BOTÃO FLUTUANTE DE CONTADOR DE FILTROS ATIVOS */
+.sidebar-filter-count-btn {
+  position: fixed;
+  top: calc(50% - 48px);
+  left: var(--sidebar-width);
+  transform: translateY(-50%);
+  z-index: 250;
+  will-change: left;
+  width: 20px;
+  height: 36px;
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--sidebar-bg));
+  border: 1px solid var(--primary-color);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  color: var(--primary-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-filter-count-btn:hover {
+  width: 28px;
+  box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-filter-count-btn i {
+  font-size: 0.65rem;
+}
+
+.filter-count-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 /* BOTÃO FLUTUANTE DE REABERTURA */
 .sidebar-float-btn {
   position: fixed;
-  top: calc(50% + 28px);
+  top: 50%;
   left: var(--sidebar-width);
   transform: translateY(-50%);
   z-index: 250;
@@ -1434,8 +1485,9 @@ onBeforeUnmount(() => {
 /* BOTÃO DE CADEADO */
 .sidebar-lock-btn {
   position: fixed;
-  top: calc(50% + 60px);
+  top: calc(50% + 48px);
   left: var(--sidebar-width);
+  transform: translateY(-50%);
   z-index: 300;
   will-change: left;
   width: 20px;

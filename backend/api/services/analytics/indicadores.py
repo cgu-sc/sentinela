@@ -108,8 +108,13 @@ _INDICADOR_VALOR_FINANCEIRO_COLS = {
     "recorrencia_sistemica": "recorrencia_valor_sistemico",
     "dias_pico": "pico_valor_top3_dias",
     "dispersao_geografica": "geografico_valor_outra_uf",
+    "volume_atipico": "volume_atipico_valor_aumento_atipico",
     "hhi_crm": "hhi_valor_total",
     "crms_irregulares": "crms_irregulares_valor",
+}
+
+_INDICADOR_DISPLAY_VALUE_COLS = {
+    "volume_atipico": "volume_atipico_valor_aumento_atipico",
 }
 
 _INDICADOR_BENCHMARK_LOCAL_KEYS = {
@@ -141,7 +146,7 @@ _INDICADOR_BENCHMARK_FORMATOS = {
     "per_capita": "val",
     "alto_custo": "pct",
     "vendas_rapidas": "pct",
-    "volume_atipico": "dec",
+    "volume_atipico": "val",
     "recorrencia_sistemica": "pct",
     "dias_pico": "pct",
     "hhi_crm": "dec",
@@ -363,6 +368,7 @@ def _indicador_benchmark_row_schema(
     risco_uf_col: str,
     atencao_col: str,
     critico_col: str,
+    status_value_col: str | None = None,
 ) -> IndicadorBenchmarkRowSchema:
     valor_financeiro_col = _INDICADOR_VALOR_FINANCEIRO_COLS.get(indicador)
     valor_financeiro = None
@@ -399,6 +405,9 @@ def _indicador_benchmark_row_schema(
             valor_numerador = _optional_float(row.get(num_col))
         if den_col in row:
             valor_denominador = _optional_float(row.get(den_col))
+    if indicador == "volume_atipico":
+        valor_numerador = _optional_float(row.get("volume_atipico_valor_aumento_atipico"))
+        valor_denominador = None
 
     return IndicadorBenchmarkRowSchema(
         cnpj=str(row["cnpj"]),
@@ -418,7 +427,7 @@ def _indicador_benchmark_row_schema(
         risco_uf=_optional_float(row.get(risco_uf_col)),
         status=_status_indicador_benchmark(
             row,
-            value_col=value_col,
+            value_col=status_value_col or value_col,
             atencao_col=atencao_col,
             critico_col=critico_col,
         ),
@@ -442,6 +451,7 @@ def _indicador_benchmark_scope_schema(
     risco_uf_col: str,
     atencao_col: str,
     critico_col: str,
+    status_value_col: str | None = None,
 ) -> IndicadorBenchmarkScopeSchema:
     rows = [
         _indicador_benchmark_row_schema(
@@ -455,6 +465,7 @@ def _indicador_benchmark_scope_schema(
             risco_uf_col=risco_uf_col,
             atencao_col=atencao_col,
             critico_col=critico_col,
+            status_value_col=status_value_col,
         )
         for row in rows_df.iter_rows(named=True)
     ]
@@ -847,6 +858,9 @@ def get_indicador_benchmark_local(
         )
 
     value_col, med_reg_col, med_uf_col, _med_br_col, risco_reg_col, risco_uf_col, _risco_br_col = INDICATOR_MAPPING[indicador]
+    display_value_col = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador, value_col)
+    display_med_reg_col = "_display_med_regiao" if display_value_col != value_col else med_reg_col
+    display_med_uf_col = "_display_med_uf" if display_value_col != value_col else med_uf_col
     atencao_col, critico_col = _INDICATOR_FLAGS[indicador]
     valor_financeiro_col = _INDICADOR_VALOR_FINANCEIRO_COLS.get(indicador)
 
@@ -885,6 +899,8 @@ def get_indicador_benchmark_local(
         atencao_col,
         critico_col,
     ]
+    if display_value_col not in matriz_required:
+        matriz_required.append(display_value_col)
     if valor_financeiro_col is not None and valor_financeiro_col not in matriz_required:
         matriz_required.append(valor_financeiro_col)
 
@@ -899,17 +915,25 @@ def get_indicador_benchmark_local(
 
     _require_columns(matriz, matriz_required, "matriz_risco_dinamica")
 
+    cast_exprs = [
+        pl.col("id_regiao_saude").cast(pl.Utf8),
+        pl.col("id_ibge7").cast(pl.Int64),
+        pl.col(value_col).cast(pl.Float64),
+        pl.col(risco_reg_col).cast(pl.Float64),
+    ]
+    if display_value_col != value_col:
+        cast_exprs.append(pl.col(display_value_col).cast(pl.Float64))
+
     base = (
         matriz.select(matriz_required)
         .join(perfil.select(perfil_required), on="id_cnpj", how="inner")
+        .with_columns(cast_exprs)
         .with_columns([
-            pl.col("id_regiao_saude").cast(pl.Utf8),
-            pl.col("id_ibge7").cast(pl.Int64),
-            pl.col(value_col).cast(pl.Float64),
-            pl.col(risco_reg_col).cast(pl.Float64),
-        ])
+            pl.col(display_value_col).median().over("id_regiao_saude").alias(display_med_reg_col),
+            pl.col(display_value_col).median().over("uf").alias(display_med_uf_col),
+        ] if display_value_col != value_col else [])
         .sort(
-            [value_col, risco_reg_col, "cnpj"],
+            [display_value_col, risco_reg_col, "cnpj"],
             descending=[True, True, False],
             nulls_last=True,
         )
@@ -936,9 +960,9 @@ def get_indicador_benchmark_local(
         kpis=_indicador_benchmark_kpis(
             target,
             indicador=indicador,
-            value_col=value_col,
-            med_reg_col=med_reg_col,
-            med_uf_col=med_uf_col,
+            value_col=display_value_col,
+            med_reg_col=display_med_reg_col,
+            med_uf_col=display_med_uf_col,
             risco_reg_col=risco_reg_col,
             risco_uf_col=risco_uf_col,
         ),
@@ -948,13 +972,14 @@ def get_indicador_benchmark_local(
             rows_df=municipio_df,
             cnpj_alvo=clean_cnpj,
             indicador=indicador,
-            value_col=value_col,
-            med_reg_col=med_reg_col,
-            med_uf_col=med_uf_col,
+            value_col=display_value_col,
+            med_reg_col=display_med_reg_col,
+            med_uf_col=display_med_uf_col,
             risco_reg_col=risco_reg_col,
             risco_uf_col=risco_uf_col,
             atencao_col=atencao_col,
             critico_col=critico_col,
+            status_value_col=value_col,
         ),
         regiao_saude=_indicador_benchmark_scope_schema(
             escopo="regiao_saude",
@@ -962,13 +987,14 @@ def get_indicador_benchmark_local(
             rows_df=regiao_df,
             cnpj_alvo=clean_cnpj,
             indicador=indicador,
-            value_col=value_col,
-            med_reg_col=med_reg_col,
-            med_uf_col=med_uf_col,
+            value_col=display_value_col,
+            med_reg_col=display_med_reg_col,
+            med_uf_col=display_med_uf_col,
             risco_reg_col=risco_reg_col,
             risco_uf_col=risco_uf_col,
             atencao_col=atencao_col,
             critico_col=critico_col,
+            status_value_col=value_col,
         ),
     )
 
@@ -1018,10 +1044,13 @@ def get_indicador_evolucao_benchmark(
         )
 
     value_col, med_reg_col, med_uf_col, med_br_col, risco_reg_col, risco_uf_col = INDICATOR_MAPPING[indicador][:6]
+    display_value_col = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador, value_col)
+    display_med_reg_col = "_display_med_regiao" if display_value_col != value_col else med_reg_col
+    display_med_uf_col = "_display_med_uf" if display_value_col != value_col else med_uf_col
     formato = _INDICADOR_BENCHMARK_FORMATOS[indicador]
 
     perfil = get_df_perfil_estabelecimento()
-    perfil_required = ["id_cnpj", "cnpj"]
+    perfil_required = ["id_cnpj", "cnpj", "uf", "id_regiao_saude"]
     _require_columns(perfil, perfil_required, "perfil_estabelecimento")
 
     target_perfil = perfil.filter(pl.col("cnpj") == clean_cnpj).select(perfil_required)
@@ -1034,6 +1063,12 @@ def get_indicador_evolucao_benchmark(
 
     matriz = build_annual_indicator_benchmark_matriz()
     matriz_required = ["id_cnpj", "ano_base", value_col, med_reg_col, med_uf_col]
+    if display_value_col not in matriz_required:
+        matriz_required.append(display_value_col)
+    if display_value_col != value_col:
+        for context_col in ("id_regiao_saude", "uf"):
+            if context_col not in matriz_required:
+                matriz_required.append(context_col)
     
     agg_spec = INDICATOR_AGGREGATIONS.get(indicador)
     num_col = None
@@ -1045,18 +1080,44 @@ def get_indicador_evolucao_benchmark(
             matriz_required.append(num_col)
         if den_col not in matriz_required:
             matriz_required.append(den_col)
+    if indicador == "volume_atipico":
+        num_col = "volume_atipico_valor_aumento_atipico"
+        den_col = None
+        if num_col not in matriz_required:
+            matriz_required.append(num_col)
 
     _require_columns(matriz, matriz_required, "matriz_risco_anual")
 
+    target_info = target_perfil.row(0, named=True)
+    target_uf = target_info.get("uf")
+    target_regiao = target_info.get("id_regiao_saude")
+    if display_value_col != value_col and (target_uf is None or target_regiao is None):
+        raise RuntimeError("Perfil do CNPJ alvo sem uf/id_regiao_saude para evolucao anual.")
+
+    matriz_base = matriz
+    if display_value_col != value_col:
+        matriz_base = matriz_base.with_columns([
+            pl.col("id_regiao_saude").cast(pl.Utf8),
+            pl.col("uf").cast(pl.Utf8),
+            pl.col(display_value_col).cast(pl.Float64),
+        ]).with_columns([
+            pl.col(display_value_col).median().over(["ano_base", "id_regiao_saude"]).alias(display_med_reg_col),
+            pl.col(display_value_col).median().over(["ano_base", "uf"]).alias(display_med_uf_col),
+        ])
+        if display_med_reg_col not in matriz_required:
+            matriz_required.append(display_med_reg_col)
+        if display_med_uf_col not in matriz_required:
+            matriz_required.append(display_med_uf_col)
+
     serie_df = (
-        matriz
+        matriz_base
         .filter(pl.col("id_cnpj") == int(id_cnpj_value))
         .select(matriz_required)
         .with_columns([
             pl.col("ano_base").cast(pl.Int64),
-            pl.col(value_col).cast(pl.Float64),
-            pl.col(med_reg_col).cast(pl.Float64),
-            pl.col(med_uf_col).cast(pl.Float64),
+            pl.col(display_value_col).cast(pl.Float64),
+            pl.col(display_med_reg_col).cast(pl.Float64),
+            pl.col(display_med_uf_col).cast(pl.Float64),
         ])
         .sort("ano_base")
     )
@@ -1067,9 +1128,9 @@ def get_indicador_evolucao_benchmark(
     series = [
         IndicadorEvolucaoBenchmarkPointSchema(
             ano_base=int(row["ano_base"]),
-            farmacia=_optional_float(row.get(value_col)),
-            regiao_saude=_optional_float(row.get(med_reg_col)),
-            uf=_optional_float(row.get(med_uf_col)),
+            farmacia=_optional_float(row.get(display_value_col)),
+            regiao_saude=_optional_float(row.get(display_med_reg_col)),
+            uf=_optional_float(row.get(display_med_uf_col)),
             valor_numerador=_optional_float(row.get(num_col)) if num_col and num_col in row else None,
             valor_denominador=_optional_float(row.get(den_col)) if den_col and den_col in row else None,
         )

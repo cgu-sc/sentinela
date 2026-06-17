@@ -129,10 +129,10 @@ export const INDICATOR_DETAIL_CONFIG = {
     benchmarkValueLabel: 'Venda Per Capita Mensal',
     valueFormat: 'val',
     formula: {
-      description: 'Valor de venda proporcional à população do município.',
+      description: 'Faturamento total dividido pela população do município ponderada pelos meses ativos.',
       numeratorLabel: 'Faturamento Total',
       numeratorFormat: 'val',
-      denominatorLabel: 'Denominador Per Capita',
+      denominatorLabel: 'População × Meses Ativos',
       denominatorFormat: 'num',
       operator: '/',
       factor: 1,
@@ -169,22 +169,22 @@ export const INDICATOR_DETAIL_CONFIG = {
     },
   },
   volume_atipico: {
-    title: 'Aumento atípico de vendas',
-    valueLabel: 'Índice',
-    valueFormat: 'dec',
+    title: 'Aumento Atípico de Vendas',
+    valueLabel: 'Aumento Atípico',
+    benchmarkValueLabel: 'Aumento Atípico',
+    valueFormat: 'val',
     formula: {
-      description: 'Média do excesso de crescimento percentual nos semestres comparáveis.',
-      numeratorLabel: 'Excesso Crescimento Pct',
-      numeratorFormat: 'num',
-      denominatorLabel: 'Semestres Comparáveis',
-      denominatorFormat: 'num',
-      operator: '/',
+      description: 'Soma dos aumentos de faturamento nos semestres classificados como atípicos.',
+      numeratorLabel: 'Valor Aumento Atípico',
+      numeratorFormat: 'val',
+      operator: null,
       factor: 1,
     },
   },
   recorrencia_sistemica: {
     title: 'Recorrência Sistêmica',
     valueLabel: 'Percentual',
+    benchmarkValueLabel: 'Percentual Recorrência',
     valueFormat: 'pct',
     formula: {
       description: 'Proporção de vendas recorrentes sistemáticas sob suspeita de fracionamento.',
@@ -199,6 +199,7 @@ export const INDICATOR_DETAIL_CONFIG = {
   dias_pico: {
     title: 'Concentração em Dias de Pico',
     valueLabel: 'Percentual',
+    benchmarkValueLabel: 'Percentual +3 Dias Pico',
     valueFormat: 'pct',
     formula: {
       description: 'Proporção do faturamento concentrado nos 3 dias de maior volume do mês.',

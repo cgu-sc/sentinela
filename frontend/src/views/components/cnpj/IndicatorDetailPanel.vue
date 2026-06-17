@@ -254,8 +254,10 @@ watch(
                       <span class="math-operator">(</span>
                     </template>
                     <span class="math-term">{{ config.formula.numeratorLabel }}</span>
-                    <span class="math-operator">{{ config.formula.operator }}</span>
-                    <span class="math-term">{{ config.formula.denominatorLabel }}</span>
+                    <template v-if="config.formula.operator">
+                      <span class="math-operator">{{ config.formula.operator }}</span>
+                      <span class="math-term">{{ config.formula.denominatorLabel }}</span>
+                    </template>
                     <template v-if="config.formula.factor === 100">
                       <span class="math-operator">)</span>
                       <span class="math-operator">×</span>
@@ -271,8 +273,8 @@ watch(
                       <tr>
                         <th>Ano</th>
                         <th class="text-right">{{ config.formula.numeratorLabel }}</th>
-                        <th class="text-center">Operação</th>
-                        <th class="text-right">{{ config.formula.denominatorLabel }}</th>
+                        <th v-if="config.formula.operator" class="text-center">Operação</th>
+                        <th v-if="config.formula.operator" class="text-right">{{ config.formula.denominatorLabel }}</th>
                         <th class="text-right">Resultado</th>
                       </tr>
                     </thead>
@@ -280,8 +282,8 @@ watch(
                       <tr v-for="point in selectedPeriodMemoryRows" :key="point.ano_base">
                         <td class="font-semibold">{{ point.ano_base }}</td>
                         <td class="text-right">{{ formatFormulaValue(point.valor_numerador, config.formula.numeratorFormat) }}</td>
-                        <td class="text-center font-bold text-muted">/</td>
-                        <td class="text-right">{{ formatFormulaValue(point.valor_denominador, config.formula.denominatorFormat) }}</td>
+                        <td v-if="config.formula.operator" class="text-center font-bold text-muted">{{ config.formula.operator }}</td>
+                        <td v-if="config.formula.operator" class="text-right">{{ formatFormulaValue(point.valor_denominador, config.formula.denominatorFormat) }}</td>
                         <td class="text-right font-semibold text-primary">
                           {{ formatValueByType(point.farmacia, config.valueFormat) }}
                         </td>
@@ -289,8 +291,8 @@ watch(
                       <tr class="consolidated-row">
                         <td class="font-bold">Consolidado</td>
                         <td class="text-right font-bold">{{ formatFormulaValue(targetRow.valor_numerador, config.formula.numeratorFormat) }}</td>
-                        <td class="text-center font-bold text-muted">/</td>
-                        <td class="text-right font-bold">{{ formatFormulaValue(targetRow.valor_denominador, config.formula.denominatorFormat) }}</td>
+                        <td v-if="config.formula.operator" class="text-center font-bold text-muted">{{ config.formula.operator }}</td>
+                        <td v-if="config.formula.operator" class="text-right font-bold">{{ formatFormulaValue(targetRow.valor_denominador, config.formula.denominatorFormat) }}</td>
                         <td class="text-right font-bold text-success">
                           {{ formatValueByType(targetRow.valor, config.valueFormat) }}
                         </td>

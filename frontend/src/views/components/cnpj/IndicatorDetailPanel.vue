@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -55,12 +55,36 @@ const periodoLabel = computed(() => {
   return `${start.slice(5, 7)}/${start.slice(0, 4)} a ${end.slice(5, 7)}/${end.slice(0, 4)}`;
 });
 
+const normalizeCnpj = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? digits.padStart(14, '0').slice(-14) : '';
+};
+
+const selectedCnpj = ref('');
+const baseCnpj = computed(() => normalizeCnpj(props.cnpj));
+const activeCnpj = computed(() => selectedCnpj.value || baseCnpj.value);
+const isViewingTargetCnpj = computed(() => activeCnpj.value === baseCnpj.value);
+
 const requestKey = computed(() => (
-  `${props.cnpj}|${props.indicatorKey}|${periodoInicio.value || ''}|${periodoFim.value || ''}`
+  `${activeCnpj.value}|${props.indicatorKey}|${periodoInicio.value || ''}|${periodoFim.value || ''}`
 ));
 
-const benchmarkData = computed(() => indicadorBenchmarkDataByKey.value[requestKey.value] ?? null);
-const evolutionData = computed(() => indicadorEvolucaoBenchmarkDataByKey.value[requestKey.value] ?? null);
+const currentBenchmarkData = computed(() => indicadorBenchmarkDataByKey.value[requestKey.value] ?? null);
+const currentEvolutionData = computed(() => indicadorEvolucaoBenchmarkDataByKey.value[requestKey.value] ?? null);
+const renderedRequestKey = ref('');
+const isPanelUpdating = ref(false);
+let panelUpdateToken = 0;
+const PANEL_UPDATE_MIN_MS = 220;
+const displayedRequestKey = computed(() => {
+  if (currentBenchmarkData.value && currentEvolutionData.value) return requestKey.value;
+  return renderedRequestKey.value;
+});
+const benchmarkData = computed(() => (
+  displayedRequestKey.value ? indicadorBenchmarkDataByKey.value[displayedRequestKey.value] ?? null : null
+));
+const evolutionData = computed(() => (
+  displayedRequestKey.value ? indicadorEvolucaoBenchmarkDataByKey.value[displayedRequestKey.value] ?? null : null
+));
 const benchmarkLoading = computed(() => Boolean(indicadorBenchmarkLoadingByKey.value[requestKey.value]));
 const evolutionLoading = computed(() => Boolean(indicadorEvolucaoBenchmarkLoadingByKey.value[requestKey.value]));
 const benchmarkError = computed(() => (
@@ -68,12 +92,17 @@ const benchmarkError = computed(() => (
   ?? indicadorEvolucaoBenchmarkErrorByKey.value[requestKey.value]
   ?? null
 ));
-const isLoading = computed(() => benchmarkLoading.value || evolutionLoading.value);
-const canRender = computed(() => !!config.value && !!benchmarkData.value && !!evolutionData.value && !isLoading.value);
+const storeRequestLoading = computed(() => benchmarkLoading.value || evolutionLoading.value);
+const isLoading = computed(() => isPanelUpdating.value || storeRequestLoading.value);
+const hasRenderableData = computed(() => !!config.value && !!benchmarkData.value && !!evolutionData.value);
+const isInitialLoading = computed(() => isLoading.value && !hasRenderableData.value);
+const showLoadingOverlay = computed(() => isPanelUpdating.value && hasRenderableData.value);
+const canRender = computed(() => hasRenderableData.value);
 
 const municipioRows = computed(() => benchmarkData.value?.municipio?.rows ?? []);
 const regiaoRows = computed(() => benchmarkData.value?.regiao_saude?.rows ?? []);
 const copiedKey = ref(null);
+const activeCnpjPreview = ref('');
 const municipioLabel = computed(() => benchmarkData.value?.municipio?.label ?? 'Município');
 const regiaoLabel = computed(() => benchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
 
@@ -132,6 +161,8 @@ const riskStatusClass = (status) => {
 
 const rowClass = (row) => ({
   'indicator-benchmark-target': row?.is_alvo,
+  'indicator-benchmark-origin': normalizeCnpj(row?.cnpj) === baseCnpj.value && !isViewingTargetCnpj.value,
+  'indicator-benchmark-clickable': normalizeCnpj(row?.cnpj) !== activeCnpj.value,
 });
 
 function copyAndSignal(text, key) {
@@ -146,6 +177,21 @@ function copyAndSignal(text, key) {
 const formulaPanel = ref(null);
 const targetRow = computed(() => {
   return municipioRows.value.find(row => row.is_alvo) || regiaoRows.value.find(row => row.is_alvo) || null;
+});
+const selectedBenchmarkRow = computed(() => {
+  const currentCnpj = activeCnpj.value;
+  return (
+    municipioRows.value.find(row => normalizeCnpj(row?.cnpj) === currentCnpj)
+    || regiaoRows.value.find(row => normalizeCnpj(row?.cnpj) === currentCnpj)
+    || targetRow.value
+    || null
+  );
+});
+const activeCnpjTitle = computed(() => {
+  const row = selectedBenchmarkRow.value;
+  if (!row) return activeCnpjPreview.value || activeCnpj.value;
+  if (normalizeCnpj(row.cnpj) !== activeCnpj.value && activeCnpjPreview.value) return activeCnpjPreview.value;
+  return row.razao_social ? `${row.razao_social} (${row.cnpj})` : row.cnpj;
 });
 
 const selectedPeriodMemoryRows = computed(() => {
@@ -164,22 +210,90 @@ const formatFormulaValue = (value, format) => {
   return formatNumberFull(value);
 };
 
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function selectBenchmarkRow(row) {
+  const cnpj = normalizeCnpj(row?.cnpj);
+  if (!cnpj || cnpj === activeCnpj.value || isLoading.value) return;
+  activeCnpjPreview.value = row?.razao_social ? `${row.razao_social} (${row.cnpj})` : row?.cnpj ?? cnpj;
+  isPanelUpdating.value = true;
+  await nextTick();
+  selectedCnpj.value = cnpj;
+  formulaPanel.value?.hide?.();
+}
+
+function resetSelectedCnpj() {
+  if (isLoading.value) return;
+  activeCnpjPreview.value = '';
+  selectedCnpj.value = baseCnpj.value;
+  formulaPanel.value?.hide?.();
+}
+
 watch(
-  () => [props.cnpj, props.indicatorKey, periodoInicio.value, periodoFim.value],
+  () => [baseCnpj.value, props.indicatorKey],
+  ([cnpj]) => {
+    selectedCnpj.value = cnpj;
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [activeCnpj.value, props.indicatorKey, periodoInicio.value, periodoFim.value],
   async ([cnpj, indicatorKey]) => {
     if (!cnpj || !indicatorKey || !config.value) return;
-    await cnpjDetailStore.fetchIndicadorBenchmarkLocal(
-      cnpj,
-      indicatorKey,
-      periodoInicio.value,
-      periodoFim.value,
-    );
-    await cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(
-      cnpj,
-      indicatorKey,
-      periodoInicio.value,
-      periodoFim.value,
-    );
+
+    const nextRequestKey = requestKey.value;
+    if (
+      indicadorBenchmarkDataByKey.value[nextRequestKey]
+      && indicadorEvolucaoBenchmarkDataByKey.value[nextRequestKey]
+    ) {
+      panelUpdateToken += 1;
+      isPanelUpdating.value = false;
+      renderedRequestKey.value = nextRequestKey;
+      activeCnpjPreview.value = '';
+      return;
+    }
+
+    const token = ++panelUpdateToken;
+    const startedAt = performance.now();
+    isPanelUpdating.value = true;
+
+    try {
+      await Promise.all([
+        cnpjDetailStore.fetchIndicadorBenchmarkLocal(
+          cnpj,
+          indicatorKey,
+          periodoInicio.value,
+          periodoFim.value,
+        ),
+        cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(
+          cnpj,
+          indicatorKey,
+          periodoInicio.value,
+          periodoFim.value,
+        ),
+      ]);
+
+      const elapsed = performance.now() - startedAt;
+      if (elapsed < PANEL_UPDATE_MIN_MS) {
+        await wait(PANEL_UPDATE_MIN_MS - elapsed);
+      }
+    } finally {
+      if (token === panelUpdateToken) {
+        isPanelUpdating.value = false;
+      }
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [requestKey.value, currentBenchmarkData.value, currentEvolutionData.value],
+  ([key, benchmark, evolution]) => {
+    if (key && benchmark && evolution) {
+      renderedRequestKey.value = key;
+      activeCnpjPreview.value = '';
+    }
   },
   { immediate: true },
 );
@@ -187,11 +301,11 @@ watch(
 
 <template>
   <div class="indicator-detail-shell">
-    <div v-if="isLoading" class="indicator-state">
+    <div v-if="isInitialLoading" class="indicator-state">
       Carregando detalhamento do indicador...
     </div>
 
-    <div v-else-if="benchmarkError" class="indicator-state indicator-state--error">
+    <div v-else-if="benchmarkError && !hasRenderableData" class="indicator-state indicator-state--error">
       {{ benchmarkError }}
     </div>
 
@@ -200,6 +314,22 @@ watch(
     </div>
 
     <template v-else>
+      <div class="indicator-active-cnpj">
+        <div class="indicator-active-cnpj-text">
+          <span>CNPJ em análise</span>
+          <strong>{{ activeCnpjTitle }}</strong>
+        </div>
+        <button
+          v-if="!isViewingTargetCnpj"
+          type="button"
+          class="return-target-button"
+          @click="resetSelectedCnpj"
+        >
+          <i class="pi pi-undo" aria-hidden="true" />
+          <span>Voltar ao CNPJ alvo</span>
+        </button>
+      </div>
+
       <div class="indicator-kpis">
         <div v-for="kpi in benchmarkData.kpis" :key="kpi.label" class="indicator-kpi">
           <span>{{ kpi.label }}</span>
@@ -315,6 +445,7 @@ watch(
               scrollHeight="300px"
               class="indicator-table"
               size="small"
+              @row-click="selectBenchmarkRow($event.data)"
             >
               <Column header="ESTABELECIMENTO" headerClass="col-name" bodyClass="col-name">
                 <template #body="{ data }">
@@ -424,6 +555,7 @@ watch(
               scrollHeight="300px"
               class="indicator-table"
               size="small"
+              @row-click="selectBenchmarkRow($event.data)"
             >
               <Column header="ESTABELECIMENTO" headerClass="col-name" bodyClass="col-name">
                 <template #body="{ data }">
@@ -524,15 +656,131 @@ watch(
           </TabPanel>
         </TabView>
       </section>
+
+      <transition name="ind-overlay-fade">
+        <div
+          v-if="showLoadingOverlay"
+          class="indicator-loading-overlay"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div class="indicator-loading-overlay__box">
+            <i class="pi pi-spin pi-spinner" aria-hidden="true" />
+            <span>Atualizando análise...</span>
+          </div>
+        </div>
+      </transition>
     </template>
   </div>
 </template>
 
 <style scoped>
 .indicator-detail-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 560px;
+}
+
+.indicator-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-color) 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.indicator-loading-overlay__box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-color-85);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color-85) 12%, transparent);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.indicator-loading-overlay__box i {
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.ind-overlay-fade-enter-active,
+.ind-overlay-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.ind-overlay-fade-enter-from,
+.ind-overlay-fade-leave-to {
+  opacity: 0;
+}
+
+.indicator-active-cnpj {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.58rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 22%, var(--card-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+}
+
+.indicator-active-cnpj-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.indicator-active-cnpj-text span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.indicator-active-cnpj-text strong {
+  overflow: hidden;
+  color: var(--text-color-85);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.return-target-button {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.42rem;
+  padding: 0.38rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 34%, var(--card-border));
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.return-target-button:hover,
+.return-target-button:focus-visible {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .indicator-kpis {
@@ -964,6 +1212,10 @@ watch(
   background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
 }
 
+:deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-clickable) {
+  cursor: pointer;
+}
+
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target > td),
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target:nth-child(even) > td) {
   background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
@@ -972,6 +1224,10 @@ watch(
 
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target > td:first-child) {
   box-shadow: inset 3px 0 0 var(--primary-color);
+}
+
+:deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-origin > td:first-child) {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary-color) 55%, var(--text-muted));
 }
 
 .indicator-value-cell {

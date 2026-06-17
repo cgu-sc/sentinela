@@ -278,6 +278,8 @@ export const useFilterStore = defineStore('filters', () => {
 
   const sidebarCollapsed = ref(localStorage.getItem('sentinela_sidebar_collapsed') === 'true');
   const sidebarLocked = ref(localStorage.getItem('sentinela_sidebar_locked') === 'true');
+  const indicatorDetailHintDismissed = ref(false);
+  const uiPreferencesLoaded = ref(false);
   const isAnimating = ref(false);
   const animationMode = ref(false);
   const animationDuration = ref(0);
@@ -377,6 +379,7 @@ export const useFilterStore = defineStore('filters', () => {
         ui: {
           sidebarCollapsed: sidebarCollapsed.value,
           sidebarLocked: sidebarLocked.value,
+          indicatorDetailHintDismissed: indicatorDetailHintDismissed.value,
         },
       });
     } catch (error) {
@@ -392,6 +395,11 @@ export const useFilterStore = defineStore('filters', () => {
     localStorage.setItem('sentinela_sidebar_locked', String(val));
     saveUiToBackend();
   });
+
+  const setIndicatorDetailHintDismissed = async (value) => {
+    indicatorDetailHintDismissed.value = value === true;
+    await saveUiToBackend();
+  };
 
   // 4. FILTROS ESPECÍFICOS DO MÓDULO ALVOS
   const clusterSelection = ref(saved?.clusterSelection ?? FILTER_DEFAULTS.CLUSTER);
@@ -541,11 +549,16 @@ export const useFilterStore = defineStore('filters', () => {
         if (typeof data.ui.sidebarLocked === 'boolean') {
           sidebarLocked.value = data.ui.sidebarLocked;
         }
+        if (typeof data.ui.indicatorDetailHintDismissed === 'boolean') {
+          indicatorDetailHintDismissed.value = data.ui.indicatorDetailHintDismissed;
+        }
       } else {
         await saveUiToBackend();
       }
     } catch (error) {
       console.warn('[filters] Usando filtros locais do navegador:', error);
+    } finally {
+      uiPreferencesLoaded.value = true;
     }
   }
 
@@ -590,6 +603,9 @@ export const useFilterStore = defineStore('filters', () => {
     regionMapData,
     sidebarCollapsed,
     sidebarLocked,
+    indicatorDetailHintDismissed,
+    uiPreferencesLoaded,
+    setIndicatorDetailHintDismissed,
     isAnimating,
     animationMode,
     animationDuration,

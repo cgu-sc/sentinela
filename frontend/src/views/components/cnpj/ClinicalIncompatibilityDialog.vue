@@ -15,6 +15,7 @@ import { useThemeStore } from '@/stores/theme';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
 import { PALETTE } from '@/config/colors';
+import IndicatorDetailPanel from './IndicatorDetailPanel.vue';
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent]);
 
@@ -43,7 +44,7 @@ const {
   toLocalISO,
 } = useFormatting();
 
-const activeIndex = ref(0);
+const activeIndex = ref(-1);
 const selectedCnpj = ref('');
 
 const cleanCnpj = (value) => {
@@ -68,7 +69,7 @@ watch(
     const clean = cleanCnpj(cnpj);
     if (clean && clean !== selectedCnpj.value) {
       selectedCnpj.value = clean;
-      activeIndex.value = 0;
+      activeIndex.value = -1;
     }
   },
   { immediate: true },
@@ -87,7 +88,7 @@ watch(
   () => incompatibilidadePatologicaData.value?.patologias,
   (patologias) => {
     if (!Array.isArray(patologias) || activeIndex.value >= patologias.length) {
-      activeIndex.value = 0;
+      activeIndex.value = -1;
     }
   },
 );
@@ -299,7 +300,7 @@ const handleRankingRowClick = ({ data }) => {
   const clean = cleanCnpj(data?.cnpj);
   if (!clean || clean === selectedCnpj.value) return;
   selectedCnpj.value = clean;
-  activeIndex.value = 0;
+  activeIndex.value = -1;
 };
 
 const close = () => emit('update:modelValue', false);
@@ -325,12 +326,17 @@ const close = () => emit('update:modelValue', false);
         {{ incompatibilidadePatologicaError }}
       </div>
 
-      <div v-else-if="!patologias.length" class="clin-empty">
-        Sem incompatibilidades patológicas no período.
-      </div>
-
       <template v-else>
         <div class="clin-tabs" role="tablist" aria-label="Recortes clínicos">
+          <button
+            type="button"
+            class="clin-tab clin-tab-indicator"
+            :class="{ active: activeIndex === -1 }"
+            @click="activeIndex = -1"
+          >
+            <span>Indicador</span>
+            <small>Visão comparativa</small>
+          </button>
           <button
             v-for="(item, index) in patologias"
             :key="`${item.patologia}-${item.regra_clinica}`"
@@ -343,6 +349,13 @@ const close = () => emit('update:modelValue', false);
             <small>{{ item.criterio }}</small>
           </button>
         </div>
+
+        <section v-if="activeIndex === -1" class="clin-panel">
+          <IndicatorDetailPanel
+            :cnpj="selectedCnpj"
+            indicator-key="incompatibilidade_patologica"
+          />
+        </section>
 
         <section v-if="activePatologia" class="clin-panel">
           <div class="clin-kpis clin-kpis-five clin-kpis-small">

@@ -113,6 +113,7 @@ _INDICADOR_VALOR_FINANCEIRO_COLS = {
 
 _INDICADOR_BENCHMARK_LOCAL_KEYS = {
     "falecidos",
+    "incompatibilidade_patologica",
     "percentual_nao_comprovacao",
     "teto",
     "polimedicamento",
@@ -130,6 +131,7 @@ _INDICADOR_BENCHMARK_LOCAL_KEYS = {
 
 _INDICADOR_BENCHMARK_FORMATOS = {
     "falecidos": "pct3",
+    "incompatibilidade_patologica": "pct",
     "percentual_nao_comprovacao": "pct",
     "teto": "pct",
     "polimedicamento": "pct",
@@ -869,7 +871,7 @@ def get_indicador_benchmark_local(
         atencao_col,
         critico_col,
     ]
-    if valor_financeiro_col is not None:
+    if valor_financeiro_col is not None and valor_financeiro_col not in matriz_required:
         matriz_required.append(valor_financeiro_col)
     _require_columns(matriz, matriz_required, "matriz_risco_dinamica")
 

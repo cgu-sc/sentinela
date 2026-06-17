@@ -44,6 +44,33 @@ watch(showOnlyHighRisk, (newVal) => {
   localStorage.setItem('sentinela_indicators_filter_only_risky', newVal);
 });
 
+// ── Banner de hint de interatividade ─────────────────────
+const showHintBanner = ref(false);
+const hintAutoHandled = ref(false);
+function dismissHint() {
+  showHintBanner.value = false;
+  void filterStore.setIndicatorDetailHintDismissed(true);
+}
+
+function hideHintTemporarily() {
+  showHintBanner.value = false;
+}
+
+watch(
+  () => [
+    cachedIndicadoresData.value,
+    filterStore.uiPreferencesLoaded,
+    filterStore.indicatorDetailHintDismissed,
+  ],
+  ([val, preferencesLoaded, dismissed]) => {
+    if (val && preferencesLoaded && !dismissed && !hintAutoHandled.value) {
+      hintAutoHandled.value = true;
+      setTimeout(() => { showHintBanner.value = true; }, 500);
+      setTimeout(() => hideHintTemporarily(), 7000);
+    }
+  },
+);
+
 
 // ── Helpers de indicadores ────────────────────────────────
 function getIndicadorStatus(indicadorData) {
@@ -105,7 +132,11 @@ async function openClinicalDialog() {
   const fim = end ? toLocalISO(end) : null;
   loadingSpecialIndicatorKey.value = 'incompatibilidade_patologica';
   try {
-    await cnpjDetailStore.fetchIncompatibilidadePatologica(cnpj, inicio, fim);
+    await Promise.all([
+      cnpjDetailStore.fetchIndicadorBenchmarkLocal(cnpj, 'incompatibilidade_patologica', inicio, fim),
+      cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(cnpj, 'incompatibilidade_patologica', inicio, fim),
+      cnpjDetailStore.fetchIncompatibilidadePatologica(cnpj, inicio, fim),
+    ]);
     showClinicalDialog.value = true;
   } finally {
     if (loadingSpecialIndicatorKey.value === 'incompatibilidade_patologica') {
@@ -116,9 +147,7 @@ async function openClinicalDialog() {
 
 function canDetailIndicator(key, indicadorData = null) {
   if (key === 'dispersao_geografica') return true;
-  if (key === 'incompatibilidade_patologica') {
-    return indicadorData?.pode_detalhar === true;
-  }
+  if (key === 'incompatibilidade_patologica') return true;
   if (GENERIC_INDICATOR_DETAIL_KEYS.includes(key)) return true;
   return false;
 }
@@ -273,6 +302,27 @@ function riscoTextStyle(indicadorData) {
             </div>
           </div>
         </div>
+
+        <!-- Banner de hint deslizante -->
+        <transition name="hint-banner">
+          <div v-if="showHintBanner" class="ind-hint-banner">
+            <div class="ind-hint-banner__inner">
+              <div class="ind-hint-icon-wrap">
+                <span class="ind-hint-ripple" />
+                <span class="ind-hint-ripple ind-hint-ripple--2" />
+                <i class="pi pi-mouse" />
+              </div>
+              <div class="ind-hint-text">
+                <strong>Detalhamento do indicador</strong>
+                <span>Clique nas linhas dos indicadores para abrir a análise detalhada.</span>
+              </div>
+              <button class="ind-hint-close" @click="dismissHint" aria-label="Fechar dica">
+                <i class="pi pi-times" />
+              </button>
+            </div>
+          </div>
+        </transition>
+
         <div class="ind-table-wrap">
         <table class="ind-table">
           <colgroup>
@@ -477,6 +527,112 @@ function riscoTextStyle(indicadorData) {
   letter-spacing: 0.04em;
   color: var(--text-color);
   opacity: 0.85;
+}
+
+/* ── Banner de hint deslizante ── */
+.ind-hint-banner {
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.ind-hint-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  border-radius: 10px;
+}
+
+.ind-hint-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.ind-hint-icon-wrap i {
+  font-size: 1.1rem;
+  color: var(--primary-color);
+  position: relative;
+  z-index: 1;
+}
+
+.ind-hint-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--primary-color) 60%, transparent);
+  animation: hint-ripple 2s ease-out infinite;
+}
+
+.ind-hint-ripple--2 {
+  animation-delay: 0.7s;
+}
+
+@keyframes hint-ripple {
+  0%   { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.ind-hint-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ind-hint-text strong {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.ind-hint-text span {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 1;
+}
+
+.ind-hint-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.ind-hint-close:hover {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 10%, transparent);
+}
+
+/* Transição slide-down do banner */
+.hint-banner-enter-active {
+  transition: max-height 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  max-height: 120px;
+}
+.hint-banner-leave-active {
+  transition: max-height 0.35s ease, opacity 0.25s ease;
+}
+.hint-banner-enter-from {
+  max-height: 0;
+  opacity: 0;
+}
+.hint-banner-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
 .risk-toggle-pill {

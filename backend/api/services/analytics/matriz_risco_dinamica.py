@@ -119,6 +119,13 @@ def _metric_ratio_expr(numerator: str, denominator: str, factor: float, alias: s
     )
 
 
+def _aggregation_factor(spec: dict[str, object]) -> float:
+    factor = spec.get("factor")
+    if isinstance(factor, bool) or not isinstance(factor, (int, float)):
+        raise RuntimeError("Configuracao de indicador possui factor invalido.")
+    return float(factor)
+
+
 def _risk_ratio_expr(value_col: str, median_col: str, alias: str) -> pl.Expr:
     return (
         pl.when(pl.col(value_col).is_null() | pl.col(median_col).is_null() | (pl.col(median_col) <= 0))
@@ -315,7 +322,7 @@ def _compute_dynamic_matriz_risco(
         _metric_ratio_expr(
             str(spec["numerator"]),
             str(spec["denominator"]),
-            float(spec["factor"]),
+            _aggregation_factor(spec),
             INDICATOR_MAPPING[key][0],
         )
         for key, spec in _INDICATOR_AGGREGATIONS.items()
@@ -592,7 +599,7 @@ def build_annual_indicator_benchmark_matriz(
         _metric_ratio_expr(
             str(spec["numerator"]),
             str(spec["denominator"]),
-            float(spec["factor"]),
+            _aggregation_factor(spec),
             INDICATOR_MAPPING[key][0],
         )
         for key, spec in _INDICATOR_AGGREGATIONS.items()

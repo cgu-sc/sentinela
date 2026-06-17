@@ -22,6 +22,12 @@ export const INDICATOR_DETAIL_CONFIG = {
     valueFormat: 'pct3',
     financialLabel: 'Valor para falecidos',
   },
+  incompatibilidade_patologica: {
+    title: 'Incompatibilidade Patológica',
+    valueLabel: 'Percentual',
+    valueFormat: 'pct',
+    financialLabel: 'Valor suspeito',
+  },
   percentual_nao_comprovacao: {
     title: 'Percentual Não Comprovação',
     valueLabel: 'Percentual',

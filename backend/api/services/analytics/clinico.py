@@ -398,25 +398,31 @@ def get_incompatibilidade_patologica_data(
 
     clinica_df = clinica.collect()
     _require_columns(clinica_df, _CLINICA_COLUNAS_OBRIGATORIAS, "analise_gtin_inconsistencia_clinica")
+
     if clinica_df.is_empty():
-        raise HTTPException(status_code=404, detail="CNPJ sem analise clinica no periodo.")
-
-    clinica_incompativel = clinica_df.filter(pl.col("qtd_cpfs_incompativeis") > 0)
-    if clinica_incompativel.is_empty():
-        raise HTTPException(status_code=404, detail="CNPJ sem incompatibilidades patologicas no periodo.")
-
-    summary_row = (
-        clinica_df
-        .select(
-            pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
-            pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
-            pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
-            pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
-            pl.sum("valor_total_pago").alias("valor_total_pago"),
-            pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
+        summary_row = {
+            "qtd_cpfs_distintos": 0,
+            "qtd_cpfs_incompativeis": 0,
+            "qtd_autorizacoes": 0,
+            "qtd_autorizacoes_incompativeis": 0,
+            "valor_total_pago": 0,
+            "valor_incompativel_pago": 0,
+        }
+        clinica_incompativel = clinica_df
+    else:
+        summary_row = (
+            clinica_df
+            .select(
+                pl.sum("qtd_cpfs_distintos").alias("qtd_cpfs_distintos"),
+                pl.sum("qtd_cpfs_incompativeis").alias("qtd_cpfs_incompativeis"),
+                pl.sum("qtd_autorizacoes").alias("qtd_autorizacoes"),
+                pl.sum("qtd_autorizacoes_incompativeis").alias("qtd_autorizacoes_incompativeis"),
+                pl.sum("valor_total_pago").alias("valor_total_pago"),
+                pl.sum("valor_incompativel_pago").alias("valor_incompativel_pago"),
+            )
+            .row(0, named=True)
         )
-        .row(0, named=True)
-    )
+        clinica_incompativel = clinica_df.filter(pl.col("qtd_cpfs_incompativeis") > 0)
     valor_total = float(summary_row["valor_total_pago"] or 0)
     valor_incompativel = float(summary_row["valor_incompativel_pago"] or 0)
     summary = ClinicoIncompatibilidadeSummarySchema(

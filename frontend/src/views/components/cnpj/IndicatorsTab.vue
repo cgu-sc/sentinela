@@ -308,6 +308,8 @@ function riscoTextStyle(indicadorData) {
                 v-for="ind in grupo.indicators"
                 :key="ind.key"
                 class="ind-data-row"
+                :class="{ 'is-clickable': canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key]) }"
+                @click="canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key]) && openIndicatorDetail(ind.key)"
               >
                 <td class="ind-nome-cell">
                   <div class="ind-nome-inner">
@@ -316,15 +318,7 @@ function riscoTextStyle(indicadorData) {
                       class="pi pi-info-circle ind-info-icon"
                       v-tooltip.right="{ value: ind.metodologia, class: 'ind-tooltip' }"
                     />
-                    <button
-                      v-if="canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key])"
-                      type="button"
-                      class="ind-action-btn"
-                      v-tooltip.top="{ value: 'Ver detalhamento do indicador', class: 'ind-tooltip' }"
-                      @click.stop="openIndicatorDetail(ind.key)"
-                    >
-                      <span>Detalhar</span>
-                    </button>
+                    
                   </div>
                 </td>
 
@@ -803,6 +797,14 @@ function riscoTextStyle(indicadorData) {
 
 .ind-data-row:hover td {
   background: var(--table-hover) !important;
+}
+
+.ind-data-row.is-clickable {
+  cursor: pointer;
+}
+
+.ind-data-row.is-clickable:hover td {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--table-hover)) !important;
 }
 
 /* Célula do nome */

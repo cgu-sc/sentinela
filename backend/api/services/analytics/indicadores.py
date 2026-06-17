@@ -16,6 +16,7 @@ from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_benc
 from .indicator_config import (
     INDICATOR_MAPPING,
     INDICATOR_FLAGS as _INDICATOR_FLAGS,
+    INDICATOR_AGGREGATIONS,
 )
 from .matriz_risco_dinamica import (
     MIN_REGIAO_BENCHMARK,
@@ -388,6 +389,17 @@ def _indicador_benchmark_row_schema(
         else None
     )
 
+    agg_spec = INDICATOR_AGGREGATIONS.get(indicador)
+    valor_numerador = None
+    valor_denominador = None
+    if agg_spec:
+        num_col = str(agg_spec["numerator"])
+        den_col = str(agg_spec["denominator"])
+        if num_col in row:
+            valor_numerador = _optional_float(row.get(num_col))
+        if den_col in row:
+            valor_denominador = _optional_float(row.get(den_col))
+
     return IndicadorBenchmarkRowSchema(
         cnpj=str(row["cnpj"]),
         razao_social=row.get("razao_social"),
@@ -411,6 +423,8 @@ def _indicador_benchmark_row_schema(
             critico_col=critico_col,
         ),
         is_alvo=str(row["cnpj"]) == cnpj_alvo,
+        valor_numerador=valor_numerador,
+        valor_denominador=valor_denominador,
     )
 
 
@@ -873,6 +887,16 @@ def get_indicador_benchmark_local(
     ]
     if valor_financeiro_col is not None and valor_financeiro_col not in matriz_required:
         matriz_required.append(valor_financeiro_col)
+
+    agg_spec = INDICATOR_AGGREGATIONS.get(indicador)
+    if agg_spec:
+        num_col = str(agg_spec["numerator"])
+        den_col = str(agg_spec["denominator"])
+        if num_col not in matriz_required:
+            matriz_required.append(num_col)
+        if den_col not in matriz_required:
+            matriz_required.append(den_col)
+
     _require_columns(matriz, matriz_required, "matriz_risco_dinamica")
 
     base = (
@@ -1010,6 +1034,18 @@ def get_indicador_evolucao_benchmark(
 
     matriz = build_annual_indicator_benchmark_matriz()
     matriz_required = ["id_cnpj", "ano_base", value_col, med_reg_col, med_uf_col]
+    
+    agg_spec = INDICATOR_AGGREGATIONS.get(indicador)
+    num_col = None
+    den_col = None
+    if agg_spec:
+        num_col = str(agg_spec["numerator"])
+        den_col = str(agg_spec["denominator"])
+        if num_col not in matriz_required:
+            matriz_required.append(num_col)
+        if den_col not in matriz_required:
+            matriz_required.append(den_col)
+
     _require_columns(matriz, matriz_required, "matriz_risco_anual")
 
     serie_df = (
@@ -1034,6 +1070,8 @@ def get_indicador_evolucao_benchmark(
             farmacia=_optional_float(row.get(value_col)),
             regiao_saude=_optional_float(row.get(med_reg_col)),
             uf=_optional_float(row.get(med_uf_col)),
+            valor_numerador=_optional_float(row.get(num_col)) if num_col and num_col in row else None,
+            valor_denominador=_optional_float(row.get(den_col)) if den_col and den_col in row else None,
         )
         for row in serie_df.to_dicts()
     ]

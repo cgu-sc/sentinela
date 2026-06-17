@@ -5,6 +5,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
+import OverlayPanel from 'primevue/overlaypanel';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
@@ -87,6 +88,7 @@ const formatValueByType = (value, format) => {
 const formatIndicatorValue = (value) => formatValueByType(value, config.value?.valueFormat ?? 'pct');
 const formatKpiValue = (kpi) => formatValueByType(kpi?.value, kpi?.formato);
 const formatFinancialValue = (value) => (value == null ? '—' : formatCurrencyFull(value));
+const benchmarkValueLabel = computed(() => config.value?.benchmarkValueLabel ?? config.value?.valueLabel ?? 'Valor');
 const hasFinancialColumn = computed(() => Boolean(config.value?.financialLabel));
 
 function formatCompactFinancialValue(value) {
@@ -141,6 +143,27 @@ function copyAndSignal(text, key) {
   }, 2000);
 }
 
+const formulaPanel = ref(null);
+const targetRow = computed(() => {
+  return municipioRows.value.find(row => row.is_alvo) || regiaoRows.value.find(row => row.is_alvo) || null;
+});
+
+const selectedPeriodMemoryRows = computed(() => {
+  const series = evolutionData.value?.series ?? [];
+  const markedYears = evolutionData.value?.periodo_marcado?.anos ?? [];
+  const markedYearSet = new Set(markedYears.map(year => Number(year)));
+
+  if (!markedYearSet.size) return series;
+  return series.filter(point => markedYearSet.has(Number(point.ano_base)));
+});
+
+const formatFormulaValue = (value, format) => {
+  if (value == null) return '—';
+  if (format === 'val') return formatCurrencyFull(value);
+  if (format === 'pct') return formatPercent(value);
+  return formatNumberFull(value);
+};
+
 watch(
   () => [props.cnpj, props.indicatorKey, periodoInicio.value, periodoFim.value],
   async ([cnpj, indicatorKey]) => {
@@ -194,7 +217,91 @@ watch(
       />
 
       <section class="indicator-benchmark-card">
-        <div class="indicator-card-title">Comparação com estabelecimentos do território</div>
+        <div class="indicator-card-header">
+          <div class="indicator-card-title">Comparação com estabelecimentos do território</div>
+          <div v-if="config?.formula && targetRow" class="formula-trigger-row">
+            <button
+              type="button"
+              class="formula-trigger"
+              aria-haspopup="dialog"
+              @click="formulaPanel?.toggle($event)"
+            >
+              <i class="pi pi-calculator" aria-hidden="true" />
+              <span class="formula-trigger-main">Fórmula</span>
+              <span class="formula-trigger-subtitle">Memória de cálculo</span>
+              <i class="pi pi-info-circle formula-trigger-info" aria-hidden="true" />
+            </button>
+
+            <OverlayPanel
+              ref="formulaPanel"
+              class="formula-overlay-panel"
+              :dismissable="true"
+              appendTo="body"
+            >
+              <div class="calculation-memory-content calculation-memory-content--floating">
+                <div class="formula-overlay-heading">
+                  <i class="pi pi-calculator" aria-hidden="true" />
+                  <span>Memória de Cálculo</span>
+                </div>
+                <p class="formula-desc">{{ config.formula.description }}</p>
+
+                <div class="formula-math-box">
+                  <span class="math-label">Equação:</span>
+                  <div class="math-formula">
+                    <span class="math-term math-term--result">{{ config.title }}</span>
+                    <span class="math-operator">=</span>
+                    <template v-if="config.formula.factor === 100">
+                      <span class="math-operator">(</span>
+                    </template>
+                    <span class="math-term">{{ config.formula.numeratorLabel }}</span>
+                    <span class="math-operator">{{ config.formula.operator }}</span>
+                    <span class="math-term">{{ config.formula.denominatorLabel }}</span>
+                    <template v-if="config.formula.factor === 100">
+                      <span class="math-operator">)</span>
+                      <span class="math-operator">×</span>
+                      <span class="math-term">100</span>
+                    </template>
+                  </div>
+                </div>
+
+                <div v-if="selectedPeriodMemoryRows.length" class="memory-evolution-table-wrapper">
+                  <div class="memory-table-title">Valores por Ano no Período</div>
+                  <table class="memory-evolution-table">
+                    <thead>
+                      <tr>
+                        <th>Ano</th>
+                        <th class="text-right">{{ config.formula.numeratorLabel }}</th>
+                        <th class="text-center">Operação</th>
+                        <th class="text-right">{{ config.formula.denominatorLabel }}</th>
+                        <th class="text-right">Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="point in selectedPeriodMemoryRows" :key="point.ano_base">
+                        <td class="font-semibold">{{ point.ano_base }}</td>
+                        <td class="text-right">{{ formatFormulaValue(point.valor_numerador, config.formula.numeratorFormat) }}</td>
+                        <td class="text-center font-bold text-muted">/</td>
+                        <td class="text-right">{{ formatFormulaValue(point.valor_denominador, config.formula.denominatorFormat) }}</td>
+                        <td class="text-right font-semibold text-primary">
+                          {{ formatValueByType(point.farmacia, config.valueFormat) }}
+                        </td>
+                      </tr>
+                      <tr class="consolidated-row">
+                        <td class="font-bold">Consolidado</td>
+                        <td class="text-right font-bold">{{ formatFormulaValue(targetRow.valor_numerador, config.formula.numeratorFormat) }}</td>
+                        <td class="text-center font-bold text-muted">/</td>
+                        <td class="text-right font-bold">{{ formatFormulaValue(targetRow.valor_denominador, config.formula.denominatorFormat) }}</td>
+                        <td class="text-right font-bold text-success">
+                          {{ formatValueByType(targetRow.valor, config.valueFormat) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </OverlayPanel>
+          </div>
+        </div>
         <TabView class="indicator-benchmark-tabs">
           <TabPanel header="Município">
             <div class="indicator-scope-label">{{ municipioLabel }}</div>
@@ -242,27 +349,12 @@ watch(
                   </div>
                 </template>
               </Column>
-              <Column header="VALOR MOVIMENTADO" headerClass="col-movement" bodyClass="col-movement">
-                <template #body="{ data }">{{ formatFinancialValue(data.valor_movimentado) }}</template>
-              </Column>
-              <Column header="NÃO COMPROVAÇÃO" headerClass="col-noncomp" bodyClass="col-noncomp">
+              <Column :header="benchmarkValueLabel.toUpperCase()" headerClass="col-indicator" bodyClass="col-indicator">
                 <template #body="{ data }">
-                  <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
-                    <span
-                      class="noncomp-value"
-                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
-                      v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
-                    >
-                      {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
-                    </span>
-                    <span v-if="data.percentual_nao_comprovacao != null" class="noncomp-percent">
-                      {{ Number(data.percentual_nao_comprovacao).toFixed(2) }}%
-                    </span>
+                  <div class="indicator-value-cell">
+                    <span class="indicator-value-main">{{ formatIndicatorValue(data.valor) }}</span>
                   </div>
                 </template>
-              </Column>
-              <Column :header="config.valueLabel.toUpperCase()" headerClass="col-indicator" bodyClass="col-indicator">
-                <template #body="{ data }">{{ formatIndicatorValue(data.valor) }}</template>
               </Column>
               <Column v-if="hasFinancialColumn" :header="config.financialLabel.toUpperCase()" headerClass="col-financial" bodyClass="col-financial">
                 <template #body="{ data }">{{ formatFinancialValue(data.valor_financeiro) }}</template>
@@ -287,6 +379,25 @@ watch(
                       :class="riskStatusClass(data.status)"
                     >
                       {{ statusLabel(data.status) }}
+                    </span>
+                  </div>
+                </template>
+              </Column>
+              <Column header="VALOR MOVIMENTADO" headerClass="col-movement" bodyClass="col-movement">
+                <template #body="{ data }">{{ formatFinancialValue(data.valor_movimentado) }}</template>
+              </Column>
+              <Column header="NÃO COMPROVAÇÃO" headerClass="col-noncomp" bodyClass="col-noncomp">
+                <template #body="{ data }">
+                  <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
+                    <span
+                      class="noncomp-value"
+                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+                      v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
+                    >
+                      {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
+                    </span>
+                    <span v-if="data.percentual_nao_comprovacao != null" class="noncomp-percent">
+                      {{ Number(data.percentual_nao_comprovacao).toFixed(2) }}%
                     </span>
                   </div>
                 </template>
@@ -347,27 +458,12 @@ watch(
                   </div>
                 </template>
               </Column>
-              <Column header="VALOR MOVIMENTADO" headerClass="col-movement" bodyClass="col-movement">
-                <template #body="{ data }">{{ formatFinancialValue(data.valor_movimentado) }}</template>
-              </Column>
-              <Column header="NÃO COMPROVAÇÃO" headerClass="col-noncomp" bodyClass="col-noncomp">
+              <Column :header="benchmarkValueLabel.toUpperCase()" headerClass="col-indicator" bodyClass="col-indicator">
                 <template #body="{ data }">
-                  <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
-                    <span
-                      class="noncomp-value"
-                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
-                      v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
-                    >
-                      {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
-                    </span>
-                    <span v-if="data.percentual_nao_comprovacao != null" class="noncomp-percent">
-                      {{ Number(data.percentual_nao_comprovacao).toFixed(2) }}%
-                    </span>
+                  <div class="indicator-value-cell">
+                    <span class="indicator-value-main">{{ formatIndicatorValue(data.valor) }}</span>
                   </div>
                 </template>
-              </Column>
-              <Column :header="config.valueLabel.toUpperCase()" headerClass="col-indicator" bodyClass="col-indicator">
-                <template #body="{ data }">{{ formatIndicatorValue(data.valor) }}</template>
               </Column>
               <Column v-if="hasFinancialColumn" :header="config.financialLabel.toUpperCase()" headerClass="col-financial" bodyClass="col-financial">
                 <template #body="{ data }">{{ formatFinancialValue(data.valor_financeiro) }}</template>
@@ -392,6 +488,25 @@ watch(
                       :class="riskStatusClass(data.status)"
                     >
                       {{ statusLabel(data.status) }}
+                    </span>
+                  </div>
+                </template>
+              </Column>
+              <Column header="VALOR MOVIMENTADO" headerClass="col-movement" bodyClass="col-movement">
+                <template #body="{ data }">{{ formatFinancialValue(data.valor_movimentado) }}</template>
+              </Column>
+              <Column header="NÃO COMPROVAÇÃO" headerClass="col-noncomp" bodyClass="col-noncomp">
+                <template #body="{ data }">
+                  <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
+                    <span
+                      class="noncomp-value"
+                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+                      v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
+                    >
+                      {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
+                    </span>
+                    <span v-if="data.percentual_nao_comprovacao != null" class="noncomp-percent">
+                      {{ Number(data.percentual_nao_comprovacao).toFixed(2) }}%
                     </span>
                   </div>
                 </template>
@@ -458,7 +573,7 @@ watch(
 .indicator-kpi strong {
   font-size: 0.98rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .indicator-benchmark-card {
@@ -466,11 +581,18 @@ watch(
   padding: 0.9rem;
 }
 
-.indicator-card-title {
+.indicator-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
   margin-bottom: 0.55rem;
+}
+
+.indicator-card-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .indicator-scope-label {
@@ -506,7 +628,7 @@ watch(
   white-space: nowrap;
   cursor: default;
   font-size: 0.76rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .cnpj-row {
@@ -641,7 +763,7 @@ watch(
 }
 
 .noncomp-value {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -733,9 +855,9 @@ watch(
 }
 
 :deep(.indicator-benchmark-tabs .p-tabview-nav-link) {
-  padding: 0.55rem 0.9rem;
+  padding: 0.68rem 1.05rem;
   background: transparent;
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
   font-size: 0.78rem;
   font-weight: 700;
@@ -746,7 +868,7 @@ watch(
   font-size: 0.78rem;
   font-weight: 600;
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
 }
 
@@ -763,7 +885,7 @@ watch(
   overflow: hidden;
   font-size: 0.8rem;
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
 }
 
@@ -788,6 +910,15 @@ watch(
 :deep(.indicator-table .col-indicator) {
   width: 10%;
   text-align: right;
+}
+
+:deep(.indicator-table th.col-indicator) {
+  color: var(--primary-color);
+}
+
+:deep(.indicator-table td.col-indicator) {
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
 }
 
 :deep(.indicator-table .col-financial) {
@@ -824,7 +955,7 @@ watch(
 }
 
 :deep(.indicator-table .p-datatable-tbody > tr:nth-child(even) > td) {
-  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg));
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
 }
 
 :deep(.indicator-table .p-datatable-tbody > tr:hover > td) {
@@ -834,10 +965,207 @@ watch(
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target > td),
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target:nth-child(even) > td) {
   background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target > td:first-child) {
   box-shadow: inset 3px 0 0 var(--primary-color);
 }
+
+.indicator-value-cell {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 5.4rem;
+  padding: 0.38rem 0.52rem;
+  border-left: 3px solid var(--primary-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary-color) 9%, var(--card-bg));
+  color: var(--text-color-85);
+}
+
+.indicator-value-main {
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.formula-trigger-row {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.formula-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.68rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 38%, var(--card-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
+  color: var(--text-color-85);
+  cursor: pointer;
+  font-size: 0.74rem;
+  line-height: 1;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.formula-trigger:hover,
+.formula-trigger:focus-visible {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 13%, var(--card-bg));
+  color: var(--primary-color);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.formula-trigger-main {
+  font-weight: 700;
+}
+
+.formula-trigger-subtitle {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.formula-trigger-info {
+  color: var(--primary-color);
+  font-size: 0.78rem;
+}
+
+:deep(.formula-overlay-panel.p-overlaypanel) {
+  width: min(720px, calc(100vw - 48px));
+  border-color: var(--card-border);
+  background: var(--card-bg);
+}
+
+:deep(.formula-overlay-panel .p-overlaypanel-content) {
+  padding: 0;
+  background: var(--card-bg);
+  color: var(--text-color-85);
+}
+
+.calculation-memory-content {
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.calculation-memory-content--floating {
+  max-height: min(560px, calc(100vh - 140px));
+  overflow: auto;
+}
+
+.formula-overlay-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--card-border);
+  color: var(--text-color-85);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.formula-overlay-heading i {
+  color: var(--primary-color);
+}
+
+.formula-desc {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  margin: 0;
+}
+
+.formula-math-box {
+  background: color-mix(in srgb, var(--text-muted) 5%, transparent);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.math-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.math-formula {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: monospace;
+  font-size: 0.78rem;
+  flex-wrap: wrap;
+}
+
+.math-term {
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  color: var(--primary-color);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.math-term--result {
+  background: color-mix(in srgb, var(--accent-indigo) 12%, var(--card-bg));
+  color: var(--accent-indigo);
+}
+
+.math-operator {
+  color: var(--text-muted);
+  font-weight: bold;
+}
+
+.memory-evolution-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.memory-table-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.memory-evolution-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.memory-evolution-table th {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 2px solid var(--card-border);
+}
+
+.memory-evolution-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.memory-evolution-table tr:hover td {
+  background: color-mix(in srgb, var(--primary-color) 3%, transparent);
+}
+
+.memory-evolution-table .consolidated-row td {
+  background: color-mix(in srgb, var(--status-success) 6%, var(--card-bg));
+  border-top: 2px solid var(--card-border);
+  border-bottom: 0;
+}
+
 </style>

@@ -284,25 +284,6 @@ function riscoTextStyle(indicadorData) {
           </div>
         </div>
 
-        <!-- Banner de hint deslizante -->
-        <transition name="hint-banner">
-          <div v-if="false" class="ind-hint-banner">
-            <div class="ind-hint-banner__inner">
-              <div class="ind-hint-icon-wrap">
-                <span class="ind-hint-ripple" />
-                <span class="ind-hint-ripple ind-hint-ripple--2" />
-                <i class="pi pi-mouse" />
-              </div>
-              <div class="ind-hint-text">
-                <strong>Detalhamento do indicador</strong>
-                <span>Clique nas linhas dos indicadores para abrir a análise detalhada.</span>
-              </div>
-              <button class="ind-hint-close" @click="dismissHint" aria-label="Fechar dica">
-                <i class="pi pi-times" />
-              </button>
-            </div>
-          </div>
-        </transition>
 
         <div class="ind-table-wrap">
         <table class="ind-table">
@@ -582,112 +563,6 @@ function riscoTextStyle(indicadorData) {
   50%      { transform: translateY(-2px); }
 }
 
-/* â”€â”€ Banner de hint deslizante â”€â”€ */
-/* ── Banner de hint deslizante ── */
-.ind-hint-banner {
-  overflow: hidden;
-  margin-bottom: 0.75rem;
-}
-
-.ind-hint-banner__inner {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.7rem 1rem;
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
-  border-radius: 10px;
-}
-
-.ind-hint-icon-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 2.2rem;
-  height: 2.2rem;
-}
-
-.ind-hint-icon-wrap i {
-  font-size: 1.1rem;
-  color: var(--primary-color);
-  position: relative;
-  z-index: 1;
-}
-
-.ind-hint-ripple {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--primary-color) 60%, transparent);
-  animation: hint-ripple 2s ease-out infinite;
-}
-
-.ind-hint-ripple--2 {
-  animation-delay: 0.7s;
-}
-
-@keyframes hint-ripple {
-  0%   { transform: scale(0.5); opacity: 1; }
-  100% { transform: scale(1.6); opacity: 0; }
-}
-
-.ind-hint-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.ind-hint-text strong {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--primary-color);
-}
-
-.ind-hint-text span {
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  opacity: 1;
-}
-
-.ind-hint-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: color 0.15s ease, background 0.15s ease;
-  flex-shrink: 0;
-}
-
-.ind-hint-close:hover {
-  color: var(--text-color);
-  background: color-mix(in srgb, var(--text-color) 10%, transparent);
-}
-
-/* Transição slide-down do banner */
-.hint-banner-enter-active {
-  transition: max-height 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
-  max-height: 120px;
-}
-.hint-banner-leave-active {
-  transition: max-height 0.35s ease, opacity 0.25s ease;
-}
-.hint-banner-enter-from {
-  max-height: 0;
-  opacity: 0;
-}
-.hint-banner-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
 
 .risk-toggle-pill {
   display: flex;

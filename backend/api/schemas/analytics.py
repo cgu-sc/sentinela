@@ -344,6 +344,8 @@ class IndicadorBenchmarkRowSchema(BaseModel):
     risco_uf: Optional[float] = None
     status: str
     is_alvo: bool = False
+    valor_numerador: Optional[float] = None
+    valor_denominador: Optional[float] = None
 
 
 class IndicadorBenchmarkScopeSchema(BaseModel):
@@ -368,6 +370,8 @@ class IndicadorEvolucaoBenchmarkPointSchema(BaseModel):
     farmacia: Optional[float] = None
     regiao_saude: Optional[float] = None
     uf: Optional[float] = None
+    valor_numerador: Optional[float] = None
+    valor_denominador: Optional[float] = None
 
 
 class IndicadorEvolucaoBenchmarkPeriodoSchema(BaseModel):

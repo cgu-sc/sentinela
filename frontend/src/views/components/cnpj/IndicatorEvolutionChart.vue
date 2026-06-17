@@ -240,7 +240,7 @@ const chartOptions = computed(() => ({
 .indicator-card-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .indicator-evolution-subtitle {

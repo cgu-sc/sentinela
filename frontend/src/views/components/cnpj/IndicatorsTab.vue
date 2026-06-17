@@ -491,18 +491,19 @@ function riscoTextStyle(indicadorData) {
   opacity: 0.85;
 }
 
-/* ── Badge de Detalhamento (Extrema Compatibilidade e Efeito Premium) ── */
+/* Badge de Detalhamento */
 .detail-hint-badge {
+  --detail-hint-accent: var(--risk-medium);
   position: relative;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.25rem 0.65rem;
-  border-radius: 20px; /* Formato de pílula */
-  background: transparent;
-  border: 1px solid var(--primary-color);
-  color: var(--primary-color) !important;
+  border: 1px solid color-mix(in srgb, var(--detail-hint-accent) 36%, var(--tabs-border));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--detail-hint-accent) 7%, transparent);
+  color: var(--text-color-85) !important;
   font-size: 0.68rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.03em !important;
@@ -510,59 +511,96 @@ function riscoTextStyle(indicadorData) {
   cursor: default;
   user-select: none;
   z-index: 1;
-  /* Glow externo animado */
-  animation: dhb-pulse-shadow 2.5s infinite alternate ease-in-out;
 }
 
-/* Fundo pulsante interno */
-.detail-hint-badge::after {
+.detail-hint-badge::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--primary-color);
-  z-index: -2;
-  animation: dhb-pulse-bg 2.5s infinite alternate ease-in-out;
+  padding: 1px;
+  border-radius: inherit;
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      transparent 238deg,
+      color-mix(in srgb, var(--detail-hint-accent) 15%, transparent) 252deg,
+      var(--detail-hint-accent) 275deg,
+      color-mix(in srgb, var(--detail-hint-accent) 18%, transparent) 302deg,
+      transparent 326deg,
+      transparent 360deg
+    );
+  opacity: 0;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: dhb-orbit-border 5s ease-out 1;
 }
 
-/* Feixe de luz removido conforme solicitado */
+.detail-hint-badge::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--detail-hint-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--detail-hint-accent) 70%, transparent);
+  offset-path: inset(2px round 18px);
+  offset-distance: 0%;
+  opacity: 0;
+  pointer-events: none;
+  animation: dhb-orbit-dot 5s ease-out 1;
+}
 
 .detail-hint-badge__dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--primary-color);
+  background: var(--detail-hint-accent);
   flex-shrink: 0;
-  box-shadow: 0 0 6px var(--primary-color);
-  animation: dhb-dot-blink 1.5s infinite alternate;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--detail-hint-accent) 60%, transparent);
 }
 
 .detail-hint-badge i {
+  color: var(--detail-hint-accent);
   font-size: 0.75rem;
-  animation: dhb-icon-bounce 2.5s infinite ease-in-out;
 }
 
-/* ── Keyframes (sem color-mix para garantir q funcione em qualquer browser) ── */
-
-@keyframes dhb-pulse-shadow {
-  0%   { box-shadow: 0 0 0px transparent; }
-  100% { box-shadow: 0 0 12px var(--primary-color); }
+@keyframes dhb-orbit-border {
+  0% {
+    opacity: 0;
+    transform: rotate(0deg);
+  }
+  10%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(2turn);
+  }
 }
 
-@keyframes dhb-pulse-bg {
-  0%   { opacity: 0.08; }
-  100% { opacity: 0.25; }
+@keyframes dhb-orbit-dot {
+  0% {
+    opacity: 0;
+    offset-distance: 0%;
+  }
+  12%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    offset-distance: 100%;
+  }
 }
-
-@keyframes dhb-dot-blink {
-  0%   { opacity: 0.3; transform: scale(0.8); }
-  100% { opacity: 1;   transform: scale(1.2); }
-}
-
-@keyframes dhb-icon-bounce {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-2px); }
-}
-
 
 .risk-toggle-pill {
   display: flex;

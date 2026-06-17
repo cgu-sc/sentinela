@@ -272,7 +272,7 @@ const dispersaoUfNaoVizinhaLabel = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -313,7 +313,7 @@ const dispersaoUfNaoVizinhaLabel = computed(() => {
 
 .field-item strong,
 .secondary-cnaes strong {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.84rem;
   font-weight: 600;
   line-height: 1.35;
@@ -357,7 +357,7 @@ const dispersaoUfNaoVizinhaLabel = computed(() => {
   border: 1px solid var(--card-border);
   border-radius: 6px;
   background: color-mix(in srgb, var(--text-muted) 5%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.75rem;
   font-weight: 600;
   overflow-wrap: anywhere;

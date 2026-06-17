@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from 'pinia';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
@@ -1765,7 +1765,7 @@ function toggleActiveRow(auth) {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 .drill-panel-title i { font-size: 1.1rem; }
 
@@ -1891,7 +1891,7 @@ function toggleActiveRow(auth) {
 .nav-btn {
   background: transparent !important;
   border: none;
-  color: var(--text-color);
+  color: var(--text-color-85);
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -1956,8 +1956,8 @@ function toggleActiveRow(auth) {
 }
 .rank-btn i { font-size: 0.75rem; }
 .rank-btn:hover {
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
-  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
+  color: var(--text-color-85);
 }
 .rank-btn.is-unico.is-active {
   background: rgba(245, 158, 11, 0.15);
@@ -1979,7 +1979,7 @@ function toggleActiveRow(auth) {
   border: 1px solid var(--card-border);
   border-radius: 6px;
   background: var(--surface-card);
-  color: var(--text-color);
+  color: var(--text-color-85);
   padding: 0 1.7rem 0 0.55rem;
   font-size: 0.7rem;
   font-weight: 700;
@@ -2051,7 +2051,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 }
 .premium-table { width: 100%; border-collapse: collapse; }
 .premium-table th { padding: 0.75rem 0.5rem; background: var(--card-bg); color: var(--text-secondary); font-size: 0.65rem; text-transform: uppercase; border-bottom: 2px solid var(--tabs-border); }
-.premium-table td { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--tabs-border); color: var(--text-color); font-size: 0.78rem; }
+.premium-table td { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--tabs-border); color: var(--text-color-85); font-size: 0.78rem; }
 .premium-table tbody tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
 .premium-table tbody tr.raiox-details-expanded-row:hover { background: transparent !important; cursor: default; }
 

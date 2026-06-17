@@ -1076,7 +1076,7 @@ const openIntegrityDialog = () => {
   gap: 0.3rem;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
 }
 
@@ -1093,7 +1093,7 @@ const openIntegrityDialog = () => {
 .address-text {
   font-size: 0.82rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--text-color-85);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1112,7 +1112,7 @@ const openIntegrityDialog = () => {
 }
 
 .loc-separator {
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.4;
   font-size: 0.85rem;
 }
@@ -1262,7 +1262,7 @@ const openIntegrityDialog = () => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.75;
   margin-bottom: 0.15rem;
 }
@@ -1271,7 +1271,7 @@ const openIntegrityDialog = () => {
   font-size: 0.95rem;
   font-weight: 600;
   font-family: "Inter", sans-serif;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1.1;
   letter-spacing: -0.02em;
   opacity: 0.7;
@@ -1821,7 +1821,7 @@ const openIntegrityDialog = () => {
 .back-btn:hover {
   background: color-mix(in srgb, var(--text-muted) 14%, transparent);
   border-color: color-mix(in srgb, var(--text-muted) 50%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   transform: translateX(-2px);
 }
 </style>

@@ -570,7 +570,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-color);
+  color: var(--text-color-85);
   margin-bottom: 1rem;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--tabs-border);
@@ -610,7 +610,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   padding: 0.55rem 1rem;
   border-bottom: 1px solid var(--tabs-border);
   font-size: 0.8rem;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   transition: background 0.15s ease;
 }
 
@@ -674,18 +674,18 @@ const falecidosAgrupadosFiltrados = computed(() => {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   font-weight: 500;
 }
 
 .f-group-cpf {
   font-weight: 700;
   margin-right: 0.75rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .f-group-nome {
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.9;
 }
 
@@ -723,12 +723,12 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 /* ── Total geral (tfoot) ── */
 .f-grand-total td {
-  background: color-mix(in srgb, var(--bg-color) 95%, var(--text-color) 5%);
+  background: color-mix(in srgb, var(--bg-color) 95%, var(--text-color-85) 5%);
   border-top: 2px solid var(--tabs-border);
   padding: 0.75rem 1rem;
   font-size: 0.78rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .f-grand-total .f-val {
@@ -759,7 +759,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-color);
+  color: var(--text-color-85);
   letter-spacing: 0.05em;
   opacity: 0.85;
 }
@@ -787,8 +787,8 @@ const falecidosAgrupadosFiltrados = computed(() => {
   align-items: center;
   gap: 1rem;
   padding: 0.5rem 0.75rem;
-  background: color-mix(in srgb, var(--text-color) 2%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text-color) 6%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 2%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-color-85) 6%, transparent);
   border-radius: 8px;
   transition: none;
 }
@@ -800,7 +800,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: color-mix(in srgb, var(--text-color) 6%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 6%, transparent);
   color: var(--text-secondary);
   font-weight: 800;
   font-size: 0.75rem;
@@ -829,7 +829,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 .rank-cnpj {
   font-size: 0.75rem;
   font-weight: 700;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
 }
 
 .ranking-expand-action {
@@ -883,7 +883,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 .rank-bar-bg {
   height: 4px;
-  background: color-mix(in srgb, var(--text-color) 10%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 10%, transparent);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -994,7 +994,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
   background: color-mix(in srgb, var(--primary-color) 5%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary-color) 15%, transparent);
   font-size: 0.82rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.9;
   margin-bottom: 0.75rem;
 }

@@ -843,7 +843,7 @@ const riskRankBadge = computed(() => {
   gap: 0.8rem;
   font-weight: 600;
   font-size: 0.82rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -908,7 +908,7 @@ const riskRankBadge = computed(() => {
 
 .diagnosis-card-help i { color: var(--primary-color); font-size: 1rem; }
 .help-text { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
-.help-text b { color: var(--text-color); font-weight: 600; }
+.help-text b { color: var(--text-color-85); font-weight: 600; }
 
 /* Animação Pulso */
 .animation-pulse {
@@ -991,7 +991,7 @@ const riskRankBadge = computed(() => {
 .period-step-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   width: 75px; /* Tamanho fixo para evitar que a barra trema ou mude de tamanho */
   text-align: center;
 }

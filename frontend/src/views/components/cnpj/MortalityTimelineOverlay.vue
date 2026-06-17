@@ -280,7 +280,7 @@ defineExpose({ open });
 
 .multi-close-btn:hover {
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .multi-desc {
@@ -304,7 +304,7 @@ defineExpose({ open });
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.4rem 0.6rem;
-  background: color-mix(in srgb, var(--text-color) 4%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 4%, transparent);
   border: 1px solid var(--card-border);
   border-radius: 6px;
   font-size: 0.82rem;
@@ -320,7 +320,7 @@ defineExpose({ open });
 
 .multi-razao {
   font-size: 0.78rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.75;
   white-space: nowrap;
   overflow: hidden;
@@ -343,7 +343,7 @@ defineExpose({ open });
 .multi-cnpj-link {
   font-weight: 600;
   letter-spacing: normal;
-  color: var(--text-color);
+  color: var(--text-color-85);
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s;
@@ -364,15 +364,15 @@ defineExpose({ open });
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
   padding: 0.4rem 0.6rem;
-  background: color-mix(in srgb, var(--text-color) 4%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 4%, transparent);
   border-radius: 6px;
   border: 1px solid var(--card-border);
 }
 
 .multi-cpf-label { color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.72rem; }
-.multi-cpf-val   { font-weight: 700; color: var(--text-color); }
+.multi-cpf-val   { font-weight: 700; color: var(--text-color-85); }
 .multi-cpf-sep   { color: var(--text-muted); opacity: 0.5; }
-.multi-cpf-name  { font-weight: 600; color: var(--text-color); opacity: 0.8; }
+.multi-cpf-name  { font-weight: 600; color: var(--text-color-85); opacity: 0.8; }
 .multi-cpf-obito { font-size: 0.82rem; color: var(--risk-high); font-weight: 600; }
 
 .multi-legend {
@@ -425,7 +425,7 @@ defineExpose({ open });
 
 .multi-cnpj-list-section {
   margin-top: 0.5rem;
-  background: color-mix(in srgb, var(--text-color) 2%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 2%, transparent);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   overflow: hidden;
@@ -458,7 +458,7 @@ defineExpose({ open });
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--text-color) 6%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 6%, transparent);
   color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 800;

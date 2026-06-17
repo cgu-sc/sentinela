@@ -364,7 +364,7 @@ defineExpose({
   letter-spacing: 0.02em;
 }
 .view-mode-btn i { font-size: 1rem; opacity: 0.6; }
-.view-mode-btn:hover { color: var(--text-color); background: color-mix(in srgb, var(--text-color) 5%, transparent); }
+.view-mode-btn:hover { color: var(--text-color-85); background: color-mix(in srgb, var(--text-color-85) 5%, transparent); }
 .view-mode-btn.active { background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); }
 :global(.dark-mode) .view-mode-btn.active { background: color-mix(in srgb, var(--primary-color) 12%, transparent); color: white; box-shadow: none; }
 .view-mode-btn.active i { opacity: 1; }

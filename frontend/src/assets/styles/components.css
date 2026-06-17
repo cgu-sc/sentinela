@@ -26,7 +26,7 @@
 .section-header h3 {
   font-size: 1rem;
   font-weight: 700;
-  color: var(--text-color);
+  color: var(--text-color-85);
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -132,7 +132,7 @@
 .p-overlaypanel,
 .p-popover {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border: 1px solid var(--sidebar-border) !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
 }
@@ -156,11 +156,11 @@
 .p-overlaypanel-content,
 .p-popover-content {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 .p-dialog-header-icon {
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 .p-dialog .p-button-label {
   font-weight: 700;
@@ -169,7 +169,7 @@
 /* TOASTS — PrimeVue Lara Light precisa ser sincronizado com os tokens do app */
 .p-toast .p-toast-message {
   background: color-mix(in srgb, var(--card-bg) 96%, transparent) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border: 1px solid var(--card-border) !important;
   border-left-width: 4px !important;
   box-shadow: 0 12px 32px color-mix(in srgb, var(--bg-color) 45%, transparent) !important;
@@ -178,11 +178,11 @@
 }
 
 .p-toast .p-toast-message-content {
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 .p-toast .p-toast-summary {
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   font-weight: 700 !important;
 }
 
@@ -196,7 +196,7 @@
 }
 
 .p-toast .p-toast-icon-close:hover {
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 .p-toast .p-toast-message-error {
@@ -248,7 +248,7 @@
 
 .enterprise-table .p-datatable-tbody > tr > td {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border-color: var(--sidebar-border) !important;
 }
 
@@ -275,7 +275,7 @@
 
 .enterprise-table .p-datatable-tbody > tr {
   font-size: 0.85rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 /** 
@@ -283,7 +283,7 @@
  */
 .enterprise-table .p-paginator {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border-top: 1px solid var(--sidebar-border) !important;
   border-radius: 0 0 12px 12px;
 }
@@ -294,7 +294,7 @@
 .enterprise-table .p-paginator .p-paginator-first,
 .enterprise-table .p-paginator .p-paginator-prev {
   background: transparent !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 .enterprise-table .p-paginator .p-paginator-page.p-highlight {
@@ -310,7 +310,7 @@
 body.dark-mode .p-tabview .p-tabview-panels,
 body.dark-mode .p-tabview .p-tabview-panel {
   background: transparent !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 body.dark-mode .p-tabview .p-tabview-nav,
@@ -338,5 +338,5 @@ body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
 
 body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link:hover {
   background: var(--sidebar-border) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }

@@ -217,7 +217,7 @@ function onNavSelect(event) {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   white-space: nowrap;
   line-height: 1.1;
 }
@@ -277,7 +277,7 @@ function onNavSelect(event) {
 }
 
 .nav-tab:hover {
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .nav-tab:hover::after {
@@ -371,7 +371,7 @@ function onNavSelect(event) {
   background: color-mix(in srgb, var(--card-bg) 80%, transparent) !important;
   border: 1px solid var(--card-border) !important;
   border-radius: 6px !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   letter-spacing: 0.03em;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
@@ -399,7 +399,7 @@ function onNavSelect(event) {
 :global(.nav-ac-panel .p-autocomplete-item) {
   padding: 0 !important;
   background: transparent !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 :global(.nav-ac-panel .p-autocomplete-item:hover),
@@ -416,7 +416,7 @@ function onNavSelect(event) {
 
 .nav-ac-razao {
   font-size: 0.75rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -454,8 +454,8 @@ function onNavSelect(event) {
 }
 
 .lists-nav-btn:hover {
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
-  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
+  color: var(--text-color-85);
 }
 
 .lists-nav-btn i {

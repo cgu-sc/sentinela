@@ -290,7 +290,7 @@ const copyAndSignal = (text, key) => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.90;
 }
 
@@ -376,7 +376,7 @@ const copyAndSignal = (text, key) => {
 .premium-table td {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--tabs-border);
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.90;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -394,11 +394,11 @@ const copyAndSignal = (text, key) => {
 .row-inactive {
   opacity: 0.8;
   background: color-mix(in srgb, var(--color-error) 4%, var(--bg-color)) !important;
-  color: color-mix(in srgb, var(--color-error) 40%, var(--text-color));
+  color: color-mix(in srgb, var(--color-error) 40%, var(--text-color-85));
 }
 
 .row-inactive .main-name {
-  color: color-mix(in srgb, var(--color-error) 60%, var(--text-color));
+  color: color-mix(in srgb, var(--color-error) 60%, var(--text-color-85));
   text-decoration: line-through rgba(239, 68, 68, 0.3);
 }
 
@@ -717,7 +717,7 @@ const copyAndSignal = (text, key) => {
 }
 
 .header-item .value.value-muted {
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.75;
 }
 

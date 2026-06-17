@@ -137,7 +137,7 @@ const navigate = (alert) => {
 .integrity-alert-title {
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .integrity-alert-sep {

@@ -31,7 +31,7 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
         <span class="alert-kpi-val">{{ formatPct(kpiData.concentracaoTop1) }}</span>
         <span class="alert-kpi-hint">
           CRM: {{ kpiData.idTop1Prescritor || 'ND' }}
-          <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(kpiData.valorTop1) }}</strong>
+          <strong style="color: var(--text-color-85)"> · {{ formatCurrencyFull(kpiData.valorTop1) }}</strong>
         </span>
       </div>
     </div>
@@ -53,7 +53,7 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
         <span class="alert-kpi-val">{{ formatPct(kpiData.concentracaoTop5) }}</span>
         <span class="alert-kpi-hint">
           Mediana Região: {{ formatPct(kpiData.medianaTop5Reg) }}
-          <strong style="color: var(--text-color)"> · {{ formatCurrencyFull(kpiData.valorTop5) }}</strong>
+          <strong style="color: var(--text-color-85)"> · {{ formatCurrencyFull(kpiData.valorTop5) }}</strong>
         </span>
       </div>
     </div>
@@ -349,13 +349,13 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
 .alert-kpi-val {
   font-size: 1.15rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1;
 }
 .alert-kpi-val-sub {
   font-size: 0.7rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 .alert-kpi-hint {

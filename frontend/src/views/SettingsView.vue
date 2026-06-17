@@ -108,7 +108,7 @@ onMounted(() => {
 .settings-container {
   min-height: 100vh;
   background: var(--bg-color);
-  color: var(--text-color);
+  color: var(--text-color-85);
   padding-bottom: 4rem;
 }
 
@@ -258,7 +258,7 @@ onMounted(() => {
   flex-direction: column;
   justify-content: center;
   gap: 0.35rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.82rem;
 }
 

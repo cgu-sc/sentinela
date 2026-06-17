@@ -284,7 +284,7 @@ function handleRiskIndicatorSelect(key) {
   border: 1px solid color-mix(in srgb, var(--risk-indicator-critical) 26%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--risk-indicator-critical) 8%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.78rem;
 }
 

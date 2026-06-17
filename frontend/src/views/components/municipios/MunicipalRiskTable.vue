@@ -435,7 +435,7 @@ function onRowClick(event) {
 
 .municipio-text {
   font-size: 0.88rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -465,7 +465,7 @@ function onRowClick(event) {
 }
 
 .participation-cell span {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.82rem;
   font-weight: 600;
 }
@@ -484,7 +484,7 @@ function onRowClick(event) {
 .municipal-table-card :deep(.municipal-risk-table .p-datatable-tfoot > tr > td),
 .municipal-table-card :deep(.municipal-risk-table .p-paginator) {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border-color: var(--card-border) !important;
 }
 

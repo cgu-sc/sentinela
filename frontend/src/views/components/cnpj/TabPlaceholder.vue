@@ -129,7 +129,7 @@ const props = defineProps({
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   letter-spacing: -0.01em;
   opacity: 0.7;
 }

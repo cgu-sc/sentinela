@@ -143,7 +143,7 @@ const {
   font-size: 1.25rem;
   font-weight: 700;
   margin: 0;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .sync-modal-content p {

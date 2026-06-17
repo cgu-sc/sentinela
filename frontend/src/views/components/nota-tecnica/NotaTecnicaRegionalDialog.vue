@@ -361,7 +361,7 @@ async function save() {
 }
 
 .nt-assinaturas-header strong {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.86rem;
   font-weight: 600;
 }
@@ -426,7 +426,7 @@ async function save() {
   border: 1px solid var(--card-border);
   border-radius: 10px;
   background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -442,7 +442,7 @@ async function save() {
   padding: 0.85rem 0.9rem;
   border: 1px dashed var(--card-border);
   border-radius: 8px;
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.86rem;
   line-height: 1.45;
 }
@@ -491,7 +491,7 @@ async function save() {
   border: 1px solid color-mix(in srgb, var(--primary-color) 30%, var(--card-border)) !important;
   border-radius: 8px !important;
   background: color-mix(in srgb, var(--card-bg) 62%, transparent) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #ffffff 10%, transparent),
     0 12px 28px color-mix(in srgb, #000000 22%, transparent);
@@ -569,6 +569,6 @@ async function save() {
 :global(.nt-regional-dialog .nt-dialog-action-secondary.p-button:hover) {
   border-color: color-mix(in srgb, var(--text-muted) 36%, var(--card-border)) !important;
   background: color-mix(in srgb, var(--text-muted) 8%, transparent) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 </style>

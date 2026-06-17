@@ -572,7 +572,7 @@ function onMapClick(params) {
 }
 
 .map-title .map-scope {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.72rem;
   font-weight: 500;
 }
@@ -644,7 +644,7 @@ function onMapClick(params) {
   display: block;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1;
 }
 
@@ -677,7 +677,7 @@ function onMapClick(params) {
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1;
-  color: color-mix(in srgb, var(--text-muted) 78%, var(--text-color));
+  color: color-mix(in srgb, var(--text-muted) 78%, var(--text-color-85));
 }
 
 .summary-item--critical .summary-sub {
@@ -727,7 +727,7 @@ function onMapClick(params) {
   border: 1px solid var(--card-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--card-bg) 88%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

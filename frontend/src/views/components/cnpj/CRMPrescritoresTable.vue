@@ -547,7 +547,7 @@ const maxPDOverall = computed(() => {
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-color);
+  color: var(--text-color-85);
   margin-bottom: 1rem;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--tabs-border);
@@ -607,7 +607,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .premium-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .premium-table th { padding: 0.6rem 0.5rem; background: transparent; color: color-mix(in srgb, var(--text-secondary) 85%, transparent); font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; border-bottom: 2px solid var(--tabs-border); text-align: center; }
 .premium-table th:first-child { text-align: left; }
-.premium-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--tabs-border); vertical-align: middle; color: color-mix(in srgb, var(--text-color) 85%, transparent); font-size: 0.8rem; text-transform: none !important; }
+.premium-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--tabs-border); vertical-align: middle; color: color-mix(in srgb, var(--text-color-85) 85%, transparent); font-size: 0.8rem; text-transform: none !important; }
 .premium-table th:nth-child(2), .premium-table td:nth-child(2) { text-align: left; overflow: hidden; text-overflow: ellipsis; }
 .premium-table tbody tr:last-child td { border-bottom: none; }
 .premium-table.row-hover tbody tr:hover { background: var(--table-hover) !important; cursor: pointer; }
@@ -629,7 +629,7 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 :global(.dark-mode) .bar-container { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.06); }
 .bar-fill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 0 5px 5px 0; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
 .bar-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.04) 55%, rgba(0,0,0,0.06) 100%); border-radius: inherit; pointer-events: none; }
-.bar-text { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 0.78rem; font-weight: 500; color: var(--text-color); text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color); }
+.bar-text { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 0.78rem; font-weight: 500; color: var(--text-color-85); text-shadow: 0 0 2px var(--bg-color), 0 0 4px var(--bg-color); }
 .part-fill { background: linear-gradient(90deg, rgba(148, 163, 184, 0.45), rgba(148, 163, 184, 0.65)) !important; opacity: 1 !important; }
 .acum-fill { background: linear-gradient(90deg, rgba(99, 102, 241, 0.7), rgba(129, 140, 248, 0.9)) !important; opacity: 1 !important; }
 
@@ -751,8 +751,8 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 
 /* Estilos da Tabela Geográfica */
 .geo-cell { line-height: 1.4; padding: 0.6rem 0.75rem !important; }
-.geo-main { font-weight: 600; color: var(--text-color); font-size: 0.8rem; opacity: 0.85; }
-.geo-sub { font-size: 0.68rem; color: var(--text-color); opacity: 0.75; }
+.geo-main { font-weight: 600; color: var(--text-color-85); font-size: 0.8rem; opacity: 0.85; }
+.geo-sub { font-size: 0.68rem; color: var(--text-color-85); opacity: 0.75; }
 
 .dist-badge {
   background: rgba(239, 68, 68, 0.1);
@@ -780,7 +780,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   align-items: center;
   justify-content: space-between;
   padding: 0.65rem 1rem;
-  background: color-mix(in srgb, var(--table-expansion-bg) 92%, var(--text-color) 8%);
+  background: color-mix(in srgb, var(--table-expansion-bg) 92%, var(--text-color-85) 8%);
   border-bottom: 1px solid var(--tabs-border);
   gap: 1rem;
 }
@@ -808,7 +808,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   font-size: 0.65rem;
   font-weight: 600;
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
   border: 1px solid var(--tabs-border);
   border-radius: 4px;
   padding: 1px 6px;
@@ -819,7 +819,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .segmented-control {
   display: flex;
   align-items: center;
-  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 7%, transparent);
   border: 1px solid var(--tabs-border);
   border-radius: 8px;
   padding: 3px;
@@ -846,7 +846,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
   transition: all 0.2s ease;
   white-space: nowrap;
 }
-.segment-btn:hover { background: color-mix(in srgb, var(--text-color) 5%, transparent); }
+.segment-btn:hover { background: color-mix(in srgb, var(--text-color-85) 5%, transparent); }
 .segment-btn.seg-active { 
   background: var(--card-bg);
   color: var(--primary-color); 
@@ -880,7 +880,7 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .evidence-table thead tr:hover,
 .evidence-table thead tr th,
 .evidence-table thead tr:hover th {
-  background: color-mix(in srgb, var(--text-color) 4%, transparent) !important;
+  background: color-mix(in srgb, var(--text-color-85) 4%, transparent) !important;
 }
 .evidence-table th {
   padding: 0.3rem 0.75rem;
@@ -897,18 +897,18 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .evidence-table td {
   padding: 0.45rem 0.75rem;
   border-top: 1px solid var(--tabs-border);
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
-.evidence-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text-color) 2%, transparent); }
-.evidence-table tbody tr:hover { background: color-mix(in srgb, var(--text-color) 5%, transparent); }
+.evidence-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text-color-85) 2%, transparent); }
+.evidence-table tbody tr:hover { background: color-mix(in srgb, var(--text-color-85) 5%, transparent); }
 .theme-conc .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--risk-medium) 8%, transparent); }
 .theme-surto .evidence-table tbody tr:hover { background: color-mix(in srgb, var(--amber-500) 8%, transparent); }
 
 
 
 .time-badge {
-  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 7%, transparent);
   padding: 1px 5px;
   border-radius: 4px;
   font-weight: 600;

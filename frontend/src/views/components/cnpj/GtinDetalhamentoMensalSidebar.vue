@@ -577,8 +577,8 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 }
 
 .sh-close:hover {
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
-  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
+  color: var(--text-color-85);
 }
 
 .sidebar-content {
@@ -635,7 +635,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
   margin: 0;
   font-size: 1.4rem;
   font-weight: 800;
-  color: var(--text-color);
+  color: var(--text-color-85);
   letter-spacing: -0.03em;
   min-width: 280px;
 }
@@ -724,7 +724,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 .kpi-val {
   font-size: 1.5rem;
   font-weight: 700;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
 }
 
 .kpi-card.is-danger .kpi-val {
@@ -743,7 +743,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
 }
 
 .section-title .subtitle {
@@ -766,7 +766,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 .med-name {
   font-weight: 600;
   font-size: 0.8rem;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -809,7 +809,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 
 .val-regular {
   font-weight: 600;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   font-size: 0.85rem;
 }
 
@@ -823,7 +823,7 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
   width: 50%;
   text-align: right;
   font-weight: 700;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   padding-right: 1.5rem;
   font-size: 0.85rem;
 }
@@ -884,10 +884,10 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
   color: var(--text-secondary);
 }
 :global(.insight-table.p-datatable .p-datatable-tbody > tr:hover > td) {
-  background: color-mix(in srgb, var(--text-color) 4%, transparent) !important;
+  background: color-mix(in srgb, var(--text-color-85) 4%, transparent) !important;
 }
 :global(.insight-table.p-datatable .p-datatable-thead > tr > th) {
-  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color) 5%);
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color-85) 5%);
   font-size: 0.75rem;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -897,13 +897,13 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 }
 
 :global(.insight-table.p-datatable .p-datatable-tfoot > tr > td) {
-  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color) 5%);
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color-85) 5%);
   padding: 0.75rem 0.5rem;
   border-top: 1px solid var(--card-border);
 }
 
 :global(.insight-table.p-datatable .p-datatable-footer) {
-  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color) 5%);
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color-85) 5%);
   padding: 0.75rem 0;
   border-top: 1px solid var(--card-border);
   margin-top: auto;
@@ -938,8 +938,8 @@ const periodoFormatado = computed(() => formatMesLabel(effectivePeriod.value));
 }
 
 :global(.insight-sidebar .custom-select-button .p-button:not(.p-highlight):hover) {
-  background: color-mix(in srgb, var(--text-color) 5%, transparent);
-  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color-85) 5%, transparent);
+  color: var(--text-color-85);
 }
 
 :global(.insight-sidebar .custom-select-button .p-button:focus),

@@ -642,7 +642,7 @@ function onMapClick(params) {
   display: block;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1;
 }
 
@@ -710,7 +710,7 @@ function onMapClick(params) {
   border: 1px solid var(--card-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--card-bg) 88%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

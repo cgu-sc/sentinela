@@ -640,7 +640,7 @@ const pctIrregular = (section) => {
 .mch-title { 
   font-size: 0.85rem; 
   font-weight: 600; 
-  color: var(--text-color); 
+  color: var(--text-color-85); 
   text-transform: uppercase; 
   letter-spacing: 0.04em; 
   opacity: 0.85;
@@ -698,7 +698,7 @@ const pctIrregular = (section) => {
 .mch-divider { width: 1px; height: 16px; background: var(--tabs-border); margin: 0 0.2rem; }
 
 .tb-btn {
-  background: color-mix(in srgb, var(--text-color) 4%, var(--card-bg));
+  background: color-mix(in srgb, var(--text-color-85) 4%, var(--card-bg));
   border: 1px solid var(--card-border);
   color: var(--text-secondary);
   padding: 0.4rem 0.8rem;
@@ -741,7 +741,7 @@ const pctIrregular = (section) => {
 }
 .gtin-accordion.has-irregular { border-left: 3px solid color-mix(in srgb, var(--risk-high) 60%, transparent); }
 .gtin-header { width: 100%; display: flex; align-items: center; gap: 0.65rem; padding: 0.6rem 0.9rem; background: none; border: none; cursor: pointer; text-align: left; color: inherit; transition: background 0.15s; min-height: 46px; }
-.gtin-header:hover { background: color-mix(in srgb, var(--text-color) 2%, var(--card-bg)); }
+.gtin-header:hover { background: color-mix(in srgb, var(--text-color-85) 2%, var(--card-bg)); }
 .is-expanded .gtin-header { background: var(--card-bg); border-bottom: 1px solid var(--card-border); }
 .header-chevron { font-size: 0.7rem; color: var(--text-muted); flex-shrink: 0; transition: transform 0.2s; }
 .gtin-badge { 
@@ -788,7 +788,7 @@ const pctIrregular = (section) => {
 .gcol-num, .gcol-cur { text-align: right; }
 .gcol-irreg-hdr { color: var(--risk-high) !important; font-weight: 600 !important; }
 .gtin-row { border-bottom: 1px solid color-mix(in srgb, var(--card-border) 50%, transparent); transition: background 0.12s; }
-.row-normal:hover { background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg)); }
+.row-normal:hover { background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg)); }
 .row-irregular { background: color-mix(in srgb, var(--risk-high) 8%, var(--card-bg)); }
 .cell-irreg-date, .cell-irreg-num, .cell-irreg-cur { color: var(--text-primary); font-weight: 600; }
 .nf-text { font-size: 0.76rem; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -801,7 +801,7 @@ const pctIrregular = (section) => {
   flex-wrap: wrap; 
   gap: 0.6rem; 
   padding: 0.85rem 1.2rem; 
-  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg)); 
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg)); 
   border: 1px solid var(--card-border); 
   border-radius: 12px; 
   font-size: 0.78rem; 
@@ -892,7 +892,7 @@ const pctIrregular = (section) => {
   pointer-events: none;
 }
 .rank-search-input {
-  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color));
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color-85));
   border: 1px solid color-mix(in srgb, var(--card-border) 80%, transparent);
   color: var(--text-primary);
   border-radius: 20px;
@@ -913,7 +913,7 @@ const pctIrregular = (section) => {
 .rh-title { 
   font-size: 0.85rem; 
   font-weight: 600; 
-  color: var(--text-color); 
+  color: var(--text-color-85); 
   text-transform: uppercase; 
   letter-spacing: 0.04em; 
   opacity: 0.85;
@@ -943,15 +943,15 @@ const pctIrregular = (section) => {
 .ranking-table tfoot td { 
   border-top: 2px solid var(--tabs-border); 
   border-bottom: none; 
-  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg)); 
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg)); 
   font-weight: 700;
   color: var(--text-primary);
 }
 .ranking-table tr.active-row {
-  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg));
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
 }
 .ranking-table tr.active-row td {
-  border-bottom: 1px solid color-mix(in srgb, var(--text-color) 10%, var(--tabs-border));
+  border-bottom: 1px solid color-mix(in srgb, var(--text-color-85) 10%, var(--tabs-border));
 }
 .ranking-table .text-right { text-align: right !important; }
 .ranking-table .text-center { text-align: center !important; }
@@ -971,9 +971,9 @@ const pctIrregular = (section) => {
 .rank-peso-txt { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); min-width: 42px; text-align: right; }
 
 .rank-goto-btn { 
-  background: color-mix(in srgb, var(--text-color) 5%, var(--card-bg)); 
-  border: 1px solid color-mix(in srgb, var(--text-color) 15%, transparent); 
-  color: color-mix(in srgb, var(--text-color) 70%, transparent); 
+  background: color-mix(in srgb, var(--text-color-85) 5%, var(--card-bg)); 
+  border: 1px solid color-mix(in srgb, var(--text-color-85) 15%, transparent); 
+  color: color-mix(in srgb, var(--text-color-85) 70%, transparent); 
   width: 26px; 
   height: 26px; 
   border-radius: 6px; 
@@ -986,11 +986,11 @@ const pctIrregular = (section) => {
 .rank-goto-btn:hover { background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 30%, transparent); }
 .rank-goto-btn.is-active { background: var(--primary-color) !important; color: var(--card-bg) !important; border-color: var(--primary-color) !important; }
 
-.ranking-footer { padding: 0.7rem; display: flex; justify-content: center; background: color-mix(in srgb, var(--text-color) 1%, var(--card-bg)); }
+.ranking-footer { padding: 0.7rem; display: flex; justify-content: center; background: color-mix(in srgb, var(--text-color-85) 1%, var(--card-bg)); }
 .ranking-more-btn { 
   background: none; 
   border: none; 
-  color: color-mix(in srgb, var(--text-color) 60%, transparent); 
+  color: color-mix(in srgb, var(--text-color-85) 60%, transparent); 
   font-size: 0.68rem; 
   font-weight: 500; 
   text-transform: uppercase; 

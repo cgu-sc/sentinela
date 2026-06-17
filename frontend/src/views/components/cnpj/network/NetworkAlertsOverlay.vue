@@ -216,6 +216,6 @@ const emit = defineEmits(["preview", "clear-preview", "select"]);
   white-space: nowrap;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 </style>

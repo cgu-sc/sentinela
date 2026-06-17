@@ -466,8 +466,8 @@ function riscoTextStyle(indicadorData) {
   border: 1px solid var(--card-border);
   border-radius: 10px;
   background: var(--card-bg);
-  color: var(--text-color);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color) 12%, transparent);
+  color: var(--text-color-85);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color-85) 12%, transparent);
 }
 
 .ind-loading-overlay__box i {
@@ -490,7 +490,7 @@ function riscoTextStyle(indicadorData) {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 
@@ -625,7 +625,7 @@ function riscoTextStyle(indicadorData) {
 .risk-toggle-pill:hover {
   border-color: var(--primary-color);
   background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
   transform: translateY(-1px);
 }
 
@@ -740,7 +740,7 @@ function riscoTextStyle(indicadorData) {
   margin: 0;
   font-size: 1.0rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 
@@ -786,7 +786,7 @@ function riscoTextStyle(indicadorData) {
 .audit-item-label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .audit-item-data {
@@ -824,7 +824,7 @@ function riscoTextStyle(indicadorData) {
   font-size: 0.6rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
 }
 
@@ -846,7 +846,7 @@ function riscoTextStyle(indicadorData) {
 .stat-mini .s-val {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .ind-section {
@@ -916,7 +916,7 @@ function riscoTextStyle(indicadorData) {
   border-bottom: 1px solid var(--tabs-border);
   vertical-align: middle;
   text-transform: none;
-  color: var(--text-color);
+  color: var(--text-color-85);
   background: transparent; /* Garante que a célula seja transparente à base do TR */
   transition: background 0.15s ease;
 }
@@ -979,7 +979,7 @@ function riscoTextStyle(indicadorData) {
 }
 
 .ind-finance-icon:hover {
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .ind-med-cell {
@@ -992,14 +992,14 @@ function riscoTextStyle(indicadorData) {
 }
 
 .ind-muted-text {
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.7;
 }
 
 .ind-risco-muted {
   font-size: 0.74rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.7; /* Transparência age na span e não na TD */
 }
 
@@ -1041,7 +1041,7 @@ function riscoTextStyle(indicadorData) {
   flex-shrink: 0;
   transition: color 0.15s;
 }
-.ind-info-icon:hover { color: var(--text-color); }
+.ind-info-icon:hover { color: var(--text-color-85); }
 
 .ind-action-btn {
   position: relative;

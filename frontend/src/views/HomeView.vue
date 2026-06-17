@@ -433,7 +433,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
       color-mix(in srgb, var(--primary-color) 10%, var(--surface-card))
     );
   box-shadow: 0 14px 34px color-mix(in srgb, var(--primary-color) 18%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 600;
@@ -528,7 +528,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
   border: 1px solid var(--card-border);
   border-radius: 8px;
   background: var(--card-bg);
-  box-shadow: 0 16px 36px color-mix(in srgb, var(--text-color) 15%, transparent);
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--text-color-85) 15%, transparent);
   opacity: 0;
   pointer-events: none;
   transform: translateX(-0.35rem);

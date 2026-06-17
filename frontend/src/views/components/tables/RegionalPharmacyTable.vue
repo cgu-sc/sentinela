@@ -245,7 +245,7 @@ const totals = computed(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 
@@ -275,7 +275,7 @@ const totals = computed(() => {
 .score-text {
   font-size: 0.75rem;
   font-weight: 400; /* Removido o negrito pesado */
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 /* Linha do CNPJ específico em análise (Estilo Hover Persistente) */
@@ -342,7 +342,7 @@ const totals = computed(() => {
 :deep(.p-datatable .p-datatable-tbody > tr > td) {
   border-bottom: 1px solid var(--tabs-border) !important;
   font-size: 0.8rem !important;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent) !important;
   padding: 0.55rem 0.5rem !important;
 }
 
@@ -363,7 +363,7 @@ const totals = computed(() => {
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
   font-size: 0.75rem !important;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent) !important;
   padding: 0.65rem 1rem !important;
 }
 

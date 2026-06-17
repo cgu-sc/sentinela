@@ -52,7 +52,7 @@ onMounted(() => {});
   height: 100vh !important;
   width: 100vw;
   overflow: hidden;
-  color: var(--text-color);
+  color: var(--text-color-85);
   scrollbar-gutter: stable;
   background: var(--bg-color) !important;
 }
@@ -122,7 +122,7 @@ onMounted(() => {});
 /* OVERRIDES GLOBAIS DE COMPONENTES PRIMEVUE */
 :deep(.p-dialog) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border: 1px solid var(--sidebar-border);
 }
 
@@ -130,12 +130,12 @@ onMounted(() => {});
 :deep(.p-dialog-content),
 :deep(.p-dialog-footer) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
-:deep(.p-dialog .p-dialog-header .p-dialog-title)      { color: var(--text-color); }
-:deep(.p-dialog .p-dialog-header .p-dialog-header-icon) { color: var(--text-color); }
-:deep(.p-dialog-content)                                { color: var(--text-color); }
+:deep(.p-dialog .p-dialog-header .p-dialog-title)      { color: var(--text-color-85); }
+:deep(.p-dialog .p-dialog-header .p-dialog-header-icon) { color: var(--text-color-85); }
+:deep(.p-dialog-content)                                { color: var(--text-color-85); }
 
 :global(.admin-layout) .p-datatable .p-datatable-header,
 :global(.admin-layout) .p-datatable .p-datatable-thead > tr > th,
@@ -143,7 +143,7 @@ onMounted(() => {});
 :global(.admin-layout) .p-datatable .p-datatable-tfoot > tr > td,
 :global(.admin-layout) .p-paginator {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border-color: var(--sidebar-border) !important;
 }
 
@@ -167,7 +167,7 @@ onMounted(() => {});
 :global(.dark-mode) .p-datatable .p-datatable-tbody > tr,
 :global(.dark-mode) .p-datatable .p-datatable-tfoot > tr > td {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border-color: var(--sidebar-border) !important;
 }
 
@@ -177,7 +177,7 @@ onMounted(() => {});
 
 :global(.admin-layout) .p-datatable .p-datatable-tbody > tr {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   font-size: 0.85rem;
 }
 
@@ -194,7 +194,7 @@ onMounted(() => {});
 :global(.admin-layout) .p-paginator .p-paginator-prev,
 :global(.admin-layout) .p-paginator .p-paginator-next,
 :global(.admin-layout) .p-paginator .p-paginator-last {
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :global(.admin-layout) .p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
@@ -213,7 +213,7 @@ onMounted(() => {});
 :global(.dark-mode .p-monthpicker),
 :global(.dark-mode .p-yearpicker) {
   background: var(--card-bg) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
   border-color: var(--sidebar-border) !important;
 }
 
@@ -241,7 +241,7 @@ onMounted(() => {});
 :global(.dark-mode) .p-datepicker .p-datepicker-header button,
 :global(.dark-mode) .p-monthpicker .p-monthpicker-month,
 :global(.dark-mode) .p-yearpicker .p-yearpicker-year {
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 :global(.dark-mode) .p-monthpicker .p-monthpicker-month:not(.p-highlight):not(.p-disabled):hover,
@@ -257,12 +257,12 @@ onMounted(() => {});
 }
 
 :global(.p-dropdown-item)       { font-size: 0.75rem !important; padding: 0.5rem 0.75rem !important; white-space: normal !important; word-break: break-word !important; }
-:global(.dark-mode .p-dropdown-item) { color: var(--text-color) !important; }
+:global(.dark-mode .p-dropdown-item) { color: var(--text-color-85) !important; }
 
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover),
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-focus:not(.p-highlight)) {
   background: var(--table-hover) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 :global(.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight) {
@@ -289,14 +289,14 @@ onMounted(() => {});
 :global(.admin-layout) .p-calendar .p-datepicker {
   background: var(--card-bg);
   border-color: var(--sidebar-border);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
-:global(.admin-layout) .p-calendar .p-datepicker table td > span { color: var(--text-color); }
+:global(.admin-layout) .p-calendar .p-datepicker table td > span { color: var(--text-color-85); }
 :global(.admin-layout) .p-calendar .p-datepicker table td > span:hover { background: var(--sidebar-bg); }
 :global(.admin-layout) .p-calendar .p-datepicker .p-datepicker-header {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--sidebar-border);
 }
 
@@ -306,7 +306,7 @@ onMounted(() => {});
 :global(.admin-layout) .p-multiselect {
   background: var(--card-bg) !important;
   border-color: var(--sidebar-border) !important;
-  color: var(--text-color) !important;
+  color: var(--text-color-85) !important;
 }
 
 :global(.admin-layout) .p-inputtext:enabled:hover,

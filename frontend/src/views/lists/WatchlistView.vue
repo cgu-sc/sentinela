@@ -507,7 +507,7 @@ function formatScore(v) {
   font-size: 1.2rem;
   font-weight: 400;
   margin: 0;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .total-badge {
@@ -522,7 +522,7 @@ function formatScore(v) {
 
 .lists-subtitle {
   font-size: 0.8rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.5;
   margin: 0;
 }
@@ -534,7 +534,7 @@ function formatScore(v) {
   justify-content: center;
   padding: 6rem 2rem;
   gap: 0.75rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.4;
 }
 
@@ -570,7 +570,7 @@ function formatScore(v) {
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .card-header-left i {
@@ -613,7 +613,7 @@ function formatScore(v) {
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--primary-color) 26%, transparent);
   background: color-mix(in srgb, var(--primary-color) 6%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.7rem;
   font-weight: 500;
   white-space: nowrap;
@@ -653,7 +653,7 @@ function formatScore(v) {
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
   background: color-mix(in srgb, var(--card-bg) 85%, var(--card-border));
   border-bottom: 1px solid var(--card-border);
@@ -677,7 +677,7 @@ function formatScore(v) {
 .lists-table td {
   padding: 0.7rem 0.9rem;
   font-size: 0.8rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-bottom: 1px solid var(--card-border);
   vertical-align: middle;
 }
@@ -782,7 +782,7 @@ function formatScore(v) {
   min-width: 0;
   flex: 1;
   font-size: 0.75rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.8;
   background: color-mix(in srgb, var(--primary-color) 5%, transparent);
   padding: 0.25rem 0.6rem;
@@ -910,11 +910,11 @@ function formatScore(v) {
   justify-content: center;
   border-radius: 6px;
   border: 1px solid var(--tabs-border);
-  background: color-mix(in srgb, var(--text-color) 3%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 3%, transparent);
   cursor: pointer;
   transition: all 0.15s ease;
   font-size: 0.72rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.6;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }

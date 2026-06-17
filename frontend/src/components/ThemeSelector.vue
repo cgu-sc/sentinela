@@ -162,7 +162,7 @@ function togglePanel(event) {
 .header-title {
   font-size: 1rem;
   font-weight: 700;
-  color: var(--text-color);
+  color: var(--text-color-85);
   margin: 0;
   line-height: 1.3;
 }
@@ -216,13 +216,13 @@ function togglePanel(event) {
 }
 
 .mode-option:hover {
-  color: var(--text-color);
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  color: var(--text-color-85);
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
 }
 
 .mode-option.active {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-weight: 600;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
@@ -313,7 +313,7 @@ function togglePanel(event) {
 .theme-name {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   text-align: center;
   display: block;
 }

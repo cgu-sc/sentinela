@@ -142,7 +142,7 @@ const levelStats = computed(() =>
   border: 1px solid color-mix(in srgb, var(--tabs-border) 82%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-ground) 54%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
   cursor: help;
 }
 

@@ -1018,7 +1018,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.85;
 }
 
@@ -1082,7 +1082,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 
 :deep(.p-datatable.evolucao-table .p-datatable-tbody > tr) {
   background: transparent;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th) {
@@ -1124,9 +1124,9 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   text-align: right; 
   border-top: 2px solid var(--tabs-border) !important; 
   border-bottom: none !important; 
-  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color) 5%); 
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color-85) 5%); 
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   padding: 0.85rem 1rem;
 }
 :deep(.p-datatable.evolucao-table .p-datatable-thead > tr > th:nth-child(1)),
@@ -1157,7 +1157,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 /* expansion row */
 :deep(.p-datatable-row-expansion > td) {
   padding: 0 !important;
-  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color) 5%);
+  background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color-85) 5%);
 }
 
 .meses-expansion-box {
@@ -1277,7 +1277,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   border: 1px solid var(--tabs-border);
   border-radius: 8px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--card-bg) 98%, var(--text-color) 2%);
+  background: color-mix(in srgb, var(--card-bg) 98%, var(--text-color-85) 2%);
 }
 
 .mensal-gtin-chart-header {
@@ -1310,7 +1310,7 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   height: 26px;
   border: none;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;

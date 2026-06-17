@@ -118,7 +118,7 @@ const displayKpis = computed(() =>
 
 .target-kpi-content span {
   margin-bottom: 0.3rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.7;
   font-size: 0.7rem;
   font-weight: 600;
@@ -128,7 +128,7 @@ const displayKpis = computed(() =>
 }
 
 .target-kpi-content strong {
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.9;
   font-size: 1.3rem;
   font-weight: 600;

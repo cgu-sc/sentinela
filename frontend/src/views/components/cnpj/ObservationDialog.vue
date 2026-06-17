@@ -54,7 +54,7 @@ const saveObs = () => {
   >
     <div class="p-fluid">
       <div class="field mb-4">
-        <label for="obs" class="block font-semibold mb-2" style="font-size: 0.9rem; color: var(--text-color)">
+        <label for="obs" class="block font-semibold mb-2" style="font-size: 0.9rem; color: var(--text-color-85)">
           Sua anotação para {{ entityName }}:
         </label>
         <Textarea
@@ -137,7 +137,7 @@ const saveObs = () => {
   background: var(--bg-secondary);
   border: 1px solid var(--establishment-header-border);
   border-radius: 8px;
-  color: var(--text-color);
+  color: var(--text-color-85);
   padding: 0.75rem;
   font-family: inherit;
   font-size: 0.9rem;

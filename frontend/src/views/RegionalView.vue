@@ -192,7 +192,7 @@ watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) 
   margin: 0;
   font-size: 1.3rem;
   font-weight: 700;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .empty-state p {
@@ -251,7 +251,7 @@ watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) 
   margin: 0;
   font-size: 1.5rem;
   font-weight: 800;
-  color: var(--text-color);
+  color: var(--text-color-85);
   letter-spacing: -0.02em;
 }
 
@@ -276,7 +276,7 @@ watch([regiaoSelecionada, () => filterStore.selectedUF], ([novaRegiao, novoUF]) 
   background: var(--bg-color);
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .stat-chip i {

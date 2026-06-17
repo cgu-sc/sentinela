@@ -98,7 +98,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
 
 .kpi-label {
   font-size: 0.70rem; /* MEDIDA DO USUÁRIO */
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.7; /* Hierarquia via transparência */
   font-weight: 700;
   text-transform: uppercase;
@@ -112,7 +112,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
   white-space: nowrap;
   letter-spacing: -0.6px;
   font-weight: 700; /* Bold padrão consolidado */
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.90;
   line-height: 1;
 }

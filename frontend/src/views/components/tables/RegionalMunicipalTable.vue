@@ -222,7 +222,7 @@ const onTableLeave = () => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1.2;
   opacity: 0.85;
 }
@@ -336,7 +336,7 @@ const onTableLeave = () => {
   border-bottom: 1px solid var(--tabs-border) !important;
   transition: background-color 0.15s ease;
   font-size: 0.8rem !important;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent) !important;
   padding: 0.55rem 0.5rem !important;
 }
 
@@ -349,7 +349,7 @@ const onTableLeave = () => {
   background: var(--table-footer-bg) !important;
   border-top: 2px solid var(--tabs-border) !important;
   font-weight: 600 !important;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent) !important;
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent) !important;
   padding: 0.75rem 1rem !important;
 }
 

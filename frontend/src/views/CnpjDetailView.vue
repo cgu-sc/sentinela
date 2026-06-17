@@ -749,12 +749,12 @@ watch(
 .cnpj-access-state {
   --access-accent: var(--primary-color);
   --access-accent-strong: var(--primary-color);
-  --access-glass-highlight: color-mix(in srgb, var(--text-color) 6%, transparent);
-  --access-soft-shadow: color-mix(in srgb, var(--text-color) 8%, transparent);
+  --access-glass-highlight: color-mix(in srgb, var(--text-color-85) 6%, transparent);
+  --access-soft-shadow: color-mix(in srgb, var(--text-color-85) 8%, transparent);
   min-height: 22rem;
   margin: 1rem 0 2rem;
   padding: 3rem 3.5rem;
-  border: 1px solid color-mix(in srgb, var(--tabs-border) 72%, var(--text-color) 8%);
+  border: 1px solid color-mix(in srgb, var(--tabs-border) 72%, var(--text-color-85) 8%);
   border-radius: 14px;
   background:
     linear-gradient(
@@ -794,12 +794,12 @@ watch(
 
 .cnpj-access-state--warning {
   --access-accent: var(--amber-500);
-  --access-accent-strong: color-mix(in srgb, var(--amber-500) 78%, var(--text-color));
+  --access-accent-strong: color-mix(in srgb, var(--amber-500) 78%, var(--text-color-85));
 }
 
 .cnpj-access-state--error {
   --access-accent: var(--color-error);
-  --access-accent-strong: color-mix(in srgb, var(--color-error) 82%, var(--text-color));
+  --access-accent-strong: color-mix(in srgb, var(--color-error) 82%, var(--text-color-85));
 }
 
 .access-state-icon {
@@ -822,7 +822,7 @@ watch(
 
 .cnpj-access-state--warning .access-state-icon {
   --access-accent: var(--amber-500);
-  --access-accent-strong: color-mix(in srgb, var(--amber-500) 78%, var(--text-color));
+  --access-accent-strong: color-mix(in srgb, var(--amber-500) 78%, var(--text-color-85));
   background:
     linear-gradient(
       145deg,
@@ -835,7 +835,7 @@ watch(
 
 .cnpj-access-state--error .access-state-icon {
   --access-accent: var(--color-error);
-  --access-accent-strong: color-mix(in srgb, var(--color-error) 82%, var(--text-color));
+  --access-accent-strong: color-mix(in srgb, var(--color-error) 82%, var(--text-color-85));
   background:
     linear-gradient(
       145deg,
@@ -890,7 +890,7 @@ watch(
 
 .access-state-copy h2 {
   margin: 0;
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   font-size: 2.05rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -920,7 +920,7 @@ watch(
 }
 
 .access-state-query strong {
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.92rem;
   font-weight: 800;
@@ -938,7 +938,7 @@ watch(
       color-mix(in srgb, var(--primary-color) 8%, var(--card-bg)),
       color-mix(in srgb, var(--primary-color) 4%, transparent)
     );
-  color: color-mix(in srgb, var(--text-color) 85%, transparent);
+  color: color-mix(in srgb, var(--text-color-85) 85%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1198,8 +1198,8 @@ watch(
   border: 1px solid var(--card-border);
   border-radius: 10px;
   background: var(--card-bg);
-  color: var(--text-color);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color) 12%, transparent);
+  color: var(--text-color-85);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color-85) 12%, transparent);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -1228,7 +1228,7 @@ watch(
   color: var(--red-400, #f87171) !important;
 }
 .tab-placeholder--error p {
-  color: var(--text-color);
+  color: var(--text-color-85);
   opacity: 0.75;
 }
 </style>

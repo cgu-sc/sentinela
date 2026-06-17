@@ -387,7 +387,7 @@ function openEstablishmentDetail() {
 .risk-field strong {
   margin-left: auto;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .panel-status-badge {
@@ -450,7 +450,7 @@ function openEstablishmentDetail() {
 }
 
 .close-btn:hover {
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .panel-names {
@@ -463,7 +463,7 @@ function openEstablishmentDetail() {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1.2;
 }
 
@@ -566,7 +566,7 @@ function openEstablishmentDetail() {
 
 .relationship-name {
   min-width: 0;
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.74rem;
   font-weight: 650;
   line-height: 1.25;
@@ -614,7 +614,7 @@ function openEstablishmentDetail() {
 }
 
 .cadunico-field {
-  color: color-mix(in srgb, #f59e0b 75%, var(--text-color));
+  color: color-mix(in srgb, #f59e0b 75%, var(--text-color-85));
 }
 
 .cadunico-field i {
@@ -639,11 +639,11 @@ function openEstablishmentDetail() {
 .cadunico-badge {
   border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
   background: color-mix(in srgb, #f59e0b 16%, transparent);
-  color: color-mix(in srgb, #f59e0b 82%, var(--text-color));
+  color: color-mix(in srgb, #f59e0b 82%, var(--text-color-85));
 }
 
 .esocial-field {
-  color: color-mix(in srgb, var(--status-success) 78%, var(--text-color));
+  color: color-mix(in srgb, var(--status-success) 78%, var(--text-color-85));
 }
 
 .esocial-field i {
@@ -653,11 +653,11 @@ function openEstablishmentDetail() {
 .esocial-badge {
   border: 1px solid color-mix(in srgb, var(--status-success) 44%, transparent);
   background: color-mix(in srgb, var(--status-success) 14%, transparent);
-  color: color-mix(in srgb, var(--status-success) 86%, var(--text-color));
+  color: color-mix(in srgb, var(--status-success) 86%, var(--text-color-85));
 }
 
 .seguro-defeso-field {
-  color: color-mix(in srgb, var(--status-info) 78%, var(--text-color));
+  color: color-mix(in srgb, var(--status-info) 78%, var(--text-color-85));
 }
 
 .seguro-defeso-field i {
@@ -667,11 +667,11 @@ function openEstablishmentDetail() {
 .seguro-defeso-badge {
   border: 1px solid color-mix(in srgb, var(--status-info) 44%, transparent);
   background: color-mix(in srgb, var(--status-info) 14%, transparent);
-  color: color-mix(in srgb, var(--status-info) 86%, var(--text-color));
+  color: color-mix(in srgb, var(--status-info) 86%, var(--text-color-85));
 }
 
 .cnae-alert-field {
-  color: color-mix(in srgb, #ef4444 76%, var(--text-color));
+  color: color-mix(in srgb, #ef4444 76%, var(--text-color-85));
 }
 
 .cnae-alert-field i {
@@ -681,7 +681,7 @@ function openEstablishmentDetail() {
 .cnae-alert-badge {
   border: 1px solid color-mix(in srgb, #ef4444 44%, transparent);
   background: color-mix(in srgb, #ef4444 14%, transparent);
-  color: color-mix(in srgb, #ef4444 84%, var(--text-color));
+  color: color-mix(in srgb, #ef4444 84%, var(--text-color-85));
 }
 
 .cnae-evidence {
@@ -700,7 +700,7 @@ function openEstablishmentDetail() {
 }
 
 .par-alert-field {
-  color: color-mix(in srgb, #dc2626 78%, var(--text-color));
+  color: color-mix(in srgb, #dc2626 78%, var(--text-color-85));
 }
 
 .par-alert-field i {
@@ -710,7 +710,7 @@ function openEstablishmentDetail() {
 .par-alert-badge {
   border: 1px solid color-mix(in srgb, #dc2626 44%, transparent);
   background: color-mix(in srgb, #dc2626 14%, transparent);
-  color: color-mix(in srgb, #dc2626 86%, var(--text-color));
+  color: color-mix(in srgb, #dc2626 86%, var(--text-color-85));
 }
 
 .par-evidence {
@@ -737,7 +737,7 @@ function openEstablishmentDetail() {
 }
 
 .par-evidence-row strong {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-size: 0.7rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -759,7 +759,7 @@ function openEstablishmentDetail() {
 }
 
 .deceased-field {
-  color: color-mix(in srgb, #94a3b8 78%, var(--text-color));
+  color: color-mix(in srgb, #94a3b8 78%, var(--text-color-85));
 }
 
 .deceased-field i {
@@ -769,7 +769,7 @@ function openEstablishmentDetail() {
 .deceased-badge {
   border: 1px solid color-mix(in srgb, #94a3b8 44%, transparent);
   background: color-mix(in srgb, #94a3b8 15%, transparent);
-  color: color-mix(in srgb, #94a3b8 86%, var(--text-color));
+  color: color-mix(in srgb, #94a3b8 86%, var(--text-color-85));
 }
 
 .field-label {
@@ -783,7 +783,7 @@ function openEstablishmentDetail() {
 .field-value {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1.2;
 }
 

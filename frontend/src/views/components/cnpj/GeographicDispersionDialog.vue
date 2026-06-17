@@ -752,7 +752,7 @@ const close = () => emit('update:modelValue', false);
 .geo-kpi strong {
   font-size: 0.98rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .geo-period {
@@ -789,7 +789,7 @@ const close = () => emit('update:modelValue', false);
 
 .panel-title {
   margin-bottom: 0.75rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .geo-chart {
@@ -839,7 +839,7 @@ const close = () => emit('update:modelValue', false);
 }
 
 .geo-estab-cell span {
-  color: var(--text-color);
+  color: var(--text-color-85);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -902,7 +902,7 @@ const close = () => emit('update:modelValue', false);
 
 :deep(.geo-benchmark-tabs .p-tabview-nav-link) {
   background: transparent;
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
   padding: 0.45rem 0.75rem;
   font-size: 0.78rem;
@@ -914,14 +914,14 @@ const close = () => emit('update:modelValue', false);
   font-size: 0.78rem;
   font-weight: 600;
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
 }
 
 :deep(.geo-table .p-datatable-tbody > tr > td) {
   font-size: 0.8rem;
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
 }
 
@@ -929,16 +929,16 @@ const close = () => emit('update:modelValue', false);
 :deep(.geo-table .p-datatable-wrapper),
 :deep(.geo-table .p-datatable-table) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.geo-table .p-datatable-tbody > tr) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.geo-table .p-datatable-tbody > tr:nth-child(even) > td) {
-  background: color-mix(in srgb, var(--text-color) 3%, var(--card-bg));
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
 }
 
 :deep(.geo-table .p-datatable-tbody > tr:hover > td) {
@@ -952,13 +952,13 @@ const close = () => emit('update:modelValue', false);
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf > td),
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf:nth-child(even) > td) {
   background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-target > td),
 :deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-target:nth-child(even) > td) {
   background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf > td:first-child) {

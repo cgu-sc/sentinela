@@ -146,7 +146,7 @@ const updateFilter = (key, event) => {
 
 .filter-option:hover {
   background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .filter-option.muted {

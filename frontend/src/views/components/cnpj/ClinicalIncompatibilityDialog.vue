@@ -549,7 +549,7 @@ const close = () => emit('update:modelValue', false);
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .clin-kpis {
@@ -591,7 +591,7 @@ const close = () => emit('update:modelValue', false);
 .clin-kpi strong {
   font-size: 0.98rem;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
   line-height: 1.15;
 }
 
@@ -624,7 +624,7 @@ const close = () => emit('update:modelValue', false);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   background: var(--surface-card);
-  color: var(--text-color);
+  color: var(--text-color-85);
   padding: 0.62rem 0.82rem;
   text-align: left;
   min-width: 12rem;
@@ -739,7 +739,7 @@ const close = () => emit('update:modelValue', false);
 
 .clin-pharmacy-cell strong {
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 .clin-pharmacy-cell span {
@@ -749,12 +749,12 @@ const close = () => emit('update:modelValue', false);
 
 :deep(.clin-table .p-datatable-table) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.clin-table .p-datatable-thead > tr > th) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
   font-size: 0.78rem;
   font-weight: 600;
@@ -762,7 +762,7 @@ const close = () => emit('update:modelValue', false);
 
 :deep(.clin-table .p-datatable-tbody > tr > td) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-color: var(--card-border);
   font-size: 0.8rem;
 }
@@ -771,12 +771,12 @@ const close = () => emit('update:modelValue', false);
 :deep(.clin-table .p-datatable-wrapper),
 :deep(.clin-table .p-datatable-table) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.clin-table .p-datatable-tbody > tr) {
   background: var(--card-bg);
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.clin-table .p-datatable-tbody > tr:hover > td) {
@@ -794,7 +794,7 @@ const close = () => emit('update:modelValue', false);
 :deep(.clin-table .p-datatable-tbody > tr.clin-row-target > td),
 :deep(.clin-table .p-datatable-tbody > tr.clin-row-target:hover > td) {
   background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
-  color: var(--text-color);
+  color: var(--text-color-85);
 }
 
 :deep(.clin-table .p-datatable-tbody > tr.clin-row-target > td:first-child) {
@@ -812,7 +812,7 @@ const close = () => emit('update:modelValue', false);
 
 :deep(.clin-dialog .p-dialog-header) {
   background: var(--bg-color);
-  color: var(--text-color);
+  color: var(--text-color-85);
   border-bottom: 1px solid var(--border-color);
 }
 </style>

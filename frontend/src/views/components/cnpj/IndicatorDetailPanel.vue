@@ -755,6 +755,10 @@ watch(
   width: 100%;
 }
 
+:deep(.indicator-table .p-datatable-wrapper) {
+  min-height: 300px;
+}
+
 :deep(.indicator-table .p-datatable-tbody > tr > td) {
   overflow: hidden;
   font-size: 0.8rem;

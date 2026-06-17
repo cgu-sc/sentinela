@@ -41,6 +41,7 @@ const seriesData = computed(() => props.data?.series ?? []);
 const years = computed(() => seriesData.value.map(point => String(point.ano_base)));
 const markedYears = computed(() => props.data?.periodo_marcado?.anos ?? []);
 const selectedSingleYear = computed(() => markedYears.value.length === 1 ? String(markedYears.value[0]) : null);
+const markedYearSet = computed(() => new Set(markedYears.value.map(year => String(year))));
 
 function hexToRgba(hex, alpha) {
   const normalized = String(hex ?? '').trim();
@@ -67,27 +68,28 @@ const palette = computed(() => ({
   regiao: PALETTE.indigo[500],
   uf: PALETTE.fuchsia[500],
   mark: chartDataColors.value.red,
-  markFill: hexToRgba(chartDataColors.value.red, 0.10),
+  markFill: hexToRgba(chartDataColors.value.red, 0.20),
   text: chartTheme.value.text,
   muted: chartTheme.value.muted,
   border: chartTheme.value.border,
 }));
 
 const markArea = computed(() => {
-  if (markedYears.value.length <= 1) return undefined;
+  const selectedYearsInSeries = years.value.filter(year => markedYearSet.value.has(year));
+  if (!selectedYearsInSeries.length) return undefined;
   return {
     silent: true,
     itemStyle: {
       color: palette.value.markFill,
     },
     data: [[
-      { xAxis: String(markedYears.value[0]) },
-      { xAxis: String(markedYears.value[markedYears.value.length - 1]) },
+      { xAxis: selectedYearsInSeries[0] },
+      { xAxis: selectedYearsInSeries[selectedYearsInSeries.length - 1] },
     ]],
   };
 });
 
-const markLine = computed(() => {
+const unusedMarkLine = computed(() => {
   if (!selectedSingleYear.value) return undefined;
   return {
     silent: true,
@@ -171,7 +173,7 @@ const chartOptions = computed(() => ({
   xAxis: {
     type: 'category',
     data: years.value,
-    boundaryGap: false,
+    boundaryGap: true,
     axisLine: { lineStyle: { color: palette.value.border } },
     axisTick: { show: false },
     axisLabel: { color: palette.value.muted, fontSize: 11 },
@@ -191,9 +193,18 @@ const chartOptions = computed(() => ({
     },
   },
   series: [
-    buildLine('Farmácia', 'farmacia', palette.value.farmacia, 3.2, {
+    {
+      name: 'Periodo selecionado',
+      type: 'line',
+      data: seriesData.value.map(() => null),
+      symbol: 'none',
+      lineStyle: { opacity: 0 },
+      tooltip: { show: false },
+      silent: true,
       markArea: markArea.value,
-      markLine: markLine.value,
+      z: 0,
+    },
+    buildLine('Farmácia', 'farmacia', palette.value.farmacia, 3.2, {
       z: 5,
     }),
     buildLine('Região de Saúde', 'regiao_saude', palette.value.regiao, 2.6, { z: 4 }),

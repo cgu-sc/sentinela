@@ -24,7 +24,7 @@ const dialogTitle = computed(() => (
     :header="dialogTitle"
     modal
     class="indicator-detail-dialog"
-    :style="{ width: '92vw', maxWidth: '1320px', height: '90vh' }"
+    :style="{ width: '92vw', maxWidth: '1320px', height: 'auto', maxHeight: '90vh' }"
     @update:visible="emit('update:modelValue', $event)"
   >
     <IndicatorDetailPanel

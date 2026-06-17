@@ -50,6 +50,13 @@ const periodoFim = computed(() => {
   return end ? toLocalISO(end) : null;
 });
 
+const periodoLabel = computed(() => {
+  const start = periodoInicio.value;
+  const end = periodoFim.value;
+  if (!start || !end) return 'Período atual';
+  return `${start.slice(5, 7)}/${start.slice(0, 4)} a ${end.slice(5, 7)}/${end.slice(0, 4)}`;
+});
+
 const requestKey = computed(() => (
   `${props.cnpj}|${props.indicatorKey}|${periodoInicio.value || ''}|${periodoFim.value || ''}`
 ));
@@ -184,6 +191,10 @@ watch(
           <div v-for="kpi in benchmarkData.kpis" :key="kpi.label" class="indicator-kpi">
             <span>{{ kpi.label }}</span>
             <strong>{{ formatKpiValue(kpi) }}</strong>
+          </div>
+          <div class="indicator-kpi indicator-period">
+            <span>Período</span>
+            <strong class="indicator-period-value">{{ periodoLabel }}</strong>
           </div>
         </div>
 
@@ -419,8 +430,7 @@ watch(
 }
 
 .indicator-kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   gap: 0.75rem;
 }
 
@@ -432,10 +442,22 @@ watch(
 }
 
 .indicator-kpi {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.75rem 0.9rem;
+}
+
+.indicator-kpi.indicator-period {
+  flex: 0 0 auto;
+  min-width: 180px;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--primary-color) 20%, var(--card-border));
+}
+
+.indicator-period-value {
+  color: var(--primary-color) !important;
 }
 
 .indicator-kpi span,

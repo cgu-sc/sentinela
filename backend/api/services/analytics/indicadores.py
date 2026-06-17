@@ -991,7 +991,7 @@ def get_indicador_evolucao_benchmark(
             ),
         )
 
-    value_col, med_reg_col, med_uf_col, med_br_col, _risco_reg_col, _risco_uf_col, _risco_br_col = INDICATOR_MAPPING[indicador]
+    value_col, med_reg_col, med_uf_col, med_br_col, risco_reg_col, risco_uf_col = INDICATOR_MAPPING[indicador][:6]
     formato = _INDICADOR_BENCHMARK_FORMATOS[indicador]
 
     perfil = get_df_perfil_estabelecimento()
@@ -1007,7 +1007,7 @@ def get_indicador_evolucao_benchmark(
         raise RuntimeError("Perfil do CNPJ alvo sem id_cnpj obrigatorio.")
 
     matriz = build_annual_indicator_benchmark_matriz()
-    matriz_required = ["id_cnpj", "ano_base", value_col, med_reg_col, med_uf_col, med_br_col]
+    matriz_required = ["id_cnpj", "ano_base", value_col, med_reg_col, med_uf_col]
     _require_columns(matriz, matriz_required, "matriz_risco_anual")
 
     serie_df = (
@@ -1019,7 +1019,6 @@ def get_indicador_evolucao_benchmark(
             pl.col(value_col).cast(pl.Float64),
             pl.col(med_reg_col).cast(pl.Float64),
             pl.col(med_uf_col).cast(pl.Float64),
-            pl.col(med_br_col).cast(pl.Float64),
         ])
         .sort("ano_base")
     )
@@ -1033,7 +1032,6 @@ def get_indicador_evolucao_benchmark(
             farmacia=_optional_float(row.get(value_col)),
             regiao_saude=_optional_float(row.get(med_reg_col)),
             uf=_optional_float(row.get(med_uf_col)),
-            brasil=_optional_float(row.get(med_br_col)),
         )
         for row in serie_df.to_dicts()
     ]

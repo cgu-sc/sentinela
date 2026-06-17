@@ -368,7 +368,6 @@ class IndicadorEvolucaoBenchmarkPointSchema(BaseModel):
     farmacia: Optional[float] = None
     regiao_saude: Optional[float] = None
     uf: Optional[float] = None
-    brasil: Optional[float] = None
 
 
 class IndicadorEvolucaoBenchmarkPeriodoSchema(BaseModel):

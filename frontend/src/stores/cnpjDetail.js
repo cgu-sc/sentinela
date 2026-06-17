@@ -123,7 +123,7 @@ function assertIndicadorEvolucaoBenchmark(data) {
     if (!Number.isInteger(point?.ano_base)) {
       throw new Error(`Contrato invalido em indicadores/evolucao-benchmark: series[${index}].ano_base obrigatorio.`);
     }
-    ['farmacia', 'regiao_saude', 'uf', 'brasil'].forEach((field) => {
+    ['farmacia', 'regiao_saude', 'uf'].forEach((field) => {
       if (point?.[field] === undefined) {
         throw new Error(`Contrato invalido em indicadores/evolucao-benchmark: series[${index}].${field} obrigatorio.`);
       }

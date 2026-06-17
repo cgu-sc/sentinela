@@ -65,7 +65,7 @@ function formatValue(value) {
 const palette = computed(() => ({
   farmacia: chartDataColors.value.red,
   regiao: PALETTE.indigo[500],
-  uf: PALETTE.amber[500],
+  uf: PALETTE.fuchsia[500],
   mark: chartDataColors.value.red,
   markFill: hexToRgba(chartDataColors.value.red, 0.10),
   text: chartTheme.value.text,
@@ -107,6 +107,7 @@ const markLine = computed(() => {
 });
 
 function buildLine(name, key, color, width, extra = {}) {
+  const { lineStyle, itemStyle, ...rest } = extra;
   return {
     name,
     type: 'line',
@@ -115,10 +116,10 @@ function buildLine(name, key, color, width, extra = {}) {
     symbolSize: width >= 3 ? 7 : 5,
     connectNulls: false,
     emphasis: { focus: 'series' },
-    lineStyle: { width, color, ...(extra.lineStyle ?? {}) },
-    itemStyle: { color },
+    lineStyle: { width, color, ...(lineStyle ?? {}) },
+    itemStyle: { color, ...(itemStyle ?? {}) },
     data: seriesData.value.map(point => point[key]),
-    ...extra,
+    ...rest,
   };
 }
 
@@ -149,13 +150,22 @@ const chartOptions = computed(() => ({
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' },
+    backgroundColor: chartTheme.value.tooltip,
+    borderColor: chartTheme.value.tooltipBorder,
+    borderWidth: 1,
+    padding: [12, 16],
+    textStyle: {
+      color: chartTheme.value.tooltipText,
+      fontFamily: 'Inter, sans-serif',
+      fontSize: 12,
+    },
     formatter(params) {
       if (!Array.isArray(params) || params.length === 0) return '';
       const year = params[0]?.axisValue ?? '';
       const lines = params
         .map(item => `${item.marker}${item.seriesName}: <strong>${formatValue(item.value)}</strong>`)
         .join('<br/>');
-      return `<strong>${year}</strong><br/>${lines}`;
+      return `<div style="color:${chartTheme.value.tooltipText};"><strong>${year}</strong><br/>${lines}</div>`;
     },
   },
   xAxis: {

@@ -538,12 +538,15 @@ const close = () => emit('update:modelValue', false);
 
 .geo-period {
   white-space: nowrap;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--primary-color) 20%, var(--card-border));
 }
 
 .geo-period-value {
   font-size: 0.78rem;
   line-height: 1.2;
   white-space: normal;
+  color: var(--primary-color) !important;
 }
 
 .geo-grid {

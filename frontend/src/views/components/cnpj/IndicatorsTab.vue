@@ -320,7 +320,10 @@ function riscoTextStyle(indicadorData) {
                 v-for="ind in grupo.indicators"
                 :key="ind.key"
                 class="ind-data-row"
-                :class="{ 'is-clickable': canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key]) }"
+                :class="{
+                  'is-clickable': canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key]),
+                  'is-detail-disabled': ind.key === 'percentual_nao_comprovacao',
+                }"
                 @click="canDetailIndicator(ind.key, cachedIndicadoresData.indicadores[ind.key]) && openIndicatorDetail(ind.key)"
               >
                 <td class="ind-nome-cell">
@@ -926,8 +929,20 @@ function riscoTextStyle(indicadorData) {
   cursor: pointer;
 }
 
+.ind-data-row.is-detail-disabled {
+  cursor: not-allowed;
+}
+
 .ind-data-row.is-clickable:hover td {
   background: color-mix(in srgb, var(--primary-color) 8%, var(--table-hover)) !important;
+}
+
+.ind-data-row.is-detail-disabled:hover td {
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--table-hover)) !important;
+}
+
+.ind-data-row.is-detail-disabled .ind-nome-inner {
+  color: var(--text-color-85);
 }
 
 /* Célula do nome */

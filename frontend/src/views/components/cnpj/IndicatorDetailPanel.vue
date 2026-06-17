@@ -16,7 +16,11 @@ import IndicatorEvolutionChart from './IndicatorEvolutionChart.vue';
 const props = defineProps({
   cnpj: { type: String, default: '' },
   indicatorKey: { type: String, default: '' },
+  showActiveCnpjHeader: { type: Boolean, default: true },
+  externalCnpjNavigation: { type: Boolean, default: false },
 });
+
+const emit = defineEmits(['cnpj-selected']);
 
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
@@ -215,6 +219,12 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 async function selectBenchmarkRow(row) {
   const cnpj = normalizeCnpj(row?.cnpj);
   if (!cnpj || cnpj === activeCnpj.value || isLoading.value) return;
+
+  if (props.externalCnpjNavigation) {
+    emit('cnpj-selected', row);
+    return;
+  }
+
   activeCnpjPreview.value = row?.razao_social ? `${row.razao_social} (${row.cnpj})` : row?.cnpj ?? cnpj;
   isPanelUpdating.value = true;
   await nextTick();
@@ -314,7 +324,7 @@ watch(
     </div>
 
     <template v-else>
-      <div class="indicator-active-cnpj">
+      <div v-if="showActiveCnpjHeader" class="indicator-active-cnpj">
         <div class="indicator-active-cnpj-text">
           <span>CNPJ em análise</span>
           <strong>{{ activeCnpjTitle }}</strong>

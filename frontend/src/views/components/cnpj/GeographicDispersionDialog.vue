@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import Dialog from 'primevue/dialog';
 import DataTable from 'primevue/datatable';
@@ -45,6 +45,20 @@ const {
 const mapReady = ref(false);
 const mapKey = ref(0);
 const mapError = ref(null);
+const selectedCnpj = ref('');
+const activeCnpjPreview = ref('');
+const isPanelUpdating = ref(false);
+let panelUpdateToken = 0;
+const PANEL_UPDATE_MIN_MS = 220;
+
+const normalizeCnpj = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? digits.padStart(14, '0').slice(-14) : '';
+};
+
+const baseCnpj = computed(() => normalizeCnpj(props.cnpj));
+const activeCnpj = computed(() => selectedCnpj.value || baseCnpj.value);
+const isViewingTargetCnpj = computed(() => activeCnpj.value === baseCnpj.value);
 
 const periodoInicio = computed(() => {
   const [start] = filterStore.periodo ?? [];
@@ -82,13 +96,41 @@ onMounted(async () => {
 });
 
 watch(
-  () => [props.modelValue, props.cnpj, periodoInicio.value, periodoFim.value],
+  () => [props.modelValue, baseCnpj.value],
+  ([visible, cnpj]) => {
+    if (!visible || !cnpj) return;
+    selectedCnpj.value = cnpj;
+    activeCnpjPreview.value = '';
+  },
+  { immediate: true },
+);
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+watch(
+  () => [props.modelValue, activeCnpj.value, periodoInicio.value, periodoFim.value],
   async ([visible, cnpj]) => {
     if (!visible || !cnpj) return;
-    await Promise.all([
-      cnpjDetailStore.fetchGeograficoOrigemUf(cnpj, periodoInicio.value, periodoFim.value),
-      cnpjDetailStore.fetchGeograficoBenchmarkLocal(cnpj, periodoInicio.value, periodoFim.value),
-    ]);
+    const token = ++panelUpdateToken;
+    const startedAt = performance.now();
+    isPanelUpdating.value = true;
+
+    try {
+      await Promise.all([
+        cnpjDetailStore.fetchGeograficoOrigemUf(cnpj, periodoInicio.value, periodoFim.value),
+        cnpjDetailStore.fetchGeograficoBenchmarkLocal(cnpj, periodoInicio.value, periodoFim.value),
+      ]);
+
+      const elapsed = performance.now() - startedAt;
+      if (elapsed < PANEL_UPDATE_MIN_MS) {
+        await wait(PANEL_UPDATE_MIN_MS - elapsed);
+      }
+    } finally {
+      if (token === panelUpdateToken) {
+        isPanelUpdating.value = false;
+        activeCnpjPreview.value = '';
+      }
+    }
   },
   { immediate: true },
 );
@@ -101,6 +143,8 @@ const rowClass = (row) => ({
 
 const benchmarkRowClass = (row) => ({
   'geo-benchmark-target': row?.is_alvo,
+  'geo-benchmark-origin': normalizeCnpj(row?.cnpj) === baseCnpj.value && !isViewingTargetCnpj.value,
+  'geo-benchmark-clickable': normalizeCnpj(row?.cnpj) !== activeCnpj.value,
 });
 
 const benchmarkMunicipioRows = computed(() => geograficoBenchmarkData.value?.municipio?.rows ?? []);
@@ -110,6 +154,47 @@ const benchmarkMunicipioLabel = computed(() => geograficoBenchmarkData.value?.mu
 const benchmarkRegiaoLabel = computed(() => geograficoBenchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
 
 const benchmarkErrorMessage = computed(() => geograficoBenchmarkError.value);
+const hasGeoData = computed(() => Boolean(geograficoOrigemUfData.value));
+const hasBenchmarkData = computed(() => Boolean(geograficoBenchmarkData.value));
+const isInitialLoading = computed(() => (
+  (geograficoOrigemUfLoading.value || geograficoBenchmarkLoading.value || isPanelUpdating.value)
+  && !hasGeoData.value
+));
+const showLoadingOverlay = computed(() => isPanelUpdating.value && hasGeoData.value);
+const benchmarkInitialLoading = computed(() => geograficoBenchmarkLoading.value && !hasBenchmarkData.value);
+
+const selectedBenchmarkRow = computed(() => {
+  const currentCnpj = activeCnpj.value;
+  return (
+    benchmarkMunicipioRows.value.find(row => normalizeCnpj(row?.cnpj) === currentCnpj)
+    || benchmarkRegiaoRows.value.find(row => normalizeCnpj(row?.cnpj) === currentCnpj)
+    || benchmarkMunicipioRows.value.find(row => row?.is_alvo)
+    || benchmarkRegiaoRows.value.find(row => row?.is_alvo)
+    || null
+  );
+});
+
+const activeCnpjTitle = computed(() => {
+  const row = selectedBenchmarkRow.value;
+  if (!row) return activeCnpjPreview.value || activeCnpj.value;
+  if (normalizeCnpj(row.cnpj) !== activeCnpj.value && activeCnpjPreview.value) return activeCnpjPreview.value;
+  return estabelecimentoLabel(row) ? `${estabelecimentoLabel(row)} (${row.cnpj})` : row.cnpj;
+});
+
+async function selectBenchmarkRow(row) {
+  const cnpj = normalizeCnpj(row?.cnpj);
+  if (!cnpj || cnpj === activeCnpj.value || isPanelUpdating.value) return;
+  activeCnpjPreview.value = estabelecimentoLabel(row) ? `${estabelecimentoLabel(row)} (${row.cnpj})` : row?.cnpj ?? cnpj;
+  isPanelUpdating.value = true;
+  await nextTick();
+  selectedCnpj.value = cnpj;
+}
+
+function resetSelectedCnpj() {
+  if (isPanelUpdating.value) return;
+  activeCnpjPreview.value = '';
+  selectedCnpj.value = baseCnpj.value;
+}
 
 const statusClass = (status) => {
   if (status === 'CRITICO') return 'geo-status geo-status--critico';
@@ -283,6 +368,22 @@ const close = () => emit('update:modelValue', false);
     @hide="close"
   >
     <div class="geo-shell">
+      <div class="geo-active-cnpj">
+        <div class="geo-active-cnpj-text">
+          <span>CNPJ em análise</span>
+          <strong>{{ activeCnpjTitle }}</strong>
+        </div>
+        <button
+          v-if="!isViewingTargetCnpj"
+          type="button"
+          class="geo-return-target-button"
+          @click="resetSelectedCnpj"
+        >
+          <i class="pi pi-undo" aria-hidden="true" />
+          <span>Voltar ao CNPJ alvo</span>
+        </button>
+      </div>
+
       <div class="geo-hero">
         <div class="geo-kpis">
           <div v-for="card in summaryCards" :key="card.label" class="geo-kpi">
@@ -296,7 +397,7 @@ const close = () => emit('update:modelValue', false);
         </div>
       </div>
 
-      <div v-if="geograficoOrigemUfLoading" class="geo-loading">
+      <div v-if="isInitialLoading" class="geo-loading">
         Carregando detalhamento geográfico...
       </div>
 
@@ -362,7 +463,7 @@ const close = () => emit('update:modelValue', false);
 
         <section class="geo-benchmark-card">
           <div class="panel-title">Comparação com estabelecimentos do território</div>
-          <div v-if="geograficoBenchmarkLoading" class="geo-benchmark-state">
+          <div v-if="benchmarkInitialLoading" class="geo-benchmark-state">
             Carregando comparação territorial...
           </div>
           <div v-else-if="benchmarkErrorMessage" class="geo-error geo-benchmark-state">
@@ -382,6 +483,7 @@ const close = () => emit('update:modelValue', false);
                 scrollable
                 scrollHeight="260px"
                 class="geo-table geo-benchmark-table"
+                @row-click="selectBenchmarkRow($event.data)"
               >
                 <Column header="ESTABELECIMENTO" style="min-width: 260px">
                   <template #body="{ data }">
@@ -441,6 +543,7 @@ const close = () => emit('update:modelValue', false);
                 scrollable
                 scrollHeight="260px"
                 class="geo-table geo-benchmark-table"
+                @row-click="selectBenchmarkRow($event.data)"
               >
                 <Column header="ESTABELECIMENTO" style="min-width: 260px">
                   <template #body="{ data }">
@@ -489,6 +592,20 @@ const close = () => emit('update:modelValue', false);
             </TabPanel>
           </TabView>
         </section>
+
+        <transition name="geo-overlay-fade">
+          <div
+            v-if="showLoadingOverlay"
+            class="geo-loading-overlay"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div class="geo-loading-overlay__box">
+              <i class="pi pi-spin pi-spinner" aria-hidden="true" />
+              <span>Atualizando análise...</span>
+            </div>
+          </div>
+        </transition>
       </template>
     </div>
   </Dialog>
@@ -496,9 +613,111 @@ const close = () => emit('update:modelValue', false);
 
 <style scoped>
 .geo-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  min-height: 760px;
+}
+
+.geo-active-cnpj {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.58rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 22%, var(--card-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+}
+
+.geo-active-cnpj-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.geo-active-cnpj-text span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.geo-active-cnpj-text strong {
+  overflow: hidden;
+  color: var(--text-color-85);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.geo-return-target-button {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.42rem;
+  padding: 0.38rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 34%, var(--card-border));
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.geo-return-target-button:hover,
+.geo-return-target-button:focus-visible {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.geo-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-color) 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.geo-loading-overlay__box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-color-85);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color-85) 12%, transparent);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.geo-loading-overlay__box i {
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.geo-overlay-fade-enter-active,
+.geo-overlay-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.geo-overlay-fade-enter-from,
+.geo-overlay-fade-leave-to {
+  opacity: 0;
 }
 
 .geo-hero {
@@ -726,6 +945,10 @@ const close = () => emit('update:modelValue', false);
   background: color-mix(in srgb, var(--primary-color) 8%, var(--card-bg));
 }
 
+:deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-clickable) {
+  cursor: pointer;
+}
+
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf > td),
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf:nth-child(even) > td) {
   background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
@@ -744,6 +967,10 @@ const close = () => emit('update:modelValue', false);
 
 :deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-target > td:first-child) {
   box-shadow: inset 3px 0 0 var(--primary-color);
+}
+
+:deep(.geo-table .p-datatable-tbody > tr.geo-benchmark-origin > td:first-child) {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary-color) 55%, var(--text-muted));
 }
 
 :deep(.geo-table .p-datatable-tbody > tr.geo-table-home-uf:hover > td) {

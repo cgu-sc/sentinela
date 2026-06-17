@@ -1,6 +1,5 @@
 export const GENERIC_INDICATOR_DETAIL_KEYS = [
   'falecidos',
-  'percentual_nao_comprovacao',
   'teto',
   'polimedicamento',
   'ticket_medio',

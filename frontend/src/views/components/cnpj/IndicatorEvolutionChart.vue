@@ -67,8 +67,8 @@ const palette = computed(() => ({
   farmacia: chartDataColors.value.red,
   regiao: PALETTE.indigo[500],
   uf: PALETTE.fuchsia[500],
-  mark: chartDataColors.value.red,
-  markFill: hexToRgba(chartDataColors.value.red, 0.20),
+  mark: PALETTE.amber[500],
+  markFill: hexToRgba(PALETTE.amber[500], 0.10),
   text: chartTheme.value.text,
   muted: chartTheme.value.muted,
   border: chartTheme.value.border,
@@ -128,6 +128,7 @@ function buildLine(name, key, color, width, extra = {}) {
 const chartOptions = computed(() => ({
   animationDuration: 350,
   color: [
+    palette.value.mark,
     palette.value.farmacia,
     palette.value.regiao,
     palette.value.uf,
@@ -199,6 +200,7 @@ const chartOptions = computed(() => ({
       data: seriesData.value.map(() => null),
       symbol: 'none',
       lineStyle: { opacity: 0 },
+      itemStyle: { color: palette.value.mark },
       tooltip: { show: false },
       silent: true,
       markArea: markArea.value,

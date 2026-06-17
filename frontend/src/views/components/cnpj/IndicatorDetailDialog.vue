@@ -178,7 +178,7 @@ watch(
     :header="dialogTitle"
     modal
     class="indicator-detail-dialog"
-    :style="{ width: 'min(1300px, 94vw)' }"
+    :style="{ width: '92vw', maxWidth: '1320px', height: '90vh' }"
     @update:visible="emit('update:modelValue', $event)"
   >
     <div class="indicator-detail-shell">

@@ -278,7 +278,7 @@ const close = () => emit('update:modelValue', false);
     dismissableMask
     :header="'Dispersão Interestadual'"
     class="geo-dialog"
-    :style="{ width: '92vw', maxWidth: '1320px' }"
+    :style="{ width: '92vw', maxWidth: '1320px', height: '90vh' }"
     @update:visible="emit('update:modelValue', $event)"
     @hide="close"
   >

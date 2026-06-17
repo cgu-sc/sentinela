@@ -33,6 +33,7 @@ from .nota_tecnica_docx_utils import (
     _keep_small_table_together,
     _run,
     _set_table_fixed_widths,
+    _set_table_open_borders,
 )
 from .nota_tecnica_charts import (
     _add_mapa_geografico_origem_uf,
@@ -852,7 +853,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
     )
 
     table = doc.add_table(rows=2, cols=7)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     metric_col_width = Inches(0.95)
     _set_table_fixed_widths(
         table,
@@ -935,7 +936,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
     )
 
     table = doc.add_table(rows=len(rows) + 1, cols=5)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(2.85), Inches(1.20), Inches(1.20), Inches(0.98), Inches(1.07)])
 
     headers = ["Indicador", "Farmácia", "Mediana região", "Risco região", "Status"]
@@ -1216,7 +1217,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
     )
 
     table = doc.add_table(rows=len(evolucao_anual) + 1, cols=8)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(
         table,
         [Inches(0.56), Inches(0.78), Inches(0.84), Inches(0.72), Inches(0.84), Inches(0.96), Inches(0.78), Inches(1.82)],
@@ -1303,7 +1304,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
     )
 
     table = doc.add_table(rows=len(resumo) + 1, cols=4)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(
         table,
         [Inches(3.10), Inches(0.78), Inches(1.88), Inches(1.54)],
@@ -1372,7 +1373,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
     )
 
     table = doc.add_table(rows=len(top20) + 1, cols=5)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(
         table,
         [Inches(0.47), Inches(1.25), Inches(2.80), Inches(1.50), Inches(1.28)],
@@ -1552,7 +1553,7 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
     ]
 
     table = doc.add_table(rows=len(rows) + 1, cols=3)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(2.55), Inches(1.30), Inches(3.45)])
 
     headers = ["Métrica", "Valor", "Observação"]
@@ -2739,7 +2740,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
     )
 
     table = doc.add_table(rows=len(rows_tabela) + 1, cols=5)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(
         table,
         [Inches(1.18), Inches(1.28), Inches(1.58), Inches(1.55), Inches(1.71)],

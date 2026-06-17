@@ -3,7 +3,7 @@ from typing import Any
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
-from .nota_tecnica_docx_utils import _cell_bg, _keep_small_table_together, _run, _set_table_fixed_widths
+from .nota_tecnica_docx_utils import _cell_bg, _keep_small_table_together, _run, _set_table_fixed_widths, _set_table_open_borders
 from .nota_tecnica_formatters import _format_decimal_pt, _format_list_pt
 from .nota_tecnica_quadros import _add_quadro_esocial, _add_quadro_esocial_trabalhadores, _format_quadro_title
 
@@ -57,6 +57,7 @@ def _format_single_worker_summary(rows: list[dict[str, Any]]) -> str:
 def _add_movimentacao_sem_funcionario_table(
     doc,
     *,
+    tabela_num: int,
     ultimo_mes_ativo_txt: str,
     periodo_txt: str,
     qtd_meses_txt: str,
@@ -68,7 +69,7 @@ def _add_movimentacao_sem_funcionario_table(
     _format_quadro_title(p_title)
     _run(
         p_title,
-        'Quadro 01-C - Síntese da movimentação após o último mês com trabalhador ativo',
+        f'Tabela {tabela_num} - Síntese da movimentação após o último mês com trabalhador ativo',
         color='334155',
         size=12,
         bold=True,
@@ -86,7 +87,7 @@ def _add_movimentacao_sem_funcionario_table(
     ]
 
     table = doc.add_table(rows=len(rows) + 1, cols=2)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(4.55), Inches(2.75)])
 
     headers = ("Item verificado", "Resultado")
@@ -130,10 +131,10 @@ def _add_legal_context(doc):
     )
 
 
-def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
+def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any], tabela_num: int) -> int:
     alerta = esocial_comp.get("movimentacao_sem_funcionario_alerta")
     if not alerta:
-        return
+        return tabela_num
 
     campos_obrigatorios = {
         "ultimo_periodo_movimentacao",
@@ -185,8 +186,10 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
             color='0F172A',
             size=10,
         )
+    tabela_num += 1
     _add_movimentacao_sem_funcionario_table(
         doc,
+        tabela_num=tabela_num,
         ultimo_mes_ativo_txt=ultimo_mes_ativo_txt,
         periodo_txt=periodo_txt,
         qtd_meses_txt=qtd_meses_txt,
@@ -194,9 +197,10 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any]):
         valor_periodo_txt=valor_periodo_txt,
         qtd_autorizacoes_periodo_txt=qtd_autorizacoes_periodo_txt,
     )
+    return tabela_num
 
 
-def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any]):
+def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any], tabela_num: int) -> int:
     """Renderiza o contexto trabalhista/eSocial na seção cadastral da Nota Técnica."""
     doc.add_heading('5.2 Vínculos Trabalhistas', level=2)
 
@@ -208,7 +212,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
             color='0F172A',
             size=10,
         )
-        return
+        return tabela_num
 
     rows = list(esocial_comp.get("rows") or [])
     annual_summary = _format_annual_summary(rows)
@@ -337,6 +341,8 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
             size=10,
         )
 
-    _add_quadro_esocial(doc, razao_social, cnpj_fmt, esocial_comp)
+    tabela_num += 1
+    _add_quadro_esocial(doc, razao_social, cnpj_fmt, esocial_comp, tabela_num)
     _add_quadro_esocial_trabalhadores(doc, razao_social, cnpj_fmt, esocial_comp)
-    _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp)
+    tabela_num = _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp, tabela_num)
+    return tabela_num

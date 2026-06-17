@@ -84,8 +84,8 @@ def _format_cnae_secundario_destacado(cnaes_secundarios: Any) -> str:
     return f"{code} - {description}" if description else code
 
 
-def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str, Any]]):
-    """Adiciona quadro com ingressos societarios proximos a aumentos atipicos."""
+def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str, Any]], tabela_num: int):
+    """Adiciona tabela com ingressos societarios proximos a aumentos atipicos."""
     if not socios_volume_atipico:
         return
 
@@ -93,14 +93,14 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
     _format_quadro_title(p_title)
     _run(
         p_title,
-        'Quadro 06 - Ingressos societários próximos a semestres com aumento atípico das transferências',
+        f'Tabela {tabela_num} - Ingressos societários próximos a semestres com aumento atípico das transferências',
         color='334155',
         size=12,
         bold=True,
     )
 
     table = doc.add_table(rows=len(socios_volume_atipico) + 1, cols=5)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(1.98), Inches(1.26), Inches(1.26), Inches(1.02), Inches(1.78)])
 
     headers = [
@@ -161,20 +161,20 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
     _keep_small_table_together(p_title, table, [p_foot])
 
 
-def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_data: dict, periodo_txt: str):
-    """Adiciona quadro compacto comparando a farmacia auditada com a mediana regional."""
+def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_data: dict, periodo_txt: str, tabela_num: int):
+    """Adiciona tabela compacta comparando a farmacia auditada com a mediana regional."""
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
     _run(
         p_title,
-        'Quadro 03 - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
+        f'Tabela {tabela_num} - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
         color='334155',
         size=12,
         bold=True,
     )
 
     table = doc.add_table(rows=5, cols=2)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(4.86), Inches(2.44)])
 
     hdr_cells = table.rows[0].cells
@@ -600,7 +600,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     # Contexto trabalhista/eSocial é renderizado fora do quadro cadastral.
 
 
-def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any]):
+def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dict[str, Any], tabela_num: int):
     """Adiciona quadro de vínculos trabalhistas anuais do eSocial."""
     rows_data = esocial_comp.get("rows") or []
     if not rows_data:
@@ -610,14 +610,14 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Quadro 01-A - Vínculos trabalhistas identificados durante o ano no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
+        f'Tabela {tabela_num} - Vínculos trabalhistas identificados durante o ano no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='334155',
         size=12,
         bold=True,
     )
 
     table = doc.add_table(rows=len(rows_data) + 1, cols=3)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(1.20), Inches(3.05), Inches(3.05)])
 
     headers = [
@@ -731,13 +731,13 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     _keep_small_table_together(p_title, table, [p_foot])
 
 
-def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt):
+def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_num: int):
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f'Quadro 02 – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=12, bold=True)
+    _run(p_title, f'Tabela {tabela_num} – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=12, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
-    table.style = 'Table Grid'
+    _set_table_open_borders(table)
     _set_table_fixed_widths(table, [Inches(3.60), Inches(1.85), Inches(1.85)])
     
     hdr_cells = table.rows[0].cells

@@ -1245,9 +1245,11 @@ def generate_nota_tecnica(
     _add_quadro_identificacao(doc, quadro_data, cap_social_val, periodo_txt)
     timing.mark("secao 5 identificacao e quadro cadastral")
 
+    tabela_num = 0
+
     esocial_comp = _build_esocial_context(cnpj, data_inicio, data_fim)
     timing.mark("contexto esocial")
-    _add_esocial_context_text(doc, razao_social, cnpj_fmt, esocial_comp)
+    tabela_num = _add_esocial_context_text(doc, razao_social, cnpj_fmt, esocial_comp, tabela_num)
     timing.mark("secao 5 contexto esocial")
 
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
@@ -1266,12 +1268,13 @@ def generate_nota_tecnica(
         _run(p_53, 'no período avaliado (', color='0F172A', size=10)
         _run(p_53, periodo_txt, color='0F172A', size=10, bold=True)
         _run(p_53, '). ', color='0F172A', size=10)
-    _run(p_53, 'O quadro, a seguir, consolida os valores apurados para todas as dispensações de medicamentos realizadas pelo estabelecimento:', color='0F172A', size=10)
+    _run(p_53, 'A tabela, a seguir, consolida os valores apurados para todas as dispensações de medicamentos realizadas pelo estabelecimento:', color='0F172A', size=10)
         
-    _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt)
+    tabela_num += 1
+    _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_num)
     
     p_conclusao_53 = doc.add_paragraph()
-    _run(p_conclusao_53, f'Depreende-se do quadro anterior que a quantidade de dispensações de medicamentos informadas pela Farmácia {razao_social} no SAV não se encontra compatível com seus estoques, contabilizados de acordo com a metodologia adotada pela CGU, o que levou à estimativa de não comprovação de vendas no percentual de ', color='0F172A', size=10)
+    _run(p_conclusao_53, f'Depreende-se da tabela anterior que a quantidade de dispensações de medicamentos informadas pela Farmácia {razao_social} no SAV não se encontra compatível com seus estoques, contabilizados de acordo com a metodologia adotada pela CGU, o que levou à estimativa de não comprovação de vendas no percentual de ', color='0F172A', size=10)
     
     perc_fmt = f"{cnpj_data.get('percValSemComp', 0):.2f}%".replace('.', ',')
     val_fmt = f"{cnpj_data.get('valSemComp', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
@@ -1319,7 +1322,8 @@ def generate_nota_tecnica(
     _run(p_geo_ampliado, f'{multiplicador_brasil_fmt} {multiplicador_brasil_unidade}', color='334155', size=10, bold=True)
     _run(p_geo_ampliado, ' a mediana dos percentuais das farmácias de todo o Brasil.', color='0F172A', size=10)
 
-    _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt)
+    tabela_num += 1
+    _add_quadro_comparativo_regional(doc, regional_comp, cnpj_data, periodo_txt, tabela_num)
     timing.mark("quadro comparativo regional")
 
     posicionamento_regional_comp = _build_posicionamento_regional_context(cnpj, cadastro, data_inicio, data_fim)
@@ -1333,8 +1337,6 @@ def generate_nota_tecnica(
     )
     _add_figura_posicionamento_regional(doc, razao_social, cnpj_fmt, posicionamento_regional_comp, figure_number=1)
     timing.mark("figura posicionamento regional")
-
-    tabela_num = 0
 
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
     timing.mark("contexto GTIN sem comprovacao")
@@ -1433,8 +1435,9 @@ def generate_nota_tecnica(
     if socios_volume_atipico:
         p_socios_volume = doc.add_paragraph()
         p_socios_volume.paragraph_format.space_before = Pt(6)
-        _run(p_socios_volume, 'Também se observam ingressos societários próximos a semestres com aumento atípico das transferências, conforme detalhado no quadro a seguir.', color='0F172A', size=10)
-    _add_quadro_socios_volume_atipico(doc, socios_volume_atipico)
+        _run(p_socios_volume, 'Também se observam ingressos societários próximos a semestres com aumento atípico das transferências, conforme detalhado na tabela a seguir.', color='0F172A', size=10)
+        tabela_num += 1
+    _add_quadro_socios_volume_atipico(doc, socios_volume_atipico, tabela_num)
     _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=2)
     timing.mark("quadros e figura evolucao financeira")
 

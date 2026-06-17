@@ -1790,8 +1790,8 @@ def _add_hhi_crm_text(
         "Valor total pago pelo PFPB tendo como base o CRM",
     ]
     table = doc.add_table(rows=1, cols=len(headers))
-    table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_open_borders(table)
     widths = [Inches(0.90), Inches(2.05), Inches(0.85), Inches(1.05), Inches(1.00), Inches(1.45)]
     _set_table_fixed_widths(table, widths)
 
@@ -1946,8 +1946,8 @@ def _add_crms_irregulares_text(
         "Valor total pago pelo PFPB tendo como base o CRM",
     ]
     table = doc.add_table(rows=1, cols=len(headers))
-    table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _set_table_open_borders(table)
     widths = [Inches(0.76), Inches(1.78), Inches(0.76), Inches(1.10), Inches(0.92), Inches(0.82), Inches(1.16)]
     _set_table_fixed_widths(table, widths)
 

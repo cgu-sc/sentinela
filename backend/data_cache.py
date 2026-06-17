@@ -14,18 +14,24 @@ else:
     # Pasta raiz do projeto em desenvolvimento (um nível acima de /backend)
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-_CACHE_DIR = os.path.join(BASE_DIR, "sentinela_cache")
+def get_modules_dir() -> str:
+    """Retorna o diretório raiz dos módulos locais do Sentinela."""
+    return os.path.join(BASE_DIR, "modules")
+
 
 def get_cache_dir() -> str:
-    """Retorna o diretório de cache, priorizando o local onde os dados realmente existem."""
-    # Opção 1: Raiz do projeto (Padrão)
-    path_root = os.path.join(BASE_DIR, "sentinela_cache")
-    # Opção 2: Dentro da pasta backend (Caso de desenvolvimento específico)
-    path_backend = os.path.join(BASE_DIR, "backend", "sentinela_cache")
-    
-    if not os.path.exists(path_root) and os.path.exists(path_backend):
-        return path_backend
-    return path_root
+    """Retorna o diretório dos parquets globais."""
+    return os.path.join(get_modules_dir(), "global")
+
+
+def get_cnpj_cache_root() -> str:
+    """Retorna o diretório raiz dos parquets por CNPJ."""
+    return os.path.join(get_modules_dir(), "cnpjs")
+
+
+def get_user_preferences_dir() -> str:
+    """Retorna o diretório local das preferências do usuário."""
+    return os.path.join(get_modules_dir(), "user_preferences")
 
 _CACHE_DIR = get_cache_dir()
 _GLOBAL_PARQUETS = cache_registry.get_global_parquet_files_by_key()
@@ -340,8 +346,9 @@ _SENTINELA_METADADOS_BASE_PARQUET_PATH = _global_cache_path("sentinela_metadados
 _DADOS_PAR_PARQUET_PATH = _global_cache_path("dados_par")
 _PAR_TEIA_ALVOS_PARQUET_PATH = _global_cache_path("par_teia_alvos")
 
-if not os.path.exists(_CACHE_DIR):
-    os.makedirs(_CACHE_DIR, exist_ok=True)
+for _dir in (get_modules_dir(), _CACHE_DIR, get_cnpj_cache_root()):
+    if not os.path.exists(_dir):
+        os.makedirs(_dir, exist_ok=True)
 
 # Estados Globais
 _df_movimentacao: pl.DataFrame | None = None
@@ -532,7 +539,7 @@ def _sync_falecidos(engine, progress_callback=None):
 
 
 def _sync_cnpj_parquets(engine, progress_callback=None, cnpjs: list[str] | None = None):
-    """Gera todos os parquets mantidos em sentinela_cache/<cnpj>/."""
+    """Gera todos os parquets mantidos em modules/cnpjs/<cnpj>/."""
     import cache_manager
 
     print("Atualizando indicadores PAR antes da teia por CNPJ...")

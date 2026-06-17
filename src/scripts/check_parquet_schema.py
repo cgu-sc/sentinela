@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(ROOT_DIR, 'backend'))
 try:
     from data_cache import (
         _CACHE_DIR,
+        get_cnpj_cache_root,
         _PARQUET_PATH,
         _LOCALIDADES_PARQUET_PATH,
         _REDE_PARQUET_PATH,
@@ -85,7 +86,7 @@ def exibir_menu():
 
 def inspecionar_cnpj(cnpj: str):
     cnpj = cnpj.strip().zfill(14)
-    cnpj_dir = os.path.join(_CACHE_DIR, cnpj)
+    cnpj_dir = os.path.join(get_cnpj_cache_root(), cnpj)
 
     if not os.path.isdir(cnpj_dir):
         print(f"\n[!] Diretorio nao encontrado para CNPJ {cnpj}: {cnpj_dir}")

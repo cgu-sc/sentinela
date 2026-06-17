@@ -229,7 +229,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
 def get_evolucao_mensal_gtin(cnpj: str, data_inicio=None, data_fim=None) -> EvolucaoMensalGtinResponse:
     """
     Retorna a série mensal de quantidades e valores (por GTIN agregado) para um CNPJ.
-    Lazy cache: gera sentinela_cache/{cnpj}/movimentacao_mensal_gtin na primeira chamada.
+    Lazy cache: gera modules/cnpjs/{cnpj}/movimentacao_mensal_gtin na primeira chamada.
 
     Args:
         cnpj: CNPJ completo (14 dígitos).

@@ -2,6 +2,11 @@ import polars as pl
 import os
 import sys
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT_DIR, "backend"))
+
+from data_cache import get_cache_dir
+
 def format_size(size_bytes):
     if size_bytes < 0: return "-" + format_size(abs(size_bytes))
     for unit in ['B', 'KB', 'MB', 'GB']:
@@ -51,7 +56,7 @@ def run_comparison(new_path, old_path, label):
     print(f"   {df_old.columns}")
 
 if __name__ == "__main__":
-    cache_dir = r"d:\sentinela\sentinela_cache"
+    cache_dir = get_cache_dir()
     
     targets = [
         ("bench_crm_br.parquet", "bench_crm_br_old.parquet", "Nacional"),

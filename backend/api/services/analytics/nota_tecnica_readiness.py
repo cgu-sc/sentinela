@@ -8,7 +8,7 @@ from typing import Any
 
 import cache_files
 import cache_registry
-from data_cache import get_cache_dir
+from data_cache import get_cache_dir, get_cnpj_cache_root
 
 
 def _clean_cnpj(cnpj: str) -> str:
@@ -48,9 +48,9 @@ def _global_files(keys: list[str], global_files: dict[str, str], cache_dir: str)
     return files
 
 
-def _cnpj_files(cnpj: str, filenames: list[str], cache_dir: str) -> list[tuple[str, str]]:
+def _cnpj_files(cnpj: str, filenames: list[str], cnpj_cache_root: str) -> list[tuple[str, str]]:
     return [
-        (os.path.join(cnpj, filename), os.path.join(cache_dir, cnpj, filename))
+        (os.path.join("cnpjs", cnpj, filename), os.path.join(cnpj_cache_root, cnpj, filename))
         for filename in filenames
     ]
 
@@ -90,6 +90,7 @@ def _document_base_modules() -> list[dict[str, Any]]:
 
 def _pdf_modules(cnpj: str) -> list[dict[str, Any]]:
     cache_dir = get_cache_dir()
+    cnpj_cache_root = get_cnpj_cache_root()
     global_files = cache_registry.get_global_parquet_files_by_key()
 
     return [
@@ -116,7 +117,7 @@ def _pdf_modules(cnpj: str) -> list[dict[str, Any]]:
                     cache_files.CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
                     cache_files.CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
                 ],
-                cache_dir,
+                cnpj_cache_root,
             ),
             scope="cnpj",
         ),
@@ -131,6 +132,7 @@ def _pdf_modules(cnpj: str) -> list[dict[str, Any]]:
 
 def _nota_tecnica_modules(cnpj: str) -> list[dict[str, Any]]:
     cache_dir = get_cache_dir()
+    cnpj_cache_root = get_cnpj_cache_root()
     global_files = cache_registry.get_global_parquet_files_by_key()
 
     return [
@@ -138,13 +140,13 @@ def _nota_tecnica_modules(cnpj: str) -> list[dict[str, Any]]:
         _module(
             "memoria_calculo",
             "Memoria de calculo do CNPJ",
-            _cnpj_files(cnpj, [cache_files.MEMORIA_CALCULO_PARQUET], cache_dir),
+            _cnpj_files(cnpj, [cache_files.MEMORIA_CALCULO_PARQUET], cnpj_cache_root),
             scope="cnpj",
         ),
         _module(
             "gtin_mensal",
             "Movimentacao mensal por GTIN",
-            _cnpj_files(cnpj, [cache_files.MOVIMENTACAO_MENSAL_GTIN_PARQUET], cache_dir)
+            _cnpj_files(cnpj, [cache_files.MOVIMENTACAO_MENSAL_GTIN_PARQUET], cnpj_cache_root)
             + _global_files(["medicamentos"], global_files, cache_dir),
             scope="cnpj",
         ),
@@ -211,7 +213,7 @@ def _nota_tecnica_modules(cnpj: str) -> list[dict[str, Any]]:
                     cache_files.CRM_TIMELINE_HORA_PARQUET,
                     cache_files.CRM_TIMELINE_EVENTOS_PARQUET,
                 ],
-                cache_dir,
+                cnpj_cache_root,
             ),
             scope="cnpj",
         ),

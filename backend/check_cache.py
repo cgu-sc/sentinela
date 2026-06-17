@@ -1,7 +1,9 @@
 import polars as pl
 import os
 
-CACHE_PATH = r"d:\sentinela\sentinela_cache\cache_matriz_risco.parquet"
+from data_cache import _MATRIZ_PARQUET_PATH
+
+CACHE_PATH = _MATRIZ_PARQUET_PATH
 
 if os.path.exists(CACHE_PATH):
     df = pl.read_parquet(CACHE_PATH)

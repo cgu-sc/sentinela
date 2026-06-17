@@ -139,13 +139,13 @@ _known_cnpj_dirs: set[str] = set()
 _CRM_RAIOX_TX_CACHE_VERSION = 2
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
-    """Retorna (e garante a existência de) sentinela_cache/{cnpj}/.
+    """Retorna (e garante a existência de) modules/cnpjs/{cnpj}/.
 
     Usa um cache em memória para evitar chamadas redundantes a makedirs
     em requests frequentes ao mesmo CNPJ.
     """
-    from data_cache import get_cache_dir
-    cnpj_dir = os.path.join(get_cache_dir(), cnpj)
+    from data_cache import get_cnpj_cache_root
+    cnpj_dir = os.path.join(get_cnpj_cache_root(), cnpj)
     if not os.path.exists(cnpj_dir):
         os.makedirs(cnpj_dir, exist_ok=True)
         _known_cnpj_dirs.add(cnpj_dir)
@@ -222,7 +222,7 @@ def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
     """Sincroniza o cache parquet de medianas horárias de autorizações para um CNPJ.
 
     Lê temp_CGUSC.fp.app_mediana_autorizacoes_horaria e grava
-    sentinela_cache/<cnpj>/mediana_autorizacoes_horaria.
+    modules/cnpjs/<cnpj>/mediana_autorizacoes_horaria.
     Usado pelo timeline-dataset CRM para preencher a mediana de referência
     em horas sem atividade no dia selecionado.
     """

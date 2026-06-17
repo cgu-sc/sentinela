@@ -31,9 +31,9 @@ _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
-    from data_cache import get_cache_dir
+    from data_cache import get_cnpj_cache_root
 
-    cnpj_dir = os.path.join(get_cache_dir(), cnpj)
+    cnpj_dir = os.path.join(get_cnpj_cache_root(), cnpj)
     os.makedirs(cnpj_dir, exist_ok=True)
     return cnpj_dir
 

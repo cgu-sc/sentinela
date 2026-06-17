@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 def _project_preferences_dir() -> Path:
     project_root = Path(__file__).resolve().parents[3]
-    return project_root / "sentinela_cache" / "user_preferences"
+    return project_root / "modules" / "user_preferences"
 
 
 def _preference_dir_candidates() -> List[Path]:

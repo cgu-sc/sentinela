@@ -1013,3 +1013,22 @@ class GtinDetalhamentoMensalResponse(BaseModel):
     from_cache: bool = False
     read_time_ms: Optional[float] = None
 
+
+class NotaTecnicaReadinessModuleSchema(BaseModel):
+    key: str
+    label: str
+    scope: Literal["global", "cnpj"]
+    required: bool
+    ready: bool
+    missing_files: List[str] = Field(default_factory=list)
+    detail: Optional[str] = None
+
+
+class NotaTecnicaReadinessResponse(BaseModel):
+    cnpj: str
+    ready: bool
+    data_inicio: Optional[date] = None
+    data_fim: Optional[date] = None
+    modules: List[NotaTecnicaReadinessModuleSchema]
+    missing_modules: List[NotaTecnicaReadinessModuleSchema] = Field(default_factory=list)
+

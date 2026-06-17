@@ -75,6 +75,28 @@ function assertIntegrityAlerts(data) {
   });
 }
 
+function assertNotaTecnicaReadiness(data) {
+  if (
+    !data
+    || typeof data.ready !== 'boolean'
+    || !Array.isArray(data.modules)
+    || !Array.isArray(data.missing_modules)
+  ) {
+    throw new Error('Contrato invalido em nota-tecnica/readiness.');
+  }
+
+  data.modules.forEach((module, index) => {
+    ['key', 'label', 'scope', 'required', 'ready', 'missing_files'].forEach((field) => {
+      if (module?.[field] === undefined || module?.[field] === null) {
+        throw new Error(`Contrato invalido em nota-tecnica/readiness: modules[${index}].${field} obrigatorio.`);
+      }
+    });
+    if (!Array.isArray(module.missing_files)) {
+      throw new Error(`Contrato invalido em nota-tecnica/readiness: modules[${index}].missing_files deve ser lista.`);
+    }
+  });
+}
+
 function assertIndicadorBenchmarkLocal(data) {
   if (!data || !data.indicador || !Array.isArray(data.kpis) || !data.municipio || !data.regiao_saude) {
     throw new Error('Contrato invalido em indicadores/benchmark-local.');
@@ -315,6 +337,20 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     integrityAlertsLoaded: false,
     integrityAlertsRequestKey: null,
     integrityAlertsError: null,
+
+    // ── Prontidão da Nota Técnica ─────────────────────────────────────────────
+    notaTecnicaReadinessData: null,
+    notaTecnicaReadinessLoading: false,
+    notaTecnicaReadinessLoadedKey: null,
+    notaTecnicaReadinessRequestKey: null,
+    notaTecnicaReadinessError: null,
+
+    // ── Prontidão do Relatório PDF ───────────────────────────────────────────
+    relatorioPdfReadinessData: null,
+    relatorioPdfReadinessLoading: false,
+    relatorioPdfReadinessLoadedKey: null,
+    relatorioPdfReadinessRequestKey: null,
+    relatorioPdfReadinessError: null,
 
     // ── Teia Societária (Grafo de Relacionamentos) ────────────────────────────
     networkData:    null,
@@ -1055,6 +1091,82 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
+    async fetchNotaTecnicaReadiness(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+      if (
+        !clean
+        || this.notaTecnicaReadinessLoadedKey === key
+        || this.notaTecnicaReadinessRequestKey === key
+      ) return this.notaTecnicaReadinessData;
+
+      this.notaTecnicaReadinessLoading = true;
+      this.notaTecnicaReadinessRequestKey = key;
+      this.notaTecnicaReadinessError = null;
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+
+        const { data } = await axios.get(API_ENDPOINTS.analyticsNotaTecnicaReadiness(clean), { params });
+        assertNotaTecnicaReadiness(data);
+        if (this.notaTecnicaReadinessRequestKey !== key) return null;
+        this.notaTecnicaReadinessData = data;
+        this.notaTecnicaReadinessLoadedKey = key;
+        return data;
+      } catch (e) {
+        if (this.notaTecnicaReadinessRequestKey !== key) return null;
+        console.error('Erro ao verificar prontidao da Nota Tecnica:', e);
+        this.notaTecnicaReadinessError = e?.response?.data?.detail || e?.message || ERROR_MSG;
+        this.notaTecnicaReadinessData = null;
+        return null;
+      } finally {
+        if (this.notaTecnicaReadinessRequestKey === key) {
+          this.notaTecnicaReadinessLoading = false;
+          this.notaTecnicaReadinessRequestKey = null;
+        }
+      }
+    },
+
+    async fetchRelatorioPdfReadiness(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+      if (
+        !clean
+        || this.relatorioPdfReadinessLoadedKey === key
+        || this.relatorioPdfReadinessRequestKey === key
+      ) return this.relatorioPdfReadinessData;
+
+      this.relatorioPdfReadinessLoading = true;
+      this.relatorioPdfReadinessRequestKey = key;
+      this.relatorioPdfReadinessError = null;
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+
+        const { data } = await axios.get(API_ENDPOINTS.analyticsRelatorioPdfReadiness(clean), { params });
+        assertNotaTecnicaReadiness(data);
+        if (this.relatorioPdfReadinessRequestKey !== key) return null;
+        this.relatorioPdfReadinessData = data;
+        this.relatorioPdfReadinessLoadedKey = key;
+        return data;
+      } catch (e) {
+        if (this.relatorioPdfReadinessRequestKey !== key) return null;
+        console.error('Erro ao verificar prontidao do Relatorio PDF:', e);
+        this.relatorioPdfReadinessError = e?.response?.data?.detail || e?.message || ERROR_MSG;
+        this.relatorioPdfReadinessData = null;
+        return null;
+      } finally {
+        if (this.relatorioPdfReadinessRequestKey === key) {
+          this.relatorioPdfReadinessLoading = false;
+          this.relatorioPdfReadinessRequestKey = null;
+        }
+      }
+    },
+
     async expandNetworkNode(cnpj, targetCnpj, inicio = null, fim = null) {
       if (!cnpj || !targetCnpj) return null;
       try {
@@ -1484,6 +1596,18 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.integrityAlertsLoaded = false;
       this.integrityAlertsRequestKey = null;
       this.integrityAlertsError = null;
+
+      this.notaTecnicaReadinessData = null;
+      this.notaTecnicaReadinessLoading = false;
+      this.notaTecnicaReadinessLoadedKey = null;
+      this.notaTecnicaReadinessRequestKey = null;
+      this.notaTecnicaReadinessError = null;
+
+      this.relatorioPdfReadinessData = null;
+      this.relatorioPdfReadinessLoading = false;
+      this.relatorioPdfReadinessLoadedKey = null;
+      this.relatorioPdfReadinessRequestKey = null;
+      this.relatorioPdfReadinessError = null;
 
       this.networkData    = null;
       this.networkLoading = false;

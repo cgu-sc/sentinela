@@ -94,6 +94,12 @@ const {
   integrityAlertsData,
   integrityAlertsLoading,
   integrityAlertsError,
+  notaTecnicaReadinessData,
+  notaTecnicaReadinessLoading,
+  notaTecnicaReadinessError,
+  relatorioPdfReadinessData,
+  relatorioPdfReadinessLoading,
+  relatorioPdfReadinessError,
 } =
   storeToRefs(cnpjDetailStore);
 
@@ -142,8 +148,34 @@ const qtdMunicipiosRegiao = computed(
     null,
 );
 
+const formatMissingModules = (readiness) =>
+  (readiness?.missing_modules ?? [])
+    .map((module) => module.label)
+    .filter(Boolean);
+
+const ensureRelatorioPdfReady = async () => {
+  const { inicio, fim } = getApiParams();
+  const readiness = await cnpjDetailStore.fetchRelatorioPdfReadiness(cnpj.value, inicio, fim);
+  if (readiness?.ready === true) return true;
+
+  const missingLabels = formatMissingModules(readiness);
+  toast.add({
+    severity: "warn",
+    summary: "Relatório PDF indisponível",
+    detail: missingLabels.length
+      ? `Módulos pendentes: ${missingLabels.join(", ")}.`
+      : cnpjDetailStore.relatorioPdfReadinessError || "Não foi possível verificar os módulos do Relatório PDF.",
+    life: 8000,
+  });
+  return false;
+};
+
 const handleExport = async () => {
   try {
+    if (!(await ensureRelatorioPdfReady())) {
+      return;
+    }
+
     const { inicio, fim, volumeAtipicoPercentual } = getApiParams();
     const payload = await loadCnpjPdfReportData({
       cnpj: cnpj.value,
@@ -210,8 +242,29 @@ const downloadNotaTecnica = async (dadosNota = {}) => {
   }
 };
 
+const ensureNotaTecnicaReady = async () => {
+  const { inicio, fim } = getApiParams();
+  const readiness = await cnpjDetailStore.fetchNotaTecnicaReadiness(cnpj.value, inicio, fim);
+  if (readiness?.ready === true) return true;
+
+  const missingLabels = formatMissingModules(readiness);
+  toast.add({
+    severity: "warn",
+    summary: "Nota Técnica indisponível",
+    detail: missingLabels.length
+      ? `Módulos pendentes: ${missingLabels.join(", ")}.`
+      : cnpjDetailStore.notaTecnicaReadinessError || "Não foi possível verificar os módulos da Nota Técnica.",
+    life: 8000,
+  });
+  return false;
+};
+
 const handleGenerateNote = async ({ skipRegionalCheck = false, dadosNota = {} } = {}) => {
   try {
+    if (!skipRegionalCheck && !(await ensureNotaTecnicaReady())) {
+      return;
+    }
+
     if (!skipRegionalCheck) {
       await notaTecnicaConfig.ensureLoaded();
       pendingNoteGeneration.value = true;
@@ -427,6 +480,8 @@ watch(
     if (newCnpj) {
       await Promise.all([
         cnpjDetailStore.fetchIntegrityAlerts(newCnpj, inicio, fim, volumeAtipicoPercentual),
+        cnpjDetailStore.fetchNotaTecnicaReadiness(newCnpj, inicio, fim),
+        cnpjDetailStore.fetchRelatorioPdfReadiness(newCnpj, inicio, fim),
         loadActiveTabData(perfSession, "initial"),
       ]);
     }
@@ -458,12 +513,16 @@ watch(
       fim,
     });
     cnpjDetailStore.fetchBootstrap(cnpj.value, inicio, fim)
-      .then(() => cnpjDetailStore.fetchIntegrityAlerts(
-        cnpj.value,
-        inicio,
-        fim,
-        volumeAtipicoPercentual,
-      ))
+      .then(() => Promise.all([
+        cnpjDetailStore.fetchIntegrityAlerts(
+          cnpj.value,
+          inicio,
+          fim,
+          volumeAtipicoPercentual,
+        ),
+        cnpjDetailStore.fetchNotaTecnicaReadiness(cnpj.value, inicio, fim),
+        cnpjDetailStore.fetchRelatorioPdfReadiness(cnpj.value, inicio, fim),
+      ]))
       .then(() => loadActiveTabData(perfSession, "period_change"))
       .then(() => {
         if (activePerfSession.value?.sessionId !== perfSession?.sessionId) return;
@@ -602,6 +661,12 @@ watch(
       :integrity-alerts="integrityAlertsData"
       :integrity-alerts-loading="integrityAlertsLoading"
       :integrity-alerts-error="integrityAlertsError"
+      :note-readiness="notaTecnicaReadinessData"
+      :note-readiness-loading="notaTecnicaReadinessLoading"
+      :note-readiness-error="notaTecnicaReadinessError"
+      :pdf-readiness="relatorioPdfReadinessData"
+      :pdf-readiness-loading="relatorioPdfReadinessLoading"
+      :pdf-readiness-error="relatorioPdfReadinessError"
       @export="handleExport"
       @generate-note="handleGenerateNote"
       @navigate-section="navigateToSection"

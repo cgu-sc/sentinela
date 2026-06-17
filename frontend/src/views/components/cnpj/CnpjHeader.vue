@@ -51,6 +51,12 @@ const props = defineProps({
   integrityAlerts: { type: Object, default: null },
   integrityAlertsLoading: { type: Boolean, default: false },
   integrityAlertsError: { type: String, default: null },
+  noteReadiness: { type: Object, default: null },
+  noteReadinessLoading: { type: Boolean, default: false },
+  noteReadinessError: { type: String, default: null },
+  pdfReadiness: { type: Object, default: null },
+  pdfReadinessLoading: { type: Boolean, default: false },
+  pdfReadinessError: { type: String, default: null },
 });
 
 const emit = defineEmits(["export", "generateNote", "navigate-section"]);
@@ -240,6 +246,57 @@ const openIntegrityDialog = () => {
     showIntegrityDialog.value = true;
   }
 };
+
+const noteMissingModules = computed(() =>
+  (props.noteReadiness?.missing_modules ?? [])
+    .map((module) => module.label)
+    .filter(Boolean),
+);
+
+const isNoteReady = computed(() => props.noteReadiness?.ready === true);
+
+const isNoteButtonDisabled = computed(() =>
+  props.isGeneratingNote
+  || props.noteReadinessLoading
+  || !isNoteReady.value,
+);
+
+const noteTooltip = computed(() => {
+  if (props.isGeneratingNote) return "Gerando Nota Técnica";
+  if (props.noteReadinessLoading || !props.noteReadiness) {
+    return "Verificando módulos da Nota Técnica";
+  }
+  if (isNoteReady.value) return "Gerar Nota Técnica";
+  if (noteMissingModules.value.length) {
+    return `Nota Técnica indisponível. Módulos pendentes: ${noteMissingModules.value.join(", ")}.`;
+  }
+  return props.noteReadinessError || "Nota Técnica indisponível";
+});
+const pdfMissingModules = computed(() =>
+  (props.pdfReadiness?.missing_modules ?? [])
+    .map((module) => module.label)
+    .filter(Boolean),
+);
+
+const isPdfReady = computed(() => props.pdfReadiness?.ready === true);
+
+const isPdfButtonDisabled = computed(() =>
+  props.isExporting
+  || props.pdfReadinessLoading
+  || !isPdfReady.value,
+);
+
+const pdfTooltip = computed(() => {
+  if (props.isExporting) return "Gerando Relatório PDF";
+  if (props.pdfReadinessLoading || !props.pdfReadiness) {
+    return "Verificando módulos do Relatório PDF";
+  }
+  if (isPdfReady.value) return "Gerar Relatório PDF";
+  if (pdfMissingModules.value.length) {
+    return `Relatório PDF indisponível. Módulos pendentes: ${pdfMissingModules.value.join(", ")}.`;
+  }
+  return props.pdfReadinessError || "Relatório PDF indisponível";
+});
 </script>
 
 <template>
@@ -581,18 +638,18 @@ const openIntegrityDialog = () => {
           <button
             class="list-btn list-btn--icon-only list-btn--export"
             @click="emit('export')"
-            :disabled="isExporting"
-            v-tooltip.bottom="'Gerar Relatório PDF'"
+            :disabled="isPdfButtonDisabled"
+            v-tooltip.bottom="pdfTooltip"
           >
-            <i :class="isExporting ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+            <i :class="(isExporting || pdfReadinessLoading) ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
           </button>
           <button
             class="list-btn list-btn--icon-only list-btn--note"
             @click="emit('generateNote')"
-            :disabled="isGeneratingNote"
-            v-tooltip.bottom="'Gerar Nota Técnica'"
+            :disabled="isNoteButtonDisabled"
+            v-tooltip.bottom="noteTooltip"
           >
-            <i :class="isGeneratingNote ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
+            <i :class="(isGeneratingNote || noteReadinessLoading) ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
           </button>
           <button
             class="list-btn list-btn--icon-only"
@@ -809,7 +866,7 @@ const openIntegrityDialog = () => {
   box-shadow: 0 4px 12px
     color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
-.list-btn--export:disabled {
+.list-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

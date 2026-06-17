@@ -21,6 +21,7 @@ from ..schemas.analytics import (
     IndicadorEvolucaoBenchmarkResponse,
     ClinicoIncompatibilidadeResponse,
     AlertasPanoramaResponse,
+    NotaTecnicaReadinessResponse,
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -660,6 +661,32 @@ def get_nota_tecnica_regionais():
     return AnalyticsService.list_nota_tecnica_regionais()
 
 
+@router.get("/cnpj/{cnpj}/nota-tecnica/readiness", response_model=NotaTecnicaReadinessResponse)
+def get_nota_tecnica_readiness(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Verifica se todos os modulos de cache obrigatorios para a Nota Tecnica estao prontos."""
+    try:
+        return AnalyticsService.get_nota_tecnica_readiness(cnpj, data_inicio, data_fim)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/cnpj/{cnpj}/relatorio-pdf/readiness", response_model=NotaTecnicaReadinessResponse)
+def get_relatorio_pdf_readiness(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Verifica se todos os modulos de cache obrigatorios para o relatorio PDF estao prontos."""
+    try:
+        return AnalyticsService.get_relatorio_pdf_readiness(cnpj, data_inicio, data_fim)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/cnpj/{cnpj}/nota-tecnica")
 def get_nota_tecnica(
     cnpj: str,
@@ -673,6 +700,11 @@ def get_nota_tecnica(
 ):
     """Gera e retorna o download da Nota Técnica Preliminar (.docx)."""
     try:
+        readiness = AnalyticsService.get_nota_tecnica_readiness(cnpj, data_inicio, data_fim)
+        if not readiness["ready"]:
+            missing = ", ".join(module["label"] for module in readiness["missing_modules"])
+            raise RuntimeError(f"Nota Tecnica indisponivel. Modulos pendentes: {missing}.")
+
         file_stream = AnalyticsService.generate_nota_tecnica(
             db,
             cnpj,

@@ -76,7 +76,7 @@ const cnaeAlertLabel = computed(() =>
 
 const dispersaoUfNaoVizinhaLabel = computed(() => {
   if (props.cadastro?.is_dispersao_uf_nao_vizinha) {
-    return `${formatPercent(props.cadastro?.pct_dispersao_uf_nao_vizinha)} para UFs sem divisa`;
+    return `${formatPercent(props.cadastro?.pct_dispersao_uf_nao_vizinha)} para UFs sem fronteira`;
   }
   return "Sem alerta identificado";
 });
@@ -184,7 +184,7 @@ const dispersaoUfNaoVizinhaLabel = computed(() => {
             <strong>{{ displayValue(geoData?.no_regiao_saude) }}</strong>
           </div>
           <div class="field-item">
-            <span>Dispersão UF sem divisa</span>
+            <span>Dispersão UF sem fronteira</span>
             <strong
               class="geo-status"
               :class="{ 'geo-status--alert': cadastro?.is_dispersao_uf_nao_vizinha }"

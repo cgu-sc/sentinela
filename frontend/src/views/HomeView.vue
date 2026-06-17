@@ -197,6 +197,12 @@ const financialCardMetrics = computed(() => [
   financialScopeMetric.value,
 ]);
 
+const displayAlertasPanorama = computed(() => {
+  if (alertasPanorama.value) return alertasPanorama.value;
+  return null;
+});
+
+const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !displayAlertasPanorama.value);
 
 </script>
 
@@ -331,18 +337,18 @@ const financialCardMetrics = computed(() => [
             </div>
             <div class="integrity-header__text">
               <span class="priority-eyebrow">Integridade</span>
-              <strong>Panorama de Alertas</strong>
+              <strong>Quadro de Alertas</strong>
             </div>
           </div>
           <div class="integrity-hero">
             <span class="integrity-hero__value">
-              {{ alertasPanoramaLoading ? '...' : (alertasPanorama?.total_cnpjs_com_alerta ?? '—') }}
+              {{ displayAlertasPanorama?.total_cnpjs_com_alerta ?? (alertasPanoramaLoading ? '...' : '—') }}
             </span>
             <span class="integrity-hero__label">estabelecimentos com ao menos 1 alerta identificado</span>
           </div>
-          <div v-if="alertasPanorama && !alertasPanoramaLoading" class="alerts-grid">
+          <div v-if="displayAlertasPanorama" class="alerts-grid">
             <div
-              v-for="alerta in alertasPanorama.alertas"
+              v-for="alerta in displayAlertasPanorama.alertas"
               :key="alerta.tipo"
               class="alert-cell"
               :class="`alert-cell--${alerta.severidade}`"
@@ -351,7 +357,7 @@ const financialCardMetrics = computed(() => [
               <span class="alert-cell__titulo">{{ alerta.titulo }}</span>
             </div>
           </div>
-          <div v-else-if="alertasPanoramaLoading" class="alerts-grid alerts-grid--loading">
+          <div v-else-if="showAlertasSkeleton" class="alerts-grid alerts-grid--loading">
             <div v-for="n in 6" :key="n" class="alert-cell alert-cell--skeleton" />
           </div>
         </article>

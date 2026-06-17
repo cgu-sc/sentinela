@@ -23,7 +23,6 @@ import NotaTecnicaRegionalDialog from "./components/nota-tecnica/NotaTecnicaRegi
 import { storeToRefs } from "pinia";
 import TabView from "primevue/tabview";
 import TabPanel from "primevue/tabpanel";
-import ProgressSpinner from "primevue/progressspinner";
 import { useToast } from "primevue/usetoast";
 import { API_ENDPOINTS } from "@/config/api";
 import { getApiErrorMessage } from "@/utils/apiErrors";
@@ -555,15 +554,8 @@ watch(
     <Transition name="fade-blur">
       <div v-if="isInitialLoading" class="global-loading-overlay">
         <div class="loader-content">
-          <ProgressSpinner
-            style="width: 64px; height: 64px"
-            strokeWidth="3"
-            animationDuration=".8s"
-          />
-          <div class="loader-text">
-            <h3>Sincronizando Dados</h3>
-            <p>Buscando indicadores e perfil cronológico...</p>
-          </div>
+          <i class="pi pi-spin pi-spinner" aria-hidden="true" />
+          <span>Carregando estabelecimento...</span>
         </div>
       </div>
     </Transition>
@@ -1180,9 +1172,9 @@ watch(
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: color-mix(in srgb, var(--body-bg) 75%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg-color) 72%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1195,44 +1187,37 @@ watch(
   /* Sincronização com as transições do layout global */
   transition:
     padding-left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.4s ease;
+    opacity 0.18s ease;
 }
 
 .loader-content {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  gap: 1.5rem;
-  text-align: center;
-}
-
-.loader-text h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--primary-color);
-  letter-spacing: -0.01em;
-}
-
-.loader-text p {
-  margin: 0.25rem 0 0;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color) 12%, transparent);
   font-size: 0.9rem;
-  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.loader-content i {
+  color: var(--primary-color);
+  font-size: 1rem;
 }
 
 /* Transição suave */
 .fade-blur-enter-active,
 .fade-blur-leave-active {
-  transition:
-    opacity 0.5s ease,
-    backdrop-filter 0.5s ease;
+  transition: opacity 0.18s ease;
 }
 
 .fade-blur-enter-from,
 .fade-blur-leave-to {
   opacity: 0;
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
 }
 </style>
 

@@ -51,19 +51,44 @@ def _filtrar_id_cnpjs_por_escopo(
     return perfil.filter(mask).get_column("id_cnpj")
 
 
-def _count_distinct_cnpjs(df: pl.DataFrame, col: str = "id_cnpj") -> int:
-    return df.get_column(col).n_unique()
+def _empty_id_cnpjs() -> pl.Series:
+    return pl.Series("id_cnpj", [], dtype=pl.Int64)
+
+
+def _distinct_id_cnpjs(df: pl.DataFrame, col: str = "id_cnpj") -> pl.Series:
+    if df.is_empty():
+        return _empty_id_cnpjs()
+    return df.select(pl.col(col).cast(pl.Int64).alias("id_cnpj")).unique().get_column("id_cnpj")
+
+
+def _ids_por_cnpj(cnpjs: pl.Series) -> pl.Series:
+    if cnpjs.is_empty():
+        return _empty_id_cnpjs()
+
+    perfil = get_df_perfil_estabelecimento()
+    required = {"id_cnpj", "cnpj"}
+    missing = required - set(perfil.columns)
+    if missing:
+        raise RuntimeError(f"perfil_estabelecimento sem colunas obrigatorias para mapear CNPJ: {missing}")
+
+    return (
+        perfil
+        .filter(pl.col("cnpj").is_in(cnpjs))
+        .select(pl.col("id_cnpj").cast(pl.Int64).alias("id_cnpj"))
+        .unique()
+        .get_column("id_cnpj")
+    )
 
 
 # ---------------------------------------------------------------------------
 # Contadores por tipo de alerta
 # ---------------------------------------------------------------------------
 
-def _contar_volume_atipico(
+def _ids_volume_atipico(
     id_cnpjs: pl.Series | None,
     ano_base_min: int | None,
     ano_base_max: int | None,
-) -> int:
+) -> pl.Series:
     df = get_df_matriz_risco()
     required = {"id_cnpj", "volume_atipico_total_semestres_atipicos"}
     missing = required - set(df.columns)
@@ -78,27 +103,27 @@ def _contar_volume_atipico(
     if id_cnpjs is not None:
         df = df.filter(pl.col("id_cnpj").is_in(id_cnpjs))
 
-    return _count_distinct_cnpjs(df)
+    return _distinct_id_cnpjs(df)
 
 
-def _contar_cnae_incompativel(id_cnpjs: pl.Series | None) -> int:
+def _ids_cnae_incompativel(id_cnpjs: pl.Series | None) -> pl.Series:
     perfil = get_df_perfil_estabelecimento()
     if "is_cnae_incompativel_farmaceutico" not in perfil.columns:
-        return 0
+        return _empty_id_cnpjs()
 
     df = perfil.filter(pl.col("is_cnae_incompativel_farmaceutico") == True)  # noqa: E712
     if id_cnpjs is not None:
         df = df.filter(pl.col("id_cnpj").is_in(id_cnpjs))
 
-    return _count_distinct_cnpjs(df)
+    return _distinct_id_cnpjs(df)
 
 
-def _contar_dispersao_uf_nao_vizinha(
+def _ids_dispersao_uf_nao_vizinha(
     id_cnpjs: pl.Series | None,
     uf_farmacia_filtro: str | None,
     ano_base_min: int | None,
     ano_base_max: int | None,
-) -> int:
+) -> pl.Series:
     """
     Conta CNPJs onde vendas para UFs não-vizinhas superam o limiar de 5%.
     Usa scan lazy do geografico_origem_uf com filtro de ano_base.
@@ -122,7 +147,7 @@ def _contar_dispersao_uf_nao_vizinha(
 
     df = lazy.select(["id_cnpj", "uf_farmacia", "uf_paciente", "valor_autorizado"]).collect()
     if df.is_empty():
-        return 0
+        return _empty_id_cnpjs()
 
     # Para cada (id_cnpj, uf_farmacia): calcula % de vendas para UFs não-vizinhas
     totais = (
@@ -166,15 +191,15 @@ def _contar_dispersao_uf_nao_vizinha(
     )
 
     alertas_df = joined.filter(pl.col("pct_distante") > LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT)
-    return _count_distinct_cnpjs(alertas_df)
+    return _distinct_id_cnpjs(alertas_df)
 
 
-def _contar_socio_falecido(id_cnpjs: pl.Series | None) -> int:
+def _ids_socio_falecido(id_cnpjs: pl.Series | None) -> pl.Series:
     socios = get_df_dados_socios()
     required = {"cnpj", "is_falecido", "indicador_socio", "data_exclusao_sociedade"}
     missing = required - set(socios.columns)
     if missing:
-        return 0
+        return _empty_id_cnpjs()
 
     df = socios.filter(
         (pl.col("indicador_socio") == "PF")
@@ -194,16 +219,16 @@ def _contar_socio_falecido(id_cnpjs: pl.Series | None) -> int:
         )
         df = df.filter(pl.col("cnpj").is_in(cnpjs_validos))
 
-    return df.get_column("cnpj").n_unique()
+    return _ids_por_cnpj(df.get_column("cnpj").unique())
 
 
-def _contar_socio_beneficio_social(id_cnpjs: pl.Series | None) -> int:
+def _ids_socio_beneficio_social(id_cnpjs: pl.Series | None) -> pl.Series:
     """Conta CNPJs com sócio inscrito no CadÚnico OU beneficiário do Seguro Defeso."""
     perfil = get_df_perfil_estabelecimento()
     tem_cadunico = "has_cadunico_direto" in perfil.columns
     tem_seguro = "has_seguro_defeso_direto" in perfil.columns
     if not tem_cadunico and not tem_seguro:
-        return 0
+        return _empty_id_cnpjs()
 
     if tem_cadunico and tem_seguro:
         mask = (pl.col("has_cadunico_direto") == True) | (pl.col("has_seguro_defeso_direto") == True)  # noqa: E712
@@ -216,20 +241,20 @@ def _contar_socio_beneficio_social(id_cnpjs: pl.Series | None) -> int:
     if id_cnpjs is not None:
         df = df.filter(pl.col("id_cnpj").is_in(id_cnpjs))
 
-    return _count_distinct_cnpjs(df)
+    return _distinct_id_cnpjs(df)
 
 
-def _contar_socio_idade_atipica(
+def _ids_socio_idade_atipica(
     id_cnpjs: pl.Series | None,
     data_referencia: date,
-) -> int:
+) -> pl.Series:
     """
     Conta CNPJs com ao menos um sócio ativo PF com idade < 21 ou > 80 anos.
     """
     socios = get_df_dados_socios()
     required = {"cnpj", "indicador_socio", "data_exclusao_sociedade", "data_nascimento_socio"}
     if not required.issubset(set(socios.columns)):
-        return 0
+        return _empty_id_cnpjs()
 
     df = socios.filter(
         (pl.col("indicador_socio") == "PF")
@@ -238,7 +263,7 @@ def _contar_socio_idade_atipica(
     )
 
     if df.is_empty():
-        return 0
+        return _empty_id_cnpjs()
 
     ref = pl.lit(data_referencia)
     df = df.with_columns(
@@ -261,7 +286,7 @@ def _contar_socio_idade_atipica(
         )
         df = df.filter(pl.col("cnpj").is_in(cnpjs_validos))
 
-    return df.get_column("cnpj").n_unique()
+    return _ids_por_cnpj(df.get_column("cnpj").unique())
 
 
 # ---------------------------------------------------------------------------
@@ -285,20 +310,24 @@ def get_alertas_panorama(
 
     id_cnpjs = _filtrar_id_cnpjs_por_escopo(uf, regiao_id, id_ibge7)
 
-    contagens = {
-        "volume_atipico": _contar_volume_atipico(id_cnpjs, ano_base_min, ano_base_max),
-        "cnpj_cnae_farmacia_ausente": _contar_cnae_incompativel(id_cnpjs),
-        "cnpj_dispersao_uf_nao_vizinha": _contar_dispersao_uf_nao_vizinha(
+    ids_por_alerta = {
+        "volume_atipico": _ids_volume_atipico(id_cnpjs, ano_base_min, ano_base_max),
+        "cnpj_cnae_farmacia_ausente": _ids_cnae_incompativel(id_cnpjs),
+        "cnpj_dispersao_uf_nao_vizinha": _ids_dispersao_uf_nao_vizinha(
             id_cnpjs, uf, ano_base_min, ano_base_max
         ),
-        "socio_falecido": _contar_socio_falecido(id_cnpjs),
-        "socio_beneficio_social": _contar_socio_beneficio_social(id_cnpjs),
-        "socio_idade_atipica": _contar_socio_idade_atipica(id_cnpjs, data_ref),
+        "socio_falecido": _ids_socio_falecido(id_cnpjs),
+        "socio_beneficio_social": _ids_socio_beneficio_social(id_cnpjs),
+        "socio_idade_atipica": _ids_socio_idade_atipica(id_cnpjs, data_ref),
+    }
+    contagens = {
+        tipo: ids.n_unique()
+        for tipo, ids in ids_por_alerta.items()
     }
 
     DEFINICOES = [
         ("volume_atipico",                "Aumento atípico de vendas",                    "critico"),
-        ("cnpj_dispersao_uf_nao_vizinha", "Vendas para UFs sem divisa",                  "critico"),
+        ("cnpj_dispersao_uf_nao_vizinha", "Vendas para UFs sem fronteira",              "critico"),
         ("cnpj_cnae_farmacia_ausente",    "CNAE incompatível",                            "atencao"),
         ("socio_falecido",                "Sócio ativo falecido",                         "atencao"),
         ("socio_beneficio_social",        "Sócio em programa social (CadÚnico/Defeso)",   "atencao"),
@@ -315,10 +344,12 @@ def get_alertas_panorama(
         for tipo, titulo, severidade in DEFINICOES
     ]
 
-    # CNPJs com pelo menos 1 alerta (sem double-count entre tipos)
-    # Aproximado: union dos conjuntos não é disponível sem reconstruir os sets.
-    # Usamos max() como lower-bound conservador; é suficiente para o dashboard.
-    total_com_alerta = max(contagens.values()) if contagens else 0
+    # CNPJs com pelo menos 1 alerta, sem dupla contagem entre tipos.
+    total_com_alerta = (
+        pl.concat(list(ids_por_alerta.values())).n_unique()
+        if ids_por_alerta
+        else 0
+    )
 
     total_criticos = sum(
         a.qtd_cnpjs for a in alertas if a.severidade == "critico"

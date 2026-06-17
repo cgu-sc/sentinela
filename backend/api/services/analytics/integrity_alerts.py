@@ -188,7 +188,7 @@ def get_integrity_alerts(
                 entidade_id=cadastro.cnpj,
                 entidade_nome=cadastro.nome_fantasia or cadastro.razao_social or cadastro.cnpj,
                 severidade="atencao",
-                titulo="Vendas para UFs sem divisa",
+                titulo="Vendas para UFs sem fronteira",
                 fonte="Dispersao geografica por UF",
                 data_referencia=(
                     cadastro.data_processamento.date()

@@ -1,7 +1,22 @@
 import { NETWORK_ALERT_COLORS, NETWORK_NODE_STYLES } from "./networkConstants";
 
-export function buildNetworkStylesheet() {
+export function buildNetworkStylesheet({ isDark = true } = {}) {
   const styles = [];
+  const labelColors = isDark
+    ? {
+        node: "#e2e8f0",
+        nodeOutline: "#0f172a",
+        edge: "#94a3b8",
+        edgeOutline: "#0f172a",
+        inactiveEdge: "#fca5a5",
+      }
+    : {
+        node: "#1e293b",
+        nodeOutline: "#f8fafc",
+        edge: "#475569",
+        edgeOutline: "#f8fafc",
+        inactiveEdge: "#b91c1c",
+      };
   const deceasedMarker = `url("data:image/svg+xml;utf8,${encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
       <defs>
@@ -30,9 +45,9 @@ export function buildNetworkStylesheet() {
         "font-size": "12px",
         "font-family": "Inter, system-ui, sans-serif",
         "font-weight": "600",
-        color: "#e2e8f0",
+        color: labelColors.node,
         "text-outline-width": 2,
-        "text-outline-color": "#0f172a",
+        "text-outline-color": labelColors.nodeOutline,
         "text-margin-y": 4,
         "transition-property": "opacity, border-width, background-color",
         "transition-duration": "0.2s",
@@ -77,9 +92,9 @@ export function buildNetworkStylesheet() {
       "arrow-scale": 0.8,
       label: "data(label)",
       "font-size": "8px",
-      color: "#94a3b8",
+      color: labelColors.edge,
       "text-outline-width": 1.5,
-      "text-outline-color": "#0f172a",
+      "text-outline-color": labelColors.edgeOutline,
       "text-rotation": "autorotate",
       "transition-property": "opacity, line-color",
       "transition-duration": "0.2s",
@@ -149,7 +164,7 @@ export function buildNetworkStylesheet() {
       "background-offset-x": 0,
       "background-offset-y": 0,
       "background-opacity": 0.98,
-      "text-outline-color": "#1e293b",
+      "text-outline-color": labelColors.nodeOutline,
       "z-index": 12,
     },
   });
@@ -196,7 +211,7 @@ export function buildNetworkStylesheet() {
       "line-style": "dotted",
       "line-color": "#ef4444",
       "target-arrow-color": "#ef4444",
-      color: "#fca5a5",
+      color: labelColors.inactiveEdge,
       opacity: 0.65,
     },
   });

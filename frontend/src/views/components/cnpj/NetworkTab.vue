@@ -11,6 +11,7 @@ import {
 } from "vue";
 import { storeToRefs } from "pinia";
 import { useCnpjDetailStore } from "@/stores/cnpjDetail";
+import { useThemeStore } from "@/stores/theme";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import { useRoute } from "vue-router";
 import cytoscape from "cytoscape";
@@ -46,6 +47,7 @@ import { createCnpjPerfSession, logCnpjPerf } from "@/utils/cnpjPerfLogger";
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
 const cnpjDetailStore = useCnpjDetailStore();
+const themeStore = useThemeStore();
 const { getApiParams } = useFilterParameters();
 const { networkData, networkLoading, networkError } =
   storeToRefs(cnpjDetailStore);
@@ -1479,7 +1481,7 @@ async function buildGraph(data, { presentationState = null } = {}) {
   cy = cytoscape({
     container: cyContainer.value,
     elements,
-    style: buildNetworkStylesheet(),
+    style: buildNetworkStylesheet({ isDark: themeStore.isDark }),
     layout: { name: "preset" },
     minZoom: 0.18,
     maxZoom: 3,
@@ -1821,6 +1823,16 @@ watch(
 watch(networkSearch, () => {
   applyGraphHighlights();
 });
+
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (!cy) return;
+    cy.style()
+      .fromJson(buildNetworkStylesheet({ isDark: themeStore.isDark }))
+      .update();
+  },
+);
 
 function handleFiltersMenuOutsideClick(event) {
   const layersRoot = layersMenuRoot.value;

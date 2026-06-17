@@ -45,6 +45,7 @@ export const API_ENDPOINTS = {
   analyticsCadastro: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/cadastro`,
   analyticsSocios:   (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/socios`,
   analyticsIntegrityAlerts: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/alertas-integridade`,
+  analyticsAlertasPanorama: `${BASE_URL}/api/v1/analytics/alertas-panorama`,
   analyticsNetwork:  (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/network`,
   analyticsNetworkExpand: (cnpj, targetCnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/network/expand/${targetCnpj}`,
   analyticsNetworkLevel3: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/network/level/3`,

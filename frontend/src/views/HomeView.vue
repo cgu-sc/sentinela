@@ -22,9 +22,11 @@ const {
   isLoading,
   error,
   lastSync,
+  alertasPanorama,
+  alertasPanoramaLoading,
 } = storeToRefs(analyticsStore);
 
-useFetchAnalytics({ includeFatorRisco: true, includeProducaoSemestral: true });
+useFetchAnalytics({ includeFatorRisco: true, includeProducaoSemestral: true, includeAlertasPanorama: true });
 
 onMounted(() => {
   analyticsStore.fetchCacheStatus();
@@ -195,84 +197,49 @@ const financialCardMetrics = computed(() => [
   financialScopeMetric.value,
 ]);
 
-const priorityCards = computed(() => [
-  {
-    title: 'Status operacional',
-    eyebrow: 'Sistema',
-    value: statusInfo.value.label,
-    detail: 'Integridade dos módulos carregados',
-    metrics: statusCardMetrics.value,
-    metricsLayout: 'system',
-    icon: statusInfo.value.icon,
-    tone: statusInfo.value.tone,
-    hasModulePanel: true,
-  },
-  {
-    title: 'Escopo da análise',
-    eyebrow: 'Escopo monitorado',
-    value: getKpiValue('CNPJS'),
-    detail: 'CNPJs com movimentação',
-    metrics: coverageCardMetrics.value,
-    icon: 'pi pi-map',
-    tone: 'info',
-  },
-  {
-    title: 'Movimentação financeira',
-    eyebrow: 'Produção',
-    value: getKpiValue('VALOR DAS VENDAS'),
-    detail: 'valor movimentado no período selecionado',
-    metrics: financialCardMetrics.value,
-    icon: 'pi pi-money-bill',
-    tone: 'critical',
-  },
-]);
+
 </script>
 
 <template>
   <div class="dashboard-container">
     <section class="audit-priorities">
       <div class="priority-grid">
+        <!-- Card Sistema — template dedicado -->
         <article
-          v-for="card in priorityCards"
-          :key="card.title"
-          class="priority-card"
-          :class="[`priority-card--${card.tone}`, { 'priority-card--operational': card.hasModulePanel }]"
-          :tabindex="card.hasModulePanel ? 0 : undefined"
+          class="priority-card priority-card--operational priority-card--system"
+          :class="`priority-card--${statusInfo.tone}`"
+          tabindex="0"
         >
-          <div class="priority-icon">
-            <i :class="card.icon" />
-          </div>
-          <div class="priority-content">
-            <span class="priority-eyebrow">{{ card.eyebrow }}</span>
-            <strong>{{ card.title }}</strong>
-            <span class="priority-value">{{ card.value }}</span>
-            <p>{{ card.detail }}</p>
-            <div
-              v-if="card.metrics"
-              class="priority-metrics"
-              :class="card.metricsLayout ? `priority-metrics--${card.metricsLayout}` : null"
-            >
-              <div
-                v-for="metric in card.metrics"
-                :key="metric.label"
-                class="priority-metric"
-                :class="[metric.tone ? `priority-metric--${metric.tone}` : null, { 'priority-metric--wide': metric.wide }]"
-              >
-                <span>{{ metric.label }}</span>
-                <strong>{{ metric.value }}</strong>
-              </div>
+          <div class="system-header">
+            <div class="priority-icon">
+              <i :class="statusInfo.icon" />
+            </div>
+            <div class="system-header__text">
+              <span class="priority-eyebrow">Sistema</span>
+              <strong>Status operacional</strong>
             </div>
           </div>
-          <button
-            v-if="card.hasModulePanel"
-            type="button"
-            class="operational-toggle"
-            aria-label="Ver integridade dos módulos"
-            title="Ver integridade dos módulos"
-          >
-            <i class="pi pi-info-circle" />
-          </button>
-          <div v-if="card.hasModulePanel" class="operational-panel">
+
+          <div class="sys-status-row">
+            <span class="sys-status-badge" :class="`sys-status-badge--${statusInfo.tone}`">
+              {{ statusInfo.label }}
+            </span>
+          </div>
+
+          <div class="sys-info-list">
+            <div class="sys-info-row">
+              <i class="pi pi-database sys-info-icon" />
+              <span class="sys-info-label">Módulos</span>
+              <span class="sys-info-value">{{ cacheSummaryText }}</span>
+            </div>
+            <div class="sys-info-row">
+              <i class="pi pi-clock sys-info-icon" />
+              <span class="sys-info-label">Atualizado</span>
+              <span class="sys-info-value">{{ syncText }}</span>
+            </div>
+          </div>
+
+          <div class="operational-panel">
             <div class="operational-panel__header">
               <strong>Integridade dos módulos</strong>
               <span>{{ cacheSummaryText }}</span>
@@ -291,6 +258,101 @@ const priorityCards = computed(() => [
                 <strong>{{ module.loaded ? 'Carregado' : 'Não carregado' }}</strong>
               </div>
             </div>
+          </div>
+        </article>
+
+        <!-- Card Escopo da análise — template dedicado -->
+        <article class="priority-card priority-card--info priority-card--escopo">
+          <div class="escopo-header">
+            <div class="priority-icon">
+              <i class="pi pi-map" />
+            </div>
+            <div class="escopo-header__text">
+              <span class="priority-eyebrow">Escopo monitorado</span>
+              <strong>Escopo da análise</strong>
+            </div>
+          </div>
+          <div class="escopo-hero">
+            <span class="escopo-hero__value">{{ getKpiValue('CNPJS') }}</span>
+            <span class="escopo-hero__label">CNPJs com movimentação</span>
+          </div>
+          <div class="escopo-stats">
+            <div class="escopo-stat">
+              <span class="escopo-stat__label">Municípios</span>
+              <strong class="escopo-stat__value">{{ getKpiValue('MUNICIPIOS') }}</strong>
+            </div>
+            <div class="escopo-stat">
+              <span class="escopo-stat__label">UFs</span>
+              <strong class="escopo-stat__value">{{ ufCount || '—' }}</strong>
+            </div>
+            <div class="escopo-stat escopo-stat--wide">
+              <span class="escopo-stat__label">Período analisado</span>
+              <strong class="escopo-stat__value">{{ periodText }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <!-- Card Produção — template dedicado -->
+        <article class="priority-card priority-card--critical priority-card--financeiro">
+          <div class="financeiro-header">
+            <div class="priority-icon">
+              <i class="pi pi-money-bill" />
+            </div>
+            <div class="financeiro-header__text">
+              <span class="priority-eyebrow">Produção</span>
+              <strong>Movimentação financeira</strong>
+            </div>
+          </div>
+          <div class="financeiro-hero">
+            <span class="financeiro-hero__value">{{ getKpiValue('VALOR DAS VENDAS') }}</span>
+            <span class="financeiro-hero__label">valor movimentado no período selecionado</span>
+          </div>
+          <div class="financeiro-stats">
+            <div class="financeiro-stat financeiro-stat--critical">
+              <span class="financeiro-stat__label">Valor sem comprovação</span>
+              <strong class="financeiro-stat__value">{{ getKpiValue('SEM COMPROVACAO') }}</strong>
+            </div>
+            <div class="financeiro-stat financeiro-stat--critical">
+              <span class="financeiro-stat__label">% sem comprovação</span>
+              <strong class="financeiro-stat__value">{{ getKpiValue('% SEM COMPROVACAO') }}</strong>
+            </div>
+            <div class="financeiro-stat financeiro-stat--wide">
+              <span class="financeiro-stat__label">{{ financialScopeMetric.label }}</span>
+              <strong class="financeiro-stat__value">{{ financialScopeMetric.value }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <!-- 4º card: Panorama de Alertas -->
+        <article class="priority-card priority-card--warning priority-card--alerts priority-card--integrity">
+          <div class="integrity-header">
+            <div class="priority-icon">
+              <i :class="alertasPanoramaLoading ? 'pi pi-spin pi-spinner' : 'pi pi-shield'" />
+            </div>
+            <div class="integrity-header__text">
+              <span class="priority-eyebrow">Integridade</span>
+              <strong>Panorama de Alertas</strong>
+            </div>
+          </div>
+          <div class="integrity-hero">
+            <span class="integrity-hero__value">
+              {{ alertasPanoramaLoading ? '...' : (alertasPanorama?.total_cnpjs_com_alerta ?? '—') }}
+            </span>
+            <span class="integrity-hero__label">estabelecimentos com ao menos 1 alerta identificado</span>
+          </div>
+          <div v-if="alertasPanorama && !alertasPanoramaLoading" class="alerts-grid">
+            <div
+              v-for="alerta in alertasPanorama.alertas"
+              :key="alerta.tipo"
+              class="alert-cell"
+              :class="`alert-cell--${alerta.severidade}`"
+            >
+              <span class="alert-cell__count">{{ alerta.qtd_cnpjs }}</span>
+              <span class="alert-cell__titulo">{{ alerta.titulo }}</span>
+            </div>
+          </div>
+          <div v-else-if="alertasPanoramaLoading" class="alerts-grid alerts-grid--loading">
+            <div v-for="n in 6" :key="n" class="alert-cell alert-cell--skeleton" />
           </div>
         </article>
       </div>
@@ -340,8 +402,9 @@ const priorityCards = computed(() => [
 
 .priority-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1.35fr);
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.7fr);
   gap: 1rem;
+  align-items: stretch;
 }
 
 .floating-start-button {
@@ -397,15 +460,15 @@ const priorityCards = computed(() => [
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 0.8rem;
+  gap: 0.65rem;
   align-items: flex-start;
-  min-height: 8.8rem;
-  padding: 1rem;
+  padding: 0.75rem 0.9rem;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   color: inherit;
   overflow: hidden;
+  min-height: 16rem;
 }
 
 .priority-card::before {
@@ -616,7 +679,7 @@ const priorityCards = computed(() => [
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.26rem;
+  gap: 0.18rem;
 }
 
 .priority-content strong {
@@ -627,7 +690,7 @@ const priorityCards = computed(() => [
 
 .priority-value {
   color: var(--text-color-85);
-  font-size: 1.55rem;
+  font-size: 1.35rem;
   font-weight: 600;
   line-height: 1.15;
   white-space: nowrap;
@@ -638,8 +701,8 @@ const priorityCards = computed(() => [
 .priority-metrics {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.55fr) minmax(0, 1.65fr);
-  gap: 0.45rem;
-  margin-top: 0.35rem;
+  gap: 0.35rem;
+  margin-top: 0.28rem;
 }
 
 .priority-metrics--system {
@@ -650,10 +713,10 @@ const priorityCards = computed(() => [
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
+  gap: 0.18rem;
   align-items: flex-start;
   justify-content: center;
-  padding: 0.52rem 0.58rem;
+  padding: 0.38rem 0.5rem;
   border: 1px solid color-mix(in srgb, var(--priority-color) 16%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--priority-color) 6%, transparent);
@@ -716,6 +779,425 @@ const priorityCards = computed(() => [
   align-items: stretch;
   flex: 0.88 1 0;
   min-height: 0;
+}
+
+/* ── Card Sistema dedicado ── */
+.priority-card--system {
+  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.system-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.system-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.system-header__text strong {
+  color: var(--text-color-85);
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.sys-status-row {
+  display: flex;
+  align-items: center;
+  margin: 0.1rem 0 0.05rem;
+}
+
+.sys-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.sys-status-badge--success {
+  color: var(--status-success);
+  border-color: color-mix(in srgb, var(--status-success) 30%, transparent);
+  background: color-mix(in srgb, var(--status-success) 10%, transparent);
+}
+
+.sys-status-badge--warning {
+  color: var(--risk-medium);
+  border-color: color-mix(in srgb, var(--risk-medium) 30%, transparent);
+  background: color-mix(in srgb, var(--risk-medium) 10%, transparent);
+}
+
+.sys-status-badge--loading {
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+.sys-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.sys-info-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.4rem;
+  row-gap: 0.05rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
+  background: color-mix(in srgb, var(--card-border) 18%, transparent);
+  min-width: 0;
+}
+
+.sys-info-icon {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  grid-row: 1 / 3;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.sys-info-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.sys-info-value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-color-85);
+  min-width: 0;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.priority-card--alerts {
+  --priority-color: var(--risk-medium);
+}
+
+/* ── Card Integridade dedicado ── */
+.priority-card--integrity {
+  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.integrity-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.integrity-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.integrity-header__text strong {
+  color: var(--text-color-85);
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.integrity-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.integrity-hero__value {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-color-85);
+  letter-spacing: -0.01em;
+}
+
+.integrity-hero__label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+/* ── Card Escopo dedicado ── */
+.priority-card--escopo {
+  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  overflow: visible;
+}
+
+.escopo-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.escopo-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.escopo-header__text strong {
+  color: var(--text-color-85);
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.escopo-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.escopo-hero__value {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-color-85);
+  letter-spacing: -0.01em;
+}
+
+.escopo-hero__label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.escopo-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.32rem;
+}
+
+.escopo-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.22rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--priority-color) 16%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--priority-color) 6%, transparent);
+  min-height: 2.6rem;
+  overflow: hidden;
+}
+
+.escopo-stat--wide {
+  grid-column: 1 / -1;
+}
+
+.escopo-stat__label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.escopo-stat__value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-color-85);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  flex: 1;
+  gap: 0.28rem;
+}
+
+.alerts-grid--loading {
+  opacity: 0.45;
+}
+
+.alert-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.28rem 0.4rem;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
+  background: color-mix(in srgb, var(--card-border) 18%, transparent);
+  min-width: 0;
+}
+
+.alert-cell--critico {
+  border-color: color-mix(in srgb, var(--risk-high) 22%, transparent);
+  background: color-mix(in srgb, var(--risk-high) 7%, transparent);
+}
+
+.alert-cell--atencao {
+  border-color: color-mix(in srgb, var(--risk-medium) 22%, transparent);
+  background: color-mix(in srgb, var(--risk-medium) 7%, transparent);
+}
+
+.alert-cell--skeleton {
+  min-height: 2.4rem;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
+}
+
+.alert-cell__count {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-color-85);
+}
+
+.alert-cell--critico .alert-cell__count { color: var(--risk-high); }
+.alert-cell--atencao .alert-cell__count { color: var(--risk-medium); }
+
+.alert-cell__titulo {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Card Financeiro dedicado ── */
+.priority-card--financeiro {
+  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.financeiro-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.financeiro-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.financeiro-header__text strong {
+  color: var(--text-color-85);
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.financeiro-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.financeiro-hero__value {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-color-85);
+  letter-spacing: -0.01em;
+}
+
+.financeiro-hero__label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.financeiro-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.32rem;
+}
+
+.financeiro-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.22rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--priority-color) 16%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--priority-color) 6%, transparent);
+  min-height: 2.6rem;
+  overflow: hidden;
+}
+
+.financeiro-stat--critical {
+  border-color: color-mix(in srgb, var(--risk-indicator-critical) 34%, transparent);
+  background: color-mix(in srgb, var(--risk-indicator-critical) 10%, transparent);
+}
+
+.financeiro-stat--wide {
+  grid-column: 1 / -1;
+}
+
+.financeiro-stat__label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.financeiro-stat__value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-color-85);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 1380px) {

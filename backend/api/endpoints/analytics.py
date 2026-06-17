@@ -20,6 +20,7 @@ from ..schemas.analytics import (
     IndicadorBenchmarkResponse,
     IndicadorEvolucaoBenchmarkResponse,
     ClinicoIncompatibilidadeResponse,
+    AlertasPanoramaResponse,
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -88,6 +89,23 @@ def get_dados_farmacia(cnpj: str):
 def get_socios_farmacia(cnpj: str):
     """Retorna o quadro societário de um estabelecimento."""
     return AnalyticsService.get_socios_farmacia(cnpj)
+
+@router.get("/alertas-panorama", response_model=AlertasPanoramaResponse)
+def get_alertas_panorama(
+    uf: Optional[str] = Query(None),
+    regiao_id: Optional[int] = Query(None),
+    id_ibge7: Optional[int] = Query(None),
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Panorama agregado de alertas de integridade para o dashboard, filtrado por escopo geográfico e período."""
+    return AnalyticsService.get_alertas_panorama(
+        uf=uf,
+        regiao_id=regiao_id,
+        id_ibge7=id_ibge7,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
 
 @router.get("/cnpj/{cnpj}/alertas-integridade", response_model=IntegrityAlertsResponse)
 def get_integrity_alerts(

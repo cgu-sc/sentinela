@@ -11,7 +11,7 @@ import { useAnalyticsStore, buildAnalyticsParams } from '@/stores/analytics';
 
 const ESTABELECIMENTO_FETCH_DEBOUNCE_MS = 450;
 
-export function useFetchAnalytics({ includeFatorRisco = false, includeNationalContext = true, includeProducaoSemestral = false } = {}) {
+export function useFetchAnalytics({ includeFatorRisco = false, includeNationalContext = true, includeProducaoSemestral = false, includeAlertasPanorama = false } = {}) {
   const filterStore = useFilterStore();
   const analyticsStore = useAnalyticsStore();
 
@@ -23,6 +23,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
     analyticsStore.fetchDashboardSummary(filters);
     if (includeFatorRisco) analyticsStore.fetchFatorRisco(filters);
     if (includeProducaoSemestral) analyticsStore.fetchProducaoSemestral(filters);
+    if (includeAlertasPanorama) analyticsStore.fetchAlertasPanorama(filters);
   };
 
   const fetchNacionalIfNeeded = () => {
@@ -63,6 +64,9 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
             }
             if (includeProducaoSemestral && !analyticsStore.producaoSemestral.length) {
               analyticsStore.fetchProducaoSemestral(filters);
+            }
+            if (includeAlertasPanorama && !analyticsStore.alertasPanorama) {
+              analyticsStore.fetchAlertasPanorama(filters);
             }
           }
         }

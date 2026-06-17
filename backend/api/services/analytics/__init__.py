@@ -27,6 +27,7 @@ from .farmacia import get_cnpj_access_status, get_dados_farmacia, get_movimentac
 from .fator_risco import get_fator_risco_data
 from .socios import get_socios_farmacia
 from .integrity_alerts import get_integrity_alerts
+from .alertas_panorama import get_alertas_panorama
 from .network import (
     get_teia_grafo_nivel2, 
     get_teia_grafo_nivel3_expansao, 
@@ -104,6 +105,7 @@ class AnalyticsService:
     get_movimentacao_data = staticmethod(get_movimentacao_data)
     get_socios_farmacia = staticmethod(get_socios_farmacia)
     get_integrity_alerts = staticmethod(get_integrity_alerts)
+    get_alertas_panorama = staticmethod(get_alertas_panorama)
     get_teia_grafo_nivel2 = staticmethod(get_teia_grafo_nivel2)
     get_teia_grafo_nivel3_expansao = staticmethod(get_teia_grafo_nivel3_expansao)
     get_teia_grafo_nivel4_expansao = staticmethod(get_teia_grafo_nivel4_expansao)

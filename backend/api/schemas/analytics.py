@@ -718,6 +718,21 @@ class IntegrityAlertsResponse(BaseModel):
     alertas: List[IntegrityAlertSchema]
     data_processamento: Optional[date] = None
 
+# ── Panorama de Alertas (Dashboard) ───────────────────────────
+class AlertaPanoramaItemSchema(BaseModel):
+    tipo: str
+    titulo: str
+    severidade: Literal["critico", "atencao"]
+    qtd_cnpjs: int
+
+
+class AlertasPanoramaResponse(BaseModel):
+    total_cnpjs_com_alerta: int
+    total_criticos: int
+    total_atencao: int
+    alertas: List[AlertaPanoramaItemSchema]
+
+
 # ── Teia Societária (Grafos) ───────────────────────────
 class NetworkNodeSchema(BaseModel):
     id: str

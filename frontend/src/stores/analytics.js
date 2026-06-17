@@ -11,11 +11,13 @@ let fatorRiscoAbortController = null;
 let nacionalAbortController = null;
 let producaoSemestralAbortController = null;
 let cacheStatusAbortController = null;
+let alertasPanoramaAbortController = null;
 let dashboardRequestSeq = 0;
 let fatorRiscoRequestSeq = 0;
 let nacionalRequestSeq = 0;
 let producaoSemestralRequestSeq = 0;
 let cacheStatusRequestSeq = 0;
+let alertasPanoramaRequestSeq = 0;
 
 /**
  * Constrói o objeto de parâmetros para as APIs de analytics.
@@ -83,6 +85,8 @@ export const useAnalyticsStore = defineStore('analytics', {
     fatorRisco: [],
     producaoSemestral: [],
     cacheStatus: null,
+    alertasPanorama: null,
+    alertasPanoramaLoading: false,
     isLoading: false,
     fatorRiscoLoading: false,
     producaoSemestralLoading: false,
@@ -127,6 +131,38 @@ export const useAnalyticsStore = defineStore('analytics', {
       } finally {
         if (requestId === dashboardRequestSeq) {
           this.isLoading = false;
+        }
+      }
+    },
+
+    async fetchAlertasPanorama(filters = {}) {
+      const { inicio, fim, uf, regiaoId, idIbge7 } = filters || {};
+      const params = {};
+      if (uf && uf !== 'Todos') params.uf = uf;
+      if (regiaoId != null) params.regiao_id = regiaoId;
+      if (idIbge7 != null) params.id_ibge7 = idIbge7;
+      if (inicio) params.data_inicio = inicio;
+      if (fim) params.data_fim = fim;
+
+      const requestId = ++alertasPanoramaRequestSeq;
+      if (alertasPanoramaAbortController) alertasPanoramaAbortController.abort();
+      alertasPanoramaAbortController = new AbortController();
+
+      this.alertasPanoramaLoading = true;
+      try {
+        const response = await axios.get(API_ENDPOINTS.analyticsAlertasPanorama, {
+          params,
+          signal: alertasPanoramaAbortController.signal,
+        });
+        if (requestId !== alertasPanoramaRequestSeq) return;
+        this.alertasPanorama = response.data;
+      } catch (err) {
+        if (axios.isCancel(err)) return;
+        console.error('Erro ao buscar panorama de alertas:', err);
+        this.alertasPanorama = null;
+      } finally {
+        if (requestId === alertasPanoramaRequestSeq) {
+          this.alertasPanoramaLoading = false;
         }
       }
     },

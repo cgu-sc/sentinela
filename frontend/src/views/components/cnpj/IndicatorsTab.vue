@@ -45,33 +45,6 @@ watch(showOnlyHighRisk, (newVal) => {
 });
 
 // ── Banner de hint de interatividade ─────────────────────
-const showHintBanner = ref(false);
-const hintAutoHandled = ref(false);
-function dismissHint() {
-  showHintBanner.value = false;
-  void filterStore.setIndicatorDetailHintDismissed(true);
-}
-
-function hideHintTemporarily() {
-  showHintBanner.value = false;
-}
-
-watch(
-  () => [
-    cachedIndicadoresData.value,
-    filterStore.uiPreferencesLoaded,
-    filterStore.indicatorDetailHintDismissed,
-  ],
-  ([val, preferencesLoaded, dismissed]) => {
-    if (val && preferencesLoaded && !dismissed && !hintAutoHandled.value) {
-      hintAutoHandled.value = true;
-      setTimeout(() => { showHintBanner.value = true; }, 500);
-      setTimeout(() => hideHintTemporarily(), 7000);
-    }
-  },
-);
-
-
 // ── Helpers de indicadores ────────────────────────────────
 function getIndicadorStatus(indicadorData) {
   const status = indicadorData?.status;
@@ -291,6 +264,14 @@ function riscoTextStyle(indicadorData) {
           <div class="title-main">
             <i class="pi pi-table" />
             <span>Indicadores de Risco</span>
+            <span
+              class="detail-hint-badge"
+              v-tooltip.top="'Clique nas linhas dos indicadores para abrir a análise detalhada'"
+            >
+              <span class="detail-hint-badge__dot" aria-hidden="true" />
+              <i class="pi pi-chart-scatter" />
+              <span class="detail-hint-badge__label">Detalhamento</span>
+            </span>
           </div>
           <div class="title-actions">
             <div class="risk-toggle-pill" :class="{ 'active': showOnlyHighRisk }" @click="showOnlyHighRisk = !showOnlyHighRisk">
@@ -305,7 +286,7 @@ function riscoTextStyle(indicadorData) {
 
         <!-- Banner de hint deslizante -->
         <transition name="hint-banner">
-          <div v-if="showHintBanner" class="ind-hint-banner">
+          <div v-if="false" class="ind-hint-banner">
             <div class="ind-hint-banner__inner">
               <div class="ind-hint-icon-wrap">
                 <span class="ind-hint-ripple" />
@@ -520,7 +501,7 @@ function riscoTextStyle(indicadorData) {
   opacity: 0;
 }
 
-.title-main span {
+.title-main > span {
   font-size: 0.85rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -529,6 +510,79 @@ function riscoTextStyle(indicadorData) {
   opacity: 0.85;
 }
 
+/* ── Badge de Detalhamento (Extrema Compatibilidade e Efeito Premium) ── */
+.detail-hint-badge {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 20px; /* Formato de pílula */
+  background: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color) !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  cursor: default;
+  user-select: none;
+  z-index: 1;
+  /* Glow externo animado */
+  animation: dhb-pulse-shadow 2.5s infinite alternate ease-in-out;
+}
+
+/* Fundo pulsante interno */
+.detail-hint-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--primary-color);
+  z-index: -2;
+  animation: dhb-pulse-bg 2.5s infinite alternate ease-in-out;
+}
+
+/* Feixe de luz removido conforme solicitado */
+
+.detail-hint-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--primary-color);
+  animation: dhb-dot-blink 1.5s infinite alternate;
+}
+
+.detail-hint-badge i {
+  font-size: 0.75rem;
+  animation: dhb-icon-bounce 2.5s infinite ease-in-out;
+}
+
+/* ── Keyframes (sem color-mix para garantir q funcione em qualquer browser) ── */
+
+@keyframes dhb-pulse-shadow {
+  0%   { box-shadow: 0 0 0px transparent; }
+  100% { box-shadow: 0 0 12px var(--primary-color); }
+}
+
+@keyframes dhb-pulse-bg {
+  0%   { opacity: 0.08; }
+  100% { opacity: 0.25; }
+}
+
+@keyframes dhb-dot-blink {
+  0%   { opacity: 0.3; transform: scale(0.8); }
+  100% { opacity: 1;   transform: scale(1.2); }
+}
+
+@keyframes dhb-icon-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+/* â”€â”€ Banner de hint deslizante â”€â”€ */
 /* ── Banner de hint deslizante ── */
 .ind-hint-banner {
   overflow: hidden;

@@ -185,7 +185,7 @@ MODULOS = sorted([
     {"id": 13, "name": "CRM timeline dia", "func": _criar_sync_crm_cnpj("crm_timeline_dia"), "peso": "medio", "ordem": 13},
     {"id": 14, "name": "CRM timeline hora", "func": _criar_sync_crm_cnpj("crm_timeline_hora"), "peso": "medio", "ordem": 14},
     {"id": 15, "name": "CRM timeline eventos", "func": _criar_sync_crm_cnpj("crm_timeline_eventos"), "peso": "medio", "ordem": 15},
-    {"id": 16, "name": "CRM Raio-X", "func": _criar_sync_crm_cnpj("crm_raiox_tx"), "peso": "medio", "ordem": 16},
+    {"id": 16, "name": "CRM Raio-X", "func": _criar_sync_crm_cnpj("crm_raiox_tx"), "peso": "pesado", "ordem": 16},
     {"id": 17, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio", "ordem": 17},
     {"id": 18, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio", "ordem": 18},
     {"id": 19, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado", "ordem": 19},

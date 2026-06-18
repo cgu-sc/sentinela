@@ -45,6 +45,25 @@ const monthFormatter = new Intl.DateTimeFormat('pt-BR', {
   year: 'numeric',
 });
 
+const integerFormatter = new Intl.NumberFormat('pt-BR', {
+  maximumFractionDigits: 0,
+});
+
+const alertTooltipTemplates = {
+  volume_atipico:
+    '{qtd} estabelecimentos apresentaram crescimento semestral superior a 50%, com aumento absoluto mínimo de R$ 10 mil, em pelo menos um semestre comparável no período selecionado.',
+  cnpj_dispersao_uf_nao_vizinha:
+    '{qtd} estabelecimentos tiveram mais de 5% do valor autorizado associado a beneficiários residentes em UFs que não fazem fronteira com a UF da farmácia, no período selecionado.',
+  cnpj_cnae_farmacia_ausente:
+    '{qtd} estabelecimentos possuem CNAE principal e secundários sem identificação de atividade farmacêutica compatível.',
+  socio_falecido:
+    '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo societário ativo identificado como falecido na base de óbitos.',
+  socio_beneficio_social:
+    '{qtd} estabelecimentos possuem ao menos um sócio direto com vínculo ativo identificado no CadÚnico ou como beneficiário do Seguro Defeso.',
+  socio_idade_atipica:
+    '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo ativo e idade inferior a 21 anos ou superior a 80 anos na data de referência do período selecionado.',
+};
+
 function normalizeLabel(label) {
   return String(label || '')
     .normalize('NFD')
@@ -176,6 +195,15 @@ function getModuleTone(module) {
 
 function goToMunicipios() {
   router.push('/municipios');
+}
+
+function getAlertaTooltip(alerta) {
+  const qtd = integerFormatter.format(Number(alerta?.qtd_cnpjs ?? 0));
+  const template = alertTooltipTemplates[alerta?.tipo];
+  if (!template) {
+    throw new Error(`Tooltip do alerta de integridade não configurado: ${alerta?.tipo}`);
+  }
+  return template.replace('{qtd}', qtd);
 }
 
 const displayAlertasPanorama = computed(() => {
@@ -337,7 +365,14 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
               class="alert-cell"
               :class="`alert-cell--${alerta.severidade}`"
             >
-              <span class="alert-cell__count">{{ alerta.qtd_cnpjs }}</span>
+              <span class="alert-cell__count">
+                {{ alerta.qtd_cnpjs }}
+                <i
+                  v-tooltip.top="getAlertaTooltip(alerta)"
+                  class="pi pi-info-circle alert-cell__info"
+                  :aria-label="`Critério do alerta ${alerta.titulo}`"
+                />
+              </span>
               <span class="alert-cell__titulo">{{ alerta.titulo }}</span>
             </div>
           </div>
@@ -1017,7 +1052,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 }
 
 .escopo-stat__value {
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-color-85);
   line-height: 1.1;
@@ -1070,6 +1105,9 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 }
 
 .alert-cell__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.1;
@@ -1078,6 +1116,18 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 
 .alert-cell--critico .alert-cell__count { color: var(--risk-high); }
 .alert-cell--atencao .alert-cell__count { color: var(--risk-medium); }
+
+.alert-cell__info {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  cursor: help;
+  opacity: 0.82;
+}
+
+.alert-cell__info:hover {
+  color: var(--text-color-85);
+  opacity: 1;
+}
 
 .alert-cell__titulo {
   font-size: 0.75rem;
@@ -1179,7 +1229,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 }
 
 .financeiro-stat__value {
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-color-85);
   line-height: 1.1;

@@ -1,5 +1,8 @@
+import json
 import os
 import time
+from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import polars as pl
@@ -375,26 +378,180 @@ def sync_crm_raiox_tx(cnpj: str, engine=None) -> CacheLoadResult:
         if required_columns.issubset(set(df.columns)) and "codigo_barra" not in df.columns and version_ok:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
 
-    query = text("SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
-                 "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
-                 "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
-                 "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                 "WHERE F.cnpj = :cnpj "
-                 "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
-                 "ORDER BY MIN(P.data_hora) ASC, P.num_autorizacao ASC")
-    result = _load_or_sync_sql_cache(cnpj, CRM_RAIOX_TX_PARQUET, query, {"cnpj": cnpj}, engine, read_existing=False)
-    if result.error or result.df is None:
-        return result
+    schema = _empty_schema(CRM_RAIOX_TX_PARQUET)
+    engine = _engine_or_default(engine)
+    parts_dir = Path(_get_cnpj_cache_dir(cnpj)) / ".parts" / "crm_raiox_tx"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = parts_dir / "manifest.json"
 
-    df = result.df.with_columns([
-        pl.col("num_autorizacao").cast(pl.Utf8),
-        pl.col("id_medico").cast(pl.Utf8),
-        pl.col("data_hora").cast(pl.Utf8),
-        pl.col("valor_pago").cast(pl.Float64),
-        pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"),
-    ])
-    df.write_parquet(parquet_path, compression="zstd")
-    return CacheLoadResult(df, result.from_cache, result.read_time_ms, result.query_time_ms, result.save_time_ms, result.error)
+    def _month_floor(value) -> date:
+        value_date = value.date() if hasattr(value, "date") else value
+        return date(value_date.year, value_date.month, 1)
+
+    def _next_month(value: date) -> date:
+        if value.month == 12:
+            return date(value.year + 1, 1, 1)
+        return date(value.year, value.month + 1, 1)
+
+    def _month_key(value: date) -> str:
+        return f"{value.year:04d}-{value.month:02d}"
+
+    def _part_path(key: str) -> Path:
+        return parts_dir / f"{key}.smod.part"
+
+    def _read_manifest() -> dict:
+        if not manifest_path.exists():
+            return {}
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def _write_manifest(data: dict) -> None:
+        tmp_path = manifest_path.with_suffix(".json.tmp")
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        os.replace(tmp_path, manifest_path)
+
+    try:
+        with engine.connect() as conn:
+            bounds = conn.execute(
+                text(
+                    "SELECT MIN(P.dt_janela) AS dt_min, MAX(P.dt_janela) AS dt_max "
+                    "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
+                    "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
+                    "WHERE F.cnpj = :cnpj"
+                ),
+                {"cnpj": cnpj},
+            ).mappings().first()
+
+            if not bounds or bounds["dt_min"] is None or bounds["dt_max"] is None:
+                empty_df = pl.DataFrame(schema=schema)
+                empty_df.write_parquet(parquet_path, compression="zstd")
+                return CacheLoadResult(empty_df, from_cache=False)
+
+            start_month = _month_floor(bounds["dt_min"])
+            end_exclusive = _next_month(_month_floor(bounds["dt_max"]))
+            month_starts: list[date] = []
+            cursor = start_month
+            while cursor < end_exclusive:
+                month_starts.append(cursor)
+                cursor = _next_month(cursor)
+
+            manifest = _read_manifest()
+            manifest_valid = (
+                manifest.get("cnpj") == cnpj
+                and manifest.get("cache_key") == "crm_raiox_tx"
+                and manifest.get("version") == _CRM_RAIOX_TX_CACHE_VERSION
+                and manifest.get("start_month") == _month_key(start_month)
+                and manifest.get("end_month") == _month_key(_month_floor(bounds["dt_max"]))
+            )
+            if not manifest_valid:
+                manifest = {
+                    "cnpj": cnpj,
+                    "cache_key": "crm_raiox_tx",
+                    "version": _CRM_RAIOX_TX_CACHE_VERSION,
+                    "start_month": _month_key(start_month),
+                    "end_month": _month_key(_month_floor(bounds["dt_max"])),
+                    "parts": {},
+                }
+                _write_manifest(manifest)
+
+            query = text(
+                "SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
+                "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
+                "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
+                "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
+                "WHERE F.cnpj = :cnpj "
+                "AND P.dt_janela >= :dt_inicio "
+                "AND P.dt_janela < :dt_fim "
+                "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
+                "ORDER BY MIN(P.data_hora) ASC, P.num_autorizacao ASC"
+            )
+
+            query_time_ms = 0.0
+            save_time_ms = 0.0
+            total_parts = len(month_starts)
+            for index, dt_inicio in enumerate(month_starts, 1):
+                dt_fim = _next_month(dt_inicio)
+                key = _month_key(dt_inicio)
+                part_path = _part_path(key)
+                part_info = manifest["parts"].get(key, {})
+                if part_info.get("status") == "done" and part_path.exists():
+                    continue
+
+                print(f"[ CACHE ] {cnpj} - CRM Raio-X - parte {index}/{total_parts}: {key}")
+                t0 = time.perf_counter()
+                pdf = pd.read_sql(
+                    query,
+                    conn,
+                    params={"cnpj": cnpj, "dt_inicio": dt_inicio, "dt_fim": dt_fim},
+                )
+                query_time_ms += (time.perf_counter() - t0) * 1000
+
+                if pdf.empty:
+                    df_part = pl.DataFrame(schema=schema)
+                else:
+                    df_part = pl.from_pandas(pdf).with_columns([
+                        pl.col("dt_janela").cast(pl.Utf8),
+                        pl.col("hr_janela").cast(pl.Int32),
+                        pl.col("num_autorizacao").cast(pl.Utf8),
+                        pl.col("id_medico").cast(pl.Utf8),
+                        pl.col("data_hora").cast(pl.Utf8),
+                        pl.col("valor_pago").cast(pl.Float64),
+                        pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"),
+                    ])
+
+                missing_cols = sorted(set(schema) - set(df_part.columns))
+                if missing_cols:
+                    raise RuntimeError(
+                        f"Contrato invalido ao gerar parte {key} de {CRM_RAIOX_TX_PARQUET}: "
+                        f"colunas ausentes {', '.join(missing_cols)}."
+                    )
+                df_part = df_part.select(list(schema.keys()))
+
+                tmp_part_path = part_path.with_suffix(part_path.suffix + ".tmp")
+                t1 = time.perf_counter()
+                df_part.write_parquet(tmp_part_path, compression="zstd")
+                os.replace(tmp_part_path, part_path)
+                save_time_ms += (time.perf_counter() - t1) * 1000
+
+                manifest["parts"][key] = {
+                    "status": "done",
+                    "rows": df_part.height,
+                    "file": part_path.name,
+                }
+                _write_manifest(manifest)
+
+        part_paths = [_part_path(_month_key(dt_inicio)) for dt_inicio in month_starts]
+        missing_parts = [path.name for path in part_paths if not path.exists()]
+        if missing_parts:
+            raise RuntimeError(f"Partes pendentes para consolidar {CRM_RAIOX_TX_PARQUET}: {', '.join(missing_parts)}")
+
+        t_merge = time.perf_counter()
+        scan = pl.scan_parquet([str(path) for path in part_paths])
+        df_final = scan.collect().sort(["data_hora", "num_autorizacao"]).select(list(schema.keys()))
+        tmp_final_path = parquet_path + ".tmp"
+        df_final.write_parquet(tmp_final_path, compression="zstd")
+        os.replace(tmp_final_path, parquet_path)
+        save_time_ms = round(save_time_ms + ((time.perf_counter() - t_merge) * 1000), 1)
+
+        manifest["status"] = "done"
+        manifest["final_rows"] = df_final.height
+        manifest["final_file"] = os.path.basename(parquet_path)
+        _write_manifest(manifest)
+
+        return CacheLoadResult(
+            df_final,
+            from_cache=False,
+            query_time_ms=round(query_time_ms, 1),
+            save_time_ms=save_time_ms,
+        )
+    except Exception as exc:
+        print(f"[ ANALYTICS ] {cnpj} - {CRM_RAIOX_TX_PARQUET} - erro ao sincronizar em partes: {exc}")
+        return CacheLoadResult(
+            pl.DataFrame(schema=schema),
+            from_cache=False,
+            error=f"Erro ao sincronizar {CRM_RAIOX_TX_PARQUET} em partes: {exc}",
+        )
 
 
 def _load_or_sync_sql_cache(

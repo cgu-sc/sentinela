@@ -164,5 +164,8 @@ export const INDICATOR_GROUPS = [
 export const indicadorExtraColumns = {
   volume_atipico: [
     { field: 'volume_atipico_maior_taxa_crescimento_pct', header: 'Maior Salto (%)', type: 'pct', align: 'center', width: '8%', minWidth: '90px' }
+  ],
+  dispersao_geografica: [
+    { field: 'pct_dispersao_uf_nao_vizinha', sortField: 'pct_dispersao_uf_nao_vizinha', header: 'UF sem Fronteira', type: 'pct', align: 'center', width: '8%', minWidth: '100px', sortable: true }
   ]
 };

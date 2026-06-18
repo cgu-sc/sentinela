@@ -12,7 +12,7 @@ import zlib
 import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
-from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation
+from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_cache_generation, scan_geografico_origem_uf
 from .indicator_config import (
     INDICATOR_MAPPING,
     INDICATOR_FLAGS as _INDICATOR_FLAGS,
@@ -25,6 +25,7 @@ from .matriz_risco_dinamica import (
 )
 from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
 from .alertas_alvos import apply_socio_beneficio_filter
+from .geografico import UF_VIZINHAS, UF_BRASILEIRAS
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 from ...utils.text_search import apply_token_search
@@ -119,6 +120,7 @@ _INDICADOR_DISPLAY_VALUE_COLS = {
 
 _INDICADOR_EXTRA_COLS: dict[str, list[str]] = {
     "volume_atipico": ["volume_atipico_maior_taxa_crescimento_pct"],
+    "dispersao_geografica": ["pct_dispersao_uf_nao_vizinha"],
 }
 
 _INDICADOR_BENCHMARK_LOCAL_KEYS = {
@@ -637,6 +639,41 @@ def _build_indicador_scope_base(
     return scope_base, perfil_df
 
 
+def _get_pct_dispersao_uf_nao_vizinha_df(data_inicio: date | None = None, data_fim: date | None = None) -> pl.DataFrame:
+    rows = []
+    for uf1 in UF_BRASILEIRAS:
+        for uf2 in UF_BRASILEIRAS:
+            is_vizinho = (uf2 == uf1) or (uf2 in UF_VIZINHAS.get(uf1, set()))
+            rows.append({"uf_farmacia": uf1, "uf_paciente": uf2, "is_vizinho": is_vizinho})
+    df_vizinhanca = pl.DataFrame(rows)
+
+    origem_scan = scan_geografico_origem_uf()
+
+    if data_inicio:
+        origem_scan = origem_scan.filter(pl.col("ano_base") >= int(data_inicio.year))
+    if data_fim:
+        origem_scan = origem_scan.filter(pl.col("ano_base") <= int(data_fim.year))
+
+    df_agg = (
+        origem_scan
+        .join(df_vizinhanca.lazy(), on=["uf_farmacia", "uf_paciente"], how="inner")
+        .group_by("id_cnpj")
+        .agg([
+            pl.col("valor_autorizado").sum().alias("_total_valor"),
+            pl.col("valor_autorizado").filter(~pl.col("is_vizinho")).sum().alias("_valor_nao_vizinho")
+        ])
+        .with_columns(
+            pl.when(pl.col("_total_valor") > 0)
+            .then(pl.col("_valor_nao_vizinho") / pl.col("_total_valor") * 100)
+            .otherwise(0.0)
+            .alias("pct_dispersao_uf_nao_vizinha")
+        )
+        .select(["id_cnpj", "pct_dispersao_uf_nao_vizinha"])
+        .collect()
+    )
+    return df_agg
+
+
 def _build_indicador_dataset(
     indicador: str,
     scope_base: pl.DataFrame,
@@ -661,6 +698,12 @@ def _build_indicador_dataset(
         data_inicio=data_inicio,
         data_fim=data_fim,
     )
+
+    if indicador == "dispersao_geografica":
+        df_nao_vizinha = _get_pct_dispersao_uf_nao_vizinha_df(data_inicio, data_fim)
+        df_risco = df_risco.join(df_nao_vizinha, on="id_cnpj", how="left").with_columns(
+            pl.col("pct_dispersao_uf_nao_vizinha").fill_null(0.0)
+        )
     risco_cols = ["id_cnpj", "_total_regiao_benchmark", c_val, c_mr, c_mu, c_rr, c_ru, c_aten, c_crit, score_col]
     # Para volume_atipico, inclui a coluna monetária de aumento para exibição na tabela
     display_col = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador)
@@ -1451,6 +1494,7 @@ def get_indicadores_analise_cnpjs(
             "valor_movimentado": "total_vendas",
             "val_sem_comp": "total_sem_comprovacao",
             "perc_val_sem_comp": "perc_val_sem_comp",
+            "pct_dispersao_uf_nao_vizinha": "pct_dispersao_uf_nao_vizinha",
         }
         sort_col = sort_columns.get(sort_field) or rr_col or "cnpj"
         if sort_col not in df_joined.columns:

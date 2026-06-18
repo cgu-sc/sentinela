@@ -164,7 +164,9 @@ const tableFooter = computed(() => {
 
 const indicatorColumnHeader = computed(() => {
   const label = props.indicadorLabel?.trim() || 'Indicador';
-  return label.toLowerCase() === 'crescimento semestral atípico' ? 'Crescimento Semestral' : label;
+  if (label.toLowerCase() === 'crescimento semestral atípico') return 'Crescimento Semestral';
+  if (label.toLowerCase() === 'dispersão interestadual') return 'Vendas para Outras UFs';
+  return label;
 });
 </script>
 
@@ -265,8 +267,9 @@ const indicatorColumnHeader = computed(() => {
         v-for="col in extraColumns"
         :key="col.field"
         :field="`detalhes_extras.${col.field}`"
+        :sortField="col.sortable ? col.sortField || col.field : undefined"
         :header="col.header"
-        :sortable="false"
+        :sortable="col.sortable || false"
         headerClass="col-extra"
         bodyClass="col-extra"
         :style="{ minWidth: col.minWidth, width: col.width }"

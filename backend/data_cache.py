@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import time
 import pandas as pd
 import polars as pl
 from sqlalchemy import text

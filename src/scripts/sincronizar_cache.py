@@ -67,7 +67,7 @@ CRM_CNPJ_CACHE_KEYS = [
 ]
 
 CRM_COMPLETO_ID = 9
-CRM_INDIVIDUAL_IDS = frozenset(range(10, 16))
+CRM_INDIVIDUAL_IDS: frozenset[int] = frozenset()  # Módulos legados 10-15 removidos; globais 33-38 são o padrão.
 
 
 def _buscar_cnpjs_crm(engine) -> list[str]:
@@ -88,37 +88,6 @@ def _sync_crm_cnpj_unit(cache_key: str, cnpj: str, engine) -> None:
 
     cache_manager.sync_cnpj_cache(cache_key, cnpj, engine)
 
-
-def _sync_crm_cnpj_cache_key(cache_key: str, engine, progress_callback=None) -> None:
-    """Sincroniza um modulo CRM por CNPJ usando o produtor registrado no cache_registry."""
-    cnpjs_sync = _buscar_cnpjs_crm(engine)
-
-    total = len(cnpjs_sync)
-    print(f"Sincronizando {cache_key} para {total} estabelecimento(s)...")
-
-    if total == 0:
-        if progress_callback:
-            progress_callback(100)
-        return
-
-    for i, cnpj in enumerate(cnpjs_sync, 1):
-        try:
-            _sync_crm_cnpj_unit(cache_key, cnpj, engine)
-            if progress_callback:
-                progress_callback(int((i / total) * 100))
-        except Exception as e:
-            print(f"\n[AVISO] Erro ao sincronizar {cache_key} para CNPJ {cnpj}: {e}")
-            raise
-
-    if progress_callback:
-        progress_callback(100)
-
-
-def _criar_sync_crm_cnpj(cache_key: str):
-    def _sync(engine, progress_callback=None):
-        return _sync_crm_cnpj_cache_key(cache_key, engine, progress_callback)
-
-    return _sync
 
 
 def _sync_crm_cnpj_completo(engine, progress_callback=None) -> None:
@@ -185,12 +154,6 @@ MODULOS = sorted([
     {"id": 7, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 7},
     {"id": 8, "name": "CRM prescritores global", "func": _sync_crm_prescritores_global, "peso": "muito pesado", "ordem": 8},
     {"id": 9, "name": "CRM Completo", "func": _sync_crm_cnpj_completo, "peso": "pesado", "ordem": 9},
-    {"id": 10, "name": "CRM geografico", "func": _criar_sync_crm_cnpj("geografico"), "peso": "medio", "ordem": 10},
-    {"id": 11, "name": "CRM conc. unico", "func": _criar_sync_crm_cnpj("crm_concentracao_unico_alertas"), "peso": "medio", "ordem": 11},
-    {"id": 12, "name": "CRM conc. multiplo", "func": _criar_sync_crm_cnpj("crm_concentracao_multiplo_alertas"), "peso": "medio", "ordem": 12},
-    {"id": 13, "name": "CRM timeline dia", "func": _criar_sync_crm_cnpj("crm_timeline_dia"), "peso": "medio", "ordem": 13},
-    {"id": 14, "name": "CRM timeline hora", "func": _criar_sync_crm_cnpj("crm_timeline_hora"), "peso": "medio", "ordem": 14},
-    {"id": 15, "name": "CRM timeline eventos", "func": _criar_sync_crm_cnpj("crm_timeline_eventos"), "peso": "medio", "ordem": 15},
     {"id": 16, "name": "CRM Raio-X global", "func": _sync_crm_raiox_tx_global, "peso": "muito pesado", "ordem": 16},
     {"id": 17, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio", "ordem": 17},
     {"id": 18, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio", "ordem": 18},

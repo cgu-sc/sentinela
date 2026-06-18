@@ -333,11 +333,11 @@ const pdfTooltip = computed(() => {
               <button
                 v-if="cadastro || cnpjData"
                 type="button"
-                class="header-icon-btn header-icon-btn--cadastro"
-                v-tooltip.bottom="'Dados cadastrais'"
+                class="cnpj-cadastro-btn-new"
                 @click="openCadastroDialog"
               >
                 <i class="pi pi-id-card" />
+                <span>Dados Cadastrais</span>
               </button>
             </div>
             <span
@@ -1025,44 +1025,52 @@ const pdfTooltip = computed(() => {
   transform: translateY(-1px);
 }
 
-.header-icon-btn--cadastro {
-  margin-left: 0.1rem;
+.cnpj-cadastro-btn-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 34px;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, var(--establishment-header-border)) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary-color) 8%, var(--establishment-header-bg)),
+    color-mix(in srgb, var(--primary-color) 3%, var(--establishment-header-bg))
+  );
   color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 34%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  font-family: "Inter", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  white-space: nowrap;
 }
 
-.header-icon-btn--cadastro::after {
-  content: "";
-  position: absolute;
-  inset: -5px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 28%, transparent);
-  box-shadow:
-    0 0 0 0 color-mix(in srgb, var(--primary-color) 16%, transparent),
-    0 0 12px color-mix(in srgb, var(--primary-color) 10%, transparent);
-  opacity: 0.65;
-  pointer-events: none;
-  animation: cadastroHaloPulse 2.8s ease-in-out infinite;
+.cnpj-cadastro-btn-new i {
+  font-size: 0.85rem;
+  transition: transform 0.2s ease;
+}
+
+.cnpj-cadastro-btn-new:hover {
+  background: color-mix(in srgb, var(--primary-color) 14%, var(--establishment-header-bg));
+  border-color: var(--primary-color) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+.cnpj-cadastro-btn-new:hover i {
+  transform: scale(1.15);
+}
+
+.cnpj-cadastro-btn-new:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .header-icon-btn i {
   font-size: 0.85rem;
-}
-
-@keyframes cadastroHaloPulse {
-  0% {
-    transform: scale(0.98);
-    opacity: 0.45;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 0.85;
-  }
-  100% {
-    transform: scale(0.98);
-    opacity: 0.45;
-  }
 }
 
 .header-main-info {

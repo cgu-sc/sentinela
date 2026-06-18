@@ -70,32 +70,32 @@ export const CHART_SERIES = {
 //            56%+: orange-glow intencional nos fills críticos (efeito premium de perigo)
 export const MAP_VISUAL_SCALE = {
   light: [
-    { max: 8, color: "#ffedd5", borderColor: "#fb923c" }, // 0–8%
-    { min: 8, max: 12, color: "#fed7aa", borderColor: "#f97316" }, // 8–12%
-    { min: 12, max: 16, color: "#fdba74", borderColor: "#ea580c" }, // 12–16%
-    { min: 16, max: 20, color: "#fb923c", borderColor: "#c2410c" }, // 16–20%
-    { min: 20, max: 25, color: "#fca5a5", borderColor: "#dc2626" }, // 20–25%
-    { min: 25, max: 32, color: "#f87171", borderColor: "#b91c1c" }, // 25–32%
-    { min: 32, max: 42, color: "#ef4444", borderColor: "#b91c1c" }, // 32–42%
-    { min: 42, max: 56, color: "#dc2626", borderColor: "#991b1b" }, // 42–56%
-    { min: 56, max: 68, color: "#c81e1e", borderColor: "#ef4444" }, // 56–68%  ← pivot: borda mais clara
-    { min: 68, max: 78, color: "#b91c1c", borderColor: "#ef4444" }, // 68–78%
-    { min: 78, max: 89, color: "#991b1b", borderColor: "#ef4444" }, // 78–89%
-    { min: 89, color: "#7f1d1d", borderColor: "#ef4444" }, // 89–100%
+    { max: 2, color: "#ffedd5", borderColor: "#fb923c" }, // 0–2%
+    { min: 2, max: 5, color: "#fed7aa", borderColor: "#f97316" }, // 2–5%
+    { min: 5, max: 10, color: "#fdba74", borderColor: "#ea580c" }, // 5–10%
+    { min: 10, max: 15, color: "#fb923c", borderColor: "#c2410c" }, // 10–15%
+    { min: 15, max: 20, color: "#fca5a5", borderColor: "#dc2626" }, // 15–20%
+    { min: 20, max: 30, color: "#f87171", borderColor: "#b91c1c" }, // 20–30%
+    { min: 30, max: 40, color: "#ef4444", borderColor: "#b91c1c" }, // 30–40%
+    { min: 40, max: 55, color: "#dc2626", borderColor: "#991b1b" }, // 40–55%
+    { min: 55, max: 65, color: "#c81e1e", borderColor: "#ef4444" }, // 55–65%  ← pivot: borda mais clara
+    { min: 65, max: 75, color: "#b91c1c", borderColor: "#ef4444" }, // 65–75%
+    { min: 75, max: 85, color: "#991b1b", borderColor: "#ef4444" }, // 75–85%
+    { min: 85, color: "#7f1d1d", borderColor: "#ef4444" }, // 85–100%
   ],
   dark: [
-    { max: 8, color: "#fed7aa", borderColor: "#ea580c" }, // 0–8%
-    { min: 8, max: 12, color: "#fdba74", borderColor: "#c2410c" }, // 8–12%
-    { min: 12, max: 16, color: "#fb923c", borderColor: "#9a3412" }, // 12–16%
-    { min: 16, max: 20, color: "#f97316", borderColor: "#7c2d12" }, // 16–20%
-    { min: 20, max: 25, color: "#f87171", borderColor: "#991b1b" }, // 20–25%
-    { min: 25, max: 32, color: "#ef4444", borderColor: "#991b1b" }, // 25–32%
-    { min: 32, max: 42, color: "#dc2626", borderColor: "#f97316" }, // 32–42%  ← pivot: borda luminosa
-    { min: 42, max: 56, color: "#c81e1e", borderColor: "#f97316" }, // 42–56%
-    { min: 56, max: 68, color: "#b91c1c", borderColor: "#f97316" }, // 56–68%  ← orange-glow
-    { min: 68, max: 78, color: "#991b1b", borderColor: "#f97316" }, // 68–78%
-    { min: 78, max: 89, color: "#7f1d1d", borderColor: "#f97316" }, // 78–89%  ← glow mais forte
-    { min: 89, color: "#450a0a", borderColor: "#f97316" }, // 89–100%
+    { max: 2, color: "#fed7aa", borderColor: "#ea580c" }, // 0–2%
+    { min: 2, max: 5, color: "#fdba74", borderColor: "#c2410c" }, // 2–5%
+    { min: 5, max: 10, color: "#fb923c", borderColor: "#9a3412" }, // 5–10%
+    { min: 10, max: 15, color: "#f97316", borderColor: "#7c2d12" }, // 10–15%
+    { min: 15, max: 20, color: "#f87171", borderColor: "#991b1b" }, // 15–20%
+    { min: 20, max: 30, color: "#ef4444", borderColor: "#991b1b" }, // 20–30%
+    { min: 30, max: 40, color: "#dc2626", borderColor: "#f97316" }, // 30–40%  ← pivot: borda luminosa
+    { min: 40, max: 55, color: "#c81e1e", borderColor: "#f97316" }, // 40–55%
+    { min: 55, max: 65, color: "#b91c1c", borderColor: "#f97316" }, // 55–65%  ← orange-glow
+    { min: 65, max: 75, color: "#991b1b", borderColor: "#f97316" }, // 65–75%
+    { min: 75, max: 85, color: "#7f1d1d", borderColor: "#f97316" }, // 75–85%  ← glow mais forte
+    { min: 85, color: "#450a0a", borderColor: "#f97316" }, // 85–100%
   ],
 };
 

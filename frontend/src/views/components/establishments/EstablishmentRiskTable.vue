@@ -2,15 +2,20 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
+import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
 import { extractCnpjRaiz } from '@/composables/useParsing';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
 import { AUDIT_THRESHOLDS, indicadorExtraColumns } from '@/config/riskConfig';
+import { GENERIC_INDICATOR_DETAIL_KEYS } from '@/config/indicatorDetailConfig';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
+import IndicatorDetailDialog from '@/views/components/cnpj/IndicatorDetailDialog.vue';
+import GeographicDispersionDialog from '@/views/components/cnpj/GeographicDispersionDialog.vue';
+import ClinicalIncompatibilityDialog from '@/views/components/cnpj/ClinicalIncompatibilityDialog.vue';
 
 const props = defineProps({
   /** Array de IndicadorCnpjRowSchema */
@@ -35,9 +40,64 @@ const emit = defineEmits(['lazy-load', 'clear-regiao-filter', 'clear-municipio-f
 
 const router = useRouter();
 const filterStore = useFilterStore();
-const { formatCurrencyFull } = useFormatting();
+const cnpjDetailStore = useCnpjDetailStore();
+const { formatCurrencyFull, toLocalISO } = useFormatting();
 const { conexaoMsClass } = useStatusClass();
 const copiedKey = ref(null);
+
+// ── Detalhamento de Indicador por linha ──────────────────
+const showGenericDetailDialog = ref(false);
+const showGeographicDetailDialog = ref(false);
+const showClinicalDetailDialog = ref(false);
+const detailCnpj = ref('');
+const loadingDetailCnpj = ref(null);
+
+const canShowDetailButton = computed(() => {
+  const key = props.indicadorKey;
+  return key === 'dispersao_geografica'
+    || key === 'incompatibilidade_patologica'
+    || GENERIC_INDICATOR_DETAIL_KEYS.includes(key);
+});
+
+async function openDetailForRow(cnpj) {
+  if (!cnpj || loadingDetailCnpj.value) return;
+  const key = props.indicadorKey;
+  if (!key) return;
+
+  const cleanCnpj = String(cnpj).replace(/\D/g, '');
+  loadingDetailCnpj.value = cleanCnpj;
+  detailCnpj.value = cleanCnpj;
+
+  const [start, end] = filterStore.periodo ?? [];
+  const inicio = start ? toLocalISO(start) : null;
+  const fim = end ? toLocalISO(end) : null;
+
+  try {
+    if (key === 'dispersao_geografica') {
+      await Promise.all([
+        cnpjDetailStore.fetchGeograficoOrigemUf(cleanCnpj, inicio, fim),
+        cnpjDetailStore.fetchGeograficoBenchmarkLocal(cleanCnpj, inicio, fim),
+      ]);
+      showGeographicDetailDialog.value = true;
+    } else if (key === 'incompatibilidade_patologica') {
+      await Promise.all([
+        cnpjDetailStore.fetchIndicadorBenchmarkLocal(cleanCnpj, key, inicio, fim),
+        cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(cleanCnpj, key, inicio, fim),
+        cnpjDetailStore.fetchIncompatibilidadePatologica(cleanCnpj, inicio, fim),
+      ]);
+      showClinicalDetailDialog.value = true;
+    } else if (GENERIC_INDICATOR_DETAIL_KEYS.includes(key)) {
+      const [b, e] = await Promise.all([
+        cnpjDetailStore.fetchIndicadorBenchmarkLocal(cleanCnpj, key, inicio, fim),
+        cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(cleanCnpj, key, inicio, fim),
+      ]);
+      if (!b || !e) return;
+      showGenericDetailDialog.value = true;
+    }
+  } finally {
+    loadingDetailCnpj.value = null;
+  }
+}
 const loadingRef = computed(() => props.isLoading);
 const tableSnapshot = useFrozenData(
   () => ({
@@ -335,7 +395,7 @@ const indicatorColumnHeader = computed(() => {
       <!-- Valor Movimentado -->
       <Column
         field="valor_movimentado"
-        header="Valor Movimentado"
+        header="Total Vendas"
         sortable
         headerClass="col-movement"
         bodyClass="col-movement"
@@ -359,7 +419,7 @@ const indicatorColumnHeader = computed(() => {
       <!-- Não Comprovação -->
       <Column
         field="val_sem_comp"
-        header="Não Comprovação"
+        header="Sem Comprovar"
         sortable
         headerClass="col-noncomp"
         bodyClass="col-noncomp"
@@ -446,11 +506,135 @@ const indicatorColumnHeader = computed(() => {
         </template>
       </Column>
 
+      <!-- Botão de Detalhamento do Indicador -->
+      <Column
+        v-if="canShowDetailButton"
+        header=""
+        headerClass="col-detail-action"
+        bodyClass="col-detail-action"
+        :style="{ width: '48px', minWidth: '48px' }"
+      >
+        <template #body="{ data }">
+          <button
+            class="detail-action-btn"
+            :class="{ 'is-loading': loadingDetailCnpj === String(data.cnpj).replace(/\D/g, '') }"
+            v-tooltip.left="'Ver detalhamento do indicador'"
+            @click.stop="openDetailForRow(data.cnpj)"
+          >
+            <i
+              v-if="loadingDetailCnpj === String(data.cnpj).replace(/\D/g, '')"
+              class="pi pi-spin pi-spinner"
+            />
+            <i v-else class="pi pi-external-link" />
+          </button>
+        </template>
+      </Column>
+
     </DataTable>
+
+    <!-- Dialogs de detalhamento (reutilizam os mesmos da aba Indicadores) -->
+    <IndicatorDetailDialog
+      v-if="canShowDetailButton && !['dispersao_geografica','incompatibilidade_patologica'].includes(indicadorKey)"
+      v-model="showGenericDetailDialog"
+      :cnpj="detailCnpj"
+      :indicator-key="indicadorKey"
+    />
+    <GeographicDispersionDialog
+      v-if="indicadorKey === 'dispersao_geografica'"
+      v-model="showGeographicDetailDialog"
+      :cnpj="detailCnpj"
+    />
+    <ClinicalIncompatibilityDialog
+      v-if="indicadorKey === 'incompatibilidade_patologica'"
+      v-model="showClinicalDetailDialog"
+      :cnpj="detailCnpj"
+    />
+
+    <!-- Overlay de loading do detalhamento -->
+    <transition name="detail-overlay-fade">
+      <div v-if="loadingDetailCnpj" class="detail-loading-overlay" aria-live="polite" aria-busy="true">
+        <div class="detail-loading-overlay__box">
+          <i class="pi pi-spin pi-spinner" />
+          <span>Carregando detalhamento...</span>
+        </div>
+      </div>
+    </transition>
+
   </div>
 </template>
 
 <style scoped>
+/* ── Botão de Detalhamento ───────────────────────── */
+.detail-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, var(--card-border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.detail-action-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 14%, var(--card-bg));
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--primary-color) 22%, transparent);
+}
+
+.detail-action-btn.is-loading {
+  opacity: 0.6;
+  pointer-events: none;
+  cursor: default;
+}
+
+/* Overlay de loading do detalhamento */
+.detail-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-color) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.detail-loading-overlay__box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-color-85);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--text-color-85) 12%, transparent);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.detail-loading-overlay__box i {
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.detail-overlay-fade-enter-active,
+.detail-overlay-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.detail-overlay-fade-enter-from,
+.detail-overlay-fade-leave-to {
+  opacity: 0;
+}
+
 .ind-table-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -883,7 +1067,6 @@ const indicatorColumnHeader = computed(() => {
 }
 
 :deep(.ind-cnpj-table .col-name) {
-  width: 28%;
 }
 
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th:first-child),

@@ -236,22 +236,6 @@ function onRowClick(event) {
       </Column>
 
       <Column
-        field="percValSemComp"
-        header="% Não comprovação"
-        sortable
-        headerClass="col-percent"
-        bodyClass="col-percent"
-      >
-        <template #body="{ data }">
-          <Tag
-            :value="formatPercent(getValorPercent(data))"
-            :class="getRiskClass(getValorPercent(data))"
-          />
-        </template>
-        <template #footer>{{ footer.percValSemComp }}</template>
-      </Column>
-
-      <Column
         field="participacao_recorte"
         header="Participação"
         headerClass="col-participation"
@@ -268,8 +252,24 @@ function onRowClick(event) {
       </Column>
 
       <Column
+        field="percValSemComp"
+        header="% Sem Comprovar"
+        sortable
+        headerClass="col-percent"
+        bodyClass="col-percent"
+      >
+        <template #body="{ data }">
+          <Tag
+            :value="formatPercent(getValorPercent(data))"
+            :class="getRiskClass(getValorPercent(data))"
+          />
+        </template>
+        <template #footer>{{ footer.percValSemComp }}</template>
+      </Column>
+
+      <Column
         field="valSemComp"
-        header="Valor sem comprovação"
+        header="Sem Comprovar"
         sortable
         headerClass="col-money"
         bodyClass="col-money"
@@ -282,7 +282,7 @@ function onRowClick(event) {
 
       <Column
         field="totalMov"
-        header="Valor total"
+        header="Total Vendas"
         sortable
         headerClass="col-money"
         bodyClass="col-money"

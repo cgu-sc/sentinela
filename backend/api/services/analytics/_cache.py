@@ -16,7 +16,6 @@ from cache_files import (
     DADOS_PAR_PARQUET,
     FARMACIAS_PARQUET,
     FARMACIAS_CNAES_SECUNDARIOS_PARQUET,
-    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
     TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
     TEIA_GRAFO_NIVEL2_NODES_PARQUET,
     TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
@@ -220,54 +219,6 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
             print(f"ℹ️  Modo Offline: Tabela de transações crm_raiox_tx não disponível.")
         else:
             print(f"⚠️ Erro ao sincronizar parquet de transações Raio-X '{cnpj}': {e}")
-
-def sync_mediana_autorizacoes_horaria(cnpj: str) -> None:
-    """Sincroniza o cache parquet de medianas horárias de autorizações para um CNPJ.
-
-    Lê temp_CGUSC.fp.app_mediana_autorizacoes_horaria e grava
-    modules/cnpjs/<cnpj>/mediana_autorizacoes_horaria.
-    Usado pelo timeline-dataset CRM para preencher a mediana de referência
-    em horas sem atividade no dia selecionado.
-    """
-    import pandas as pd
-    import polars as pl
-    from sqlalchemy import text
-    from database import engine as _engine
-
-    cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    PARQUET_PATH = os.path.join(cnpj_dir, MEDIANA_AUTORIZACOES_HORARIA_PARQUET)
-
-    if os.path.exists(PARQUET_PATH):
-        try:
-            header = pl.scan_parquet(PARQUET_PATH).limit(0).collect()
-            if "mediana_hora" in header.columns:
-                return
-        except Exception:
-            pass
-
-    try:
-        print(f"🗄️ [SYNC] Buscando medianas horárias para {cnpj}...")
-        with _engine.connect() as conn:
-            pdf = pd.read_sql(
-                text("SELECT M.ano, M.trimestre, M.hr_janela, M.mediana_hora "
-                     "FROM temp_CGUSC.fp.app_mediana_autorizacoes_horaria M "
-                     "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
-                     "WHERE F.cnpj = :cnpj "
-                     "ORDER BY M.ano, M.trimestre, M.hr_janela"),
-                conn, params={"cnpj": cnpj}
-            )
-        df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema={
-            "ano": pl.Int32, "trimestre": pl.Int32,
-            "hr_janela": pl.Int32, "mediana_hora": pl.Float64
-        })
-        df.write_parquet(PARQUET_PATH, compression="zstd")
-        print(f"✅ Cache medianas horárias salvo para {cnpj}")
-    except Exception as e:
-        if "IM002" in str(e) or "connection" in str(e).lower():
-            print(f"ℹ️  Modo Offline: Tabela mediana_autorizacoes_horaria não disponível.")
-        else:
-            print(f"⚠️ Erro ao sincronizar parquet de medianas horárias '{cnpj}': {e}")
-
 
 def sync_network(cnpj: str) -> None:
     """Sincroniza o cache Parquet da Teia Societária para um CNPJ usando fontes Parquet.

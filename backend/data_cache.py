@@ -2592,20 +2592,12 @@ def _sync_crm_parquets(engine, progress_callback=None, cnpjs: list[str] | None =
             cache_manager.sync_cnpj_cache("geografico", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_concentracao_unico_alertas", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_concentracao_multiplo_alertas", cnpj, engine)
-            
-            # 2. Perfil Diário Unificado (is_dia_com_volume_horario_anomalo + is_anomalo_unico)
-            cache_manager.sync_cnpj_cache("crm_perfil_diario", cnpj, engine)
 
-            # 3. Detalhamento Horário de Anomalias (auto-warms medianas internamente)
-            cache_manager.sync_cnpj_cache("crm_horario", cnpj, engine)
-            cache_manager.sync_cnpj_cache("crm_horario_eventos", cnpj, engine)
-            cache_manager.sync_cnpj_cache("mediana_autorizacoes_horaria", cnpj, engine)
-            cache_manager.sync_cnpj_cache("mediana_autorizacoes_horaria_movel", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_timeline_dia", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_timeline_hora", cnpj, engine)
             cache_manager.sync_cnpj_cache("crm_timeline_eventos", cnpj, engine)
 
-            # 4. Transações Raio-X (unificado: múltiplos + único)
+            # 2. Transacoes Raio-X
             cache_manager.sync_cnpj_cache("crm_raiox_tx", cnpj, engine)
 
             if progress_callback:

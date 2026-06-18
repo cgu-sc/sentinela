@@ -8,22 +8,16 @@ from sqlalchemy import text
 from cache_files import (
     CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
     CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
-    CRM_HORARIO_EVENTOS_PARQUET,
-    CRM_HORARIO_PARQUET,
-    CRM_PERFIL_DIARIO_PARQUET,
     CRM_RAIOX_TX_PARQUET,
     CRM_TIMELINE_DIA_PARQUET,
     CRM_TIMELINE_EVENTOS_PARQUET,
     CRM_TIMELINE_HORA_PARQUET,
     CRM_PRESCRITORES_PARQUET,
     GEOGRAFICO_PARQUET,
-    MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
-    MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
 )
 from cache_producers.types import CacheLoadResult
 
 _CRM_ALERTS_CACHE_VERSION = 4
-_CRM_SEVERITY_CACHE_VERSION = 3
 _CRM_RAIOX_TX_CACHE_VERSION = 3
 _CRM_PRESCRITORES_CACHE_VERSION = 2
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
@@ -196,112 +190,6 @@ def load_or_sync_geografico(cnpj: str, engine=None) -> CacheLoadResult:
                 error=result.error,
             )
     return result
-
-
-def load_or_sync_crm_perfil_diario(cnpj: str, engine=None) -> CacheLoadResult:
-    parquet_path = _path(cnpj, CRM_PERFIL_DIARIO_PARQUET)
-    df, read_time_ms = _read_parquet(parquet_path)
-    if df is not None and "is_crm_multiplo" in df.columns:
-        return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-    return _load_or_sync_sql_cache(
-        cnpj,
-        CRM_PERFIL_DIARIO_PARQUET,
-        text("SELECT P.* FROM temp_CGUSC.fp.app_crm_perfil_diario P"
-             " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj"
-             " WHERE F.cnpj = :cnpj ORDER BY P.dt_janela"),
-        {"cnpj": cnpj},
-        engine,
-        read_existing=False,
-    )
-
-
-def load_or_sync_crm_perfil_horario(cnpj: str, engine=None) -> CacheLoadResult:
-    parquet_path = _path(cnpj, CRM_HORARIO_PARQUET)
-    df, read_time_ms = _read_parquet(parquet_path)
-    if df is not None and {"is_crm_multiplo", "is_hora_com_alerta"}.issubset(df.columns):
-        return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-    return _load_or_sync_sql_cache(
-        cnpj,
-        CRM_HORARIO_PARQUET,
-        text("SELECT P.dt_janela, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora, "
-             "P.is_hora_com_alerta, P.is_volume_horario_anomalo, P.is_crm_unico, P.is_crm_multiplo "
-             "FROM temp_CGUSC.fp.app_crm_perfil_horario P "
-             "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-             "WHERE F.cnpj = :cnpj "
-             "ORDER BY P.dt_janela, P.hr_janela"),
-        {"cnpj": cnpj},
-        engine,
-        read_existing=False,
-    )
-
-
-def load_or_sync_crm_horario_eventos(cnpj: str, engine=None) -> CacheLoadResult:
-    parquet_path = _path(cnpj, CRM_HORARIO_EVENTOS_PARQUET)
-    df, read_time_ms = _read_parquet(parquet_path)
-    if (
-        df is not None
-        and "_crm_severity_cache_version" in df.columns
-        and _to_int(df["_crm_severity_cache_version"].max()) >= _CRM_SEVERITY_CACHE_VERSION
-    ):
-        return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-
-    query_time_ms: float | None = None
-    save_time_ms: float | None = None
-    try:
-        engine = _engine_or_default(engine)
-        with engine.connect() as conn:
-            t0 = time.perf_counter()
-            pdf = pd.read_sql(
-                text("""
-                    SELECT 'UNICO' as tipo, A.dt_dia, A.id_medico, NULL as nu_crms_distintos,
-                           A.dt_ini_concentracao, A.dt_fim_concentracao,
-                           CASE A.id_severidade WHEN 4 THEN 'EXTREMO' WHEN 3 THEN 'CRITICO'
-                                WHEN 2 THEN 'GRAVE' WHEN 1 THEN 'ALTO' ELSE 'ALERTA' END AS severidade
-                    FROM temp_CGUSC.fp.app_crm_concentracao_unico_alertas A
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                    WHERE F.cnpj = :cnpj
-                    UNION ALL
-                    SELECT 'MULTIPLO' as tipo, A.dt_dia, NULL as id_medico, A.nu_crms_distintos,
-                           A.dt_ini_concentracao, A.dt_fim_concentracao,
-                           CASE A.id_severidade WHEN 4 THEN 'EXTREMO' WHEN 3 THEN 'CRITICO'
-                                WHEN 2 THEN 'GRAVE' WHEN 1 THEN 'ALTO' ELSE 'ALERTA' END AS severidade
-                    FROM temp_CGUSC.fp.app_crm_concentracao_multiplo_alertas A
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = A.id_cnpj
-                    WHERE F.cnpj = :cnpj
-                    UNION ALL
-                    SELECT 'VOLUME' as tipo, P.dt_janela as dt_dia, NULL as id_medico, P.nu_crms_diferentes as nu_crms_distintos,
-                           DATEADD(HOUR, P.hr_janela, CAST(P.dt_janela AS DATETIME)) as dt_ini_concentracao,
-                           DATEADD(HOUR, P.hr_janela + 1, CAST(P.dt_janela AS DATETIME)) as dt_fim_concentracao,
-                           'CRITICO' as severidade
-                    FROM temp_CGUSC.fp.app_crm_timeline_hora P
-                    INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj
-                    WHERE F.cnpj = :cnpj
-                      AND P.is_volume_horario_anomalo = 1
-                """),
-                conn,
-                params={"cnpj": cnpj},
-            )
-            query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
-
-        df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema=_empty_schema(CRM_HORARIO_EVENTOS_PARQUET))
-        if not df.is_empty():
-            df = df.with_columns([
-                pl.col("dt_ini_concentracao").dt.strftime("%H:%M").alias("hora_inicio"),
-                pl.col("dt_fim_concentracao").dt.strftime("%H:%M").alias("hora_fim"),
-                (pl.col("dt_ini_concentracao").dt.hour() * 60 + pl.col("dt_ini_concentracao").dt.minute()).alias("minuto_inicio"),
-                (pl.col("dt_fim_concentracao").dt.hour() * 60 + pl.col("dt_fim_concentracao").dt.minute()).alias("minuto_fim"),
-                pl.lit(_CRM_SEVERITY_CACHE_VERSION).alias("_crm_severity_cache_version"),
-            ])
-        else:
-            df = df.with_columns(pl.lit(_CRM_SEVERITY_CACHE_VERSION).alias("_crm_severity_cache_version"))
-
-        t1 = time.perf_counter()
-        df.write_parquet(parquet_path, compression="zstd")
-        save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
-        return CacheLoadResult(df, from_cache=False, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
-    except Exception:
-        print(f"[ ANALYTICS ] {cnpj} - EVENTOS CRM - indisponivel (sem cache e banco offline)")
-        return CacheLoadResult(pl.DataFrame(schema=_empty_schema(CRM_HORARIO_EVENTOS_PARQUET)), from_cache=False, error="Banco Offline.")
 
 
 def load_or_sync_crm_timeline_dia(cnpj: str, engine=None) -> CacheLoadResult:
@@ -507,45 +395,6 @@ def sync_crm_raiox_tx(cnpj: str, engine=None) -> CacheLoadResult:
     ])
     df.write_parquet(parquet_path, compression="zstd")
     return CacheLoadResult(df, result.from_cache, result.read_time_ms, result.query_time_ms, result.save_time_ms, result.error)
-
-
-def sync_mediana_autorizacoes_horaria(cnpj: str, engine=None) -> CacheLoadResult:
-    parquet_path = _path(cnpj, MEDIANA_AUTORIZACOES_HORARIA_PARQUET)
-    df, read_time_ms = _read_parquet(parquet_path)
-    if df is not None and "mediana_hora" in df.columns:
-        return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-    return _load_or_sync_sql_cache(
-        cnpj,
-        MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
-        text("SELECT M.ano, M.trimestre, M.hr_janela, M.mediana_hora "
-             "FROM temp_CGUSC.fp.app_mediana_autorizacoes_horaria M "
-             "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
-             "WHERE F.cnpj = :cnpj "
-             "ORDER BY M.ano, M.trimestre, M.hr_janela"),
-        {"cnpj": cnpj},
-        engine,
-        read_existing=False,
-    )
-
-
-def sync_mediana_autorizacoes_horaria_movel(cnpj: str, engine=None) -> CacheLoadResult:
-    parquet_path = _path(cnpj, MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET)
-    df, read_time_ms = _read_parquet(parquet_path)
-    required_cols = {"dt_janela", "hr_janela", "mediana_hora_movel", "mad_hora_movel"}
-    if df is not None and required_cols.issubset(df.columns):
-        return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-    return _load_or_sync_sql_cache(
-        cnpj,
-        MEDIANA_AUTORIZACOES_HORARIA_MOVEL_PARQUET,
-        text("SELECT M.dt_janela, M.hr_janela, M.mediana_hora_movel, M.mad_hora_movel "
-             "FROM temp_CGUSC.fp.app_mediana_autorizacoes_horaria_movel M "
-             "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = M.id_cnpj "
-             "WHERE F.cnpj = :cnpj "
-             "ORDER BY M.dt_janela, M.hr_janela"),
-        {"cnpj": cnpj},
-        engine,
-        read_existing=False,
-    )
 
 
 def _load_or_sync_sql_cache(

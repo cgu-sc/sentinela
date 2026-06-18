@@ -19,12 +19,13 @@ import time
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT_DIR, "backend"))
 
+from sqlalchemy import text
+
 from database import engine
 from data_cache import (
     _sync_analise_gtin_inconsistencia_clinica,
     _sync_analise_gtin_inconsistencia_clinica_municipio,
     _sync_analise_gtin_inconsistencia_clinica_regiao,
-    _sync_cnpj_parquets,
     _sync_crm_benchmarks,
     _sync_crm_prescricoes_brasil_semestre,
     _sync_dados_farmacia,
@@ -46,6 +47,103 @@ from data_cache import (
     _sync_teia_expansao_completa,
     _sync_volume_atipico_semestral,
 )
+
+
+CRM_CNPJ_CACHE_KEYS = [
+    ("crm_prescritores", "CRM prescritores"),
+    ("geografico", "CRM geografico"),
+    ("crm_concentracao_unico_alertas", "CRM concentracao unico"),
+    ("crm_concentracao_multiplo_alertas", "CRM concentracao multiplo"),
+    ("crm_timeline_dia", "CRM timeline dia"),
+    ("crm_timeline_hora", "CRM timeline hora"),
+    ("crm_timeline_eventos", "CRM timeline eventos"),
+    ("crm_raiox_tx", "CRM Raio-X transacoes"),
+]
+
+CRM_CNPJ_INDIVIDUAL_IDS = frozenset(range(26, 34))
+
+
+def _buscar_cnpjs_crm(engine) -> list[str]:
+    """Retorna os CNPJs elegiveis para sincronizacao de modulos CRM por CNPJ."""
+    with engine.connect() as conn:
+        res = conn.execute(text("""
+            SELECT DISTINCT F.cnpj
+            FROM temp_CGUSC.fp.matriz_risco_consolidada M
+            INNER JOIN temp_CGUSC.fp.dados_farmacia F
+                ON F.id = M.id_cnpj
+            ORDER BY F.cnpj
+        """))
+        return [str(r[0]).strip() for r in res if str(r[0]).strip()]
+
+
+def _sync_crm_cnpj_unit(cache_key: str, cnpj: str, engine) -> None:
+    import cache_manager
+
+    cache_manager.sync_cnpj_cache(cache_key, cnpj, engine)
+
+
+def _sync_crm_cnpj_cache_key(cache_key: str, engine, progress_callback=None) -> None:
+    """Sincroniza um modulo CRM por CNPJ usando o produtor registrado no cache_registry."""
+    cnpjs_sync = _buscar_cnpjs_crm(engine)
+
+    total = len(cnpjs_sync)
+    print(f"Sincronizando {cache_key} para {total} estabelecimento(s)...")
+
+    if total == 0:
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    for i, cnpj in enumerate(cnpjs_sync, 1):
+        try:
+            _sync_crm_cnpj_unit(cache_key, cnpj, engine)
+            if progress_callback:
+                progress_callback(int((i / total) * 100))
+        except Exception as e:
+            print(f"\n[AVISO] Erro ao sincronizar {cache_key} para CNPJ {cnpj}: {e}")
+            raise
+
+    if progress_callback:
+        progress_callback(100)
+
+
+def _criar_sync_crm_cnpj(cache_key: str):
+    def _sync(engine, progress_callback=None):
+        return _sync_crm_cnpj_cache_key(cache_key, engine, progress_callback)
+
+    return _sync
+
+
+def _sync_crm_cnpj_completo(engine, progress_callback=None) -> None:
+    """Sincroniza somente os modulos CRM ativos por CNPJ."""
+    cnpjs_sync = _buscar_cnpjs_crm(engine)
+
+    total = len(cnpjs_sync)
+    if total == 0:
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    print(
+        "Sincronizando pacote CRM por CNPJ: "
+        f"{len(CRM_CNPJ_CACHE_KEYS)} modulo(s), {total} estabelecimento(s)..."
+    )
+
+    total_steps = total * len(CRM_CNPJ_CACHE_KEYS)
+    step = 0
+    for cnpj in cnpjs_sync:
+        for cache_key, label in CRM_CNPJ_CACHE_KEYS:
+            try:
+                _sync_crm_cnpj_unit(cache_key, cnpj, engine)
+                step += 1
+                if progress_callback:
+                    progress_callback(int((step / total_steps) * 100))
+            except Exception as e:
+                print(f"\n[AVISO] Erro ao sincronizar {label} para CNPJ {cnpj}: {e}")
+                raise
+
+    if progress_callback:
+        progress_callback(100)
 
 
 def _sync_clinica_anual_completa(engine, progress_callback=None):
@@ -71,40 +169,52 @@ def _sync_clinica_anual_completa(engine, progress_callback=None):
 
 
 MODULOS = sorted([
-    {"id": 1, "name": "Localidades", "func": _sync_localidades, "peso": "rapido"},
-    {"id": 2, "name": "Rede", "func": _sync_rede, "peso": "rapido"},
-    {"id": 3, "name": "Matriz risco", "func": _sync_matriz_risco, "peso": "medio"},
-    {"id": 18, "name": "Clinica anual completa", "func": _sync_clinica_anual_completa, "peso": "rapido"},
-    {"id": 20, "name": "Clinica municipal", "func": _sync_analise_gtin_inconsistencia_clinica_municipio, "peso": "rapido"},
-    {"id": 21, "name": "Clinica regiao", "func": _sync_analise_gtin_inconsistencia_clinica_regiao, "peso": "rapido"},
-    {"id": 19, "name": "Demografia", "func": _sync_dados_ibge_demografia, "peso": "rapido"},
-    {"id": 12, "name": "Volume atipico", "func": _sync_volume_atipico_semestral, "peso": "medio"},
-    {"id": 22, "name": "Geo origem UF", "func": _sync_geografico_origem_uf, "peso": "rapido"},
-    {"id": 16, "name": "eSocial", "func": _sync_esocial, "peso": "rapido"},
-    {"id": 17, "name": "Metadados", "func": _sync_sentinela_metadados_base, "peso": "rapido"},
-    {"id": 14, "name": "PAR", "func": _sync_dados_par, "peso": "rapido"},
-    {"id": 7, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio"},
-    {"id": 13, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio"},
-    {"id": 4, "name": "Falecidos global", "func": _sync_falecidos, "peso": "medio"},
-    {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido"},
-    {"id": 23, "name": "CRM Brasil semestre", "func": _sync_crm_prescricoes_brasil_semestre, "peso": "rapido"},
-    {"id": 24, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 5.5},
-    {"id": 8, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado"},
-    {"id": 9, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido"},
-    {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio"},
-    {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado"},
-    {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido"},
-    {"id": 6, "name": "CNPJ modulos", "func": _sync_cnpj_parquets, "peso": "muito pesado", "ordem": 11.5},
-], key=lambda modulo: modulo["id"])
+    {"id": 1, "name": "Localidades", "func": _sync_localidades, "peso": "rapido", "ordem": 1},
+    {"id": 2, "name": "Rede", "func": _sync_rede, "peso": "rapido", "ordem": 2},
+    {"id": 3, "name": "Matriz risco", "func": _sync_matriz_risco, "peso": "medio", "ordem": 3},
+    {"id": 4, "name": "Falecidos global", "func": _sync_falecidos, "peso": "medio", "ordem": 4},
+    {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido", "ordem": 5},
+    {"id": 23, "name": "CRM Brasil semestre", "func": _sync_crm_prescricoes_brasil_semestre, "peso": "rapido", "ordem": 5.1},
+    {"id": 24, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 5.2},
+    {"id": 25, "name": "CRM CNPJ completo", "func": _sync_crm_cnpj_completo, "peso": "pesado", "ordem": 5.3},
+    {"id": 26, "name": "CRM prescritores", "func": _criar_sync_crm_cnpj("crm_prescritores"), "peso": "medio", "ordem": 5.4},
+    {"id": 27, "name": "CRM geografico", "func": _criar_sync_crm_cnpj("geografico"), "peso": "medio", "ordem": 5.5},
+    {"id": 28, "name": "CRM conc. unico", "func": _criar_sync_crm_cnpj("crm_concentracao_unico_alertas"), "peso": "medio", "ordem": 5.6},
+    {"id": 29, "name": "CRM conc. multiplo", "func": _criar_sync_crm_cnpj("crm_concentracao_multiplo_alertas"), "peso": "medio", "ordem": 5.7},
+    {"id": 30, "name": "CRM timeline dia", "func": _criar_sync_crm_cnpj("crm_timeline_dia"), "peso": "medio", "ordem": 5.8},
+    {"id": 31, "name": "CRM timeline hora", "func": _criar_sync_crm_cnpj("crm_timeline_hora"), "peso": "medio", "ordem": 5.9},
+    {"id": 32, "name": "CRM timeline eventos", "func": _criar_sync_crm_cnpj("crm_timeline_eventos"), "peso": "medio", "ordem": 6.0},
+    {"id": 33, "name": "CRM Raio-X", "func": _criar_sync_crm_cnpj("crm_raiox_tx"), "peso": "medio", "ordem": 6.1},
+    {"id": 7, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio", "ordem": 7},
+    {"id": 13, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio", "ordem": 7.5},
+    {"id": 8, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado", "ordem": 8},
+    {"id": 9, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido", "ordem": 9},
+    {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio", "ordem": 10},
+    {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado", "ordem": 11},
+    {"id": 12, "name": "Volume atipico", "func": _sync_volume_atipico_semestral, "peso": "medio", "ordem": 12},
+    {"id": 14, "name": "PAR", "func": _sync_dados_par, "peso": "rapido", "ordem": 14},
+    {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido", "ordem": 15},
+    {"id": 16, "name": "eSocial", "func": _sync_esocial, "peso": "rapido", "ordem": 16},
+    {"id": 17, "name": "Metadados", "func": _sync_sentinela_metadados_base, "peso": "rapido", "ordem": 17},
+    {"id": 18, "name": "Clinica anual completa", "func": _sync_clinica_anual_completa, "peso": "rapido", "ordem": 18},
+    {"id": 19, "name": "Demografia", "func": _sync_dados_ibge_demografia, "peso": "rapido", "ordem": 19},
+    {"id": 20, "name": "Clinica municipal", "func": _sync_analise_gtin_inconsistencia_clinica_municipio, "peso": "rapido", "ordem": 20},
+    {"id": 21, "name": "Clinica regiao", "func": _sync_analise_gtin_inconsistencia_clinica_regiao, "peso": "rapido", "ordem": 21},
+    {"id": 22, "name": "Geo origem UF", "func": _sync_geografico_origem_uf, "peso": "rapido", "ordem": 22},
+], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {
-    6: {7, 10, 11},
     11: {10},
+    25: {24},
+    26: {24},
 }
 
 
 def _incluir_dependencias(selecionados: list[dict]) -> list[dict]:
     ids = {modulo["id"] for modulo in selecionados}
+    if 25 in ids:
+        ids.difference_update(CRM_CNPJ_INDIVIDUAL_IDS)
+
     pendentes = list(ids)
 
     while pendentes:
@@ -136,7 +246,11 @@ def selecionar_modulos() -> list[dict]:
     entrada = input("\nDigite os numeros separados por virgula (ex: 1,3,7): ").strip()
 
     if entrada == "0":
-        return _incluir_dependencias(MODULOS)
+        modulos_todos = [
+            modulo for modulo in MODULOS
+            if modulo["id"] not in CRM_CNPJ_INDIVIDUAL_IDS
+        ]
+        return _incluir_dependencias(modulos_todos)
 
     ids_validos = {m["id"] for m in MODULOS}
     selecionados = []
@@ -161,26 +275,10 @@ def selecionar_modulos() -> list[dict]:
     return _incluir_dependencias(selecionados)
 
 
-def perguntar_params(selecionados: list[dict]) -> None:
-    """Coleta parametros extras para modulos que os suportam."""
-    for modulo in selecionados:
-        if modulo["id"] == 6:
-            entrada = input(
-                "\nCNPJs para exportar (separados por virgula) - Enter para TODOS: "
-            ).strip()
-            if entrada:
-                modulo["params"] = {
-                    "cnpjs": [c.strip() for c in entrada.split(",") if c.strip()]
-                }
-
-
 def confirmar(selecionados: list[dict]) -> bool:
     print("\nModulos selecionados para sincronizacao:")
     for m in selecionados:
-        detalhe = ""
-        if "params" in m and m["params"].get("cnpjs"):
-            detalhe = f"  ({len(m['params']['cnpjs'])} CNPJ(s) especifico(s))"
-        print(f"  - {m['name']}{detalhe}")
+        print(f"  - {m['name']}")
     resposta = input("\nConfirmar? [S/n]: ").strip().lower()
     return resposta in ("", "s", "sim", "y", "yes")
 
@@ -204,7 +302,7 @@ def executar(selecionados: list[dict]):
 
         t0 = time.perf_counter()
         try:
-            modulo["func"](engine, callback, **modulo.get("params", {}))
+            modulo["func"](engine, callback)
             elapsed = time.perf_counter() - t0
             print(f"\r  OK {nome:<35} concluido em {elapsed:.1f}s")
         except Exception as e:
@@ -223,8 +321,6 @@ def main():
         if not selecionados:
             print("\nAviso: nenhum modulo selecionado. Encerrando.")
             return
-
-        perguntar_params(selecionados)
 
         if not confirmar(selecionados):
             print("\nOperacao cancelada.")

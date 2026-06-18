@@ -4,8 +4,6 @@ from ._cache import (
 )
 from cache_producers.crm import (
     sync_crm_raiox_tx,
-    sync_mediana_autorizacoes_horaria,
-    sync_mediana_autorizacoes_horaria_movel,
 )
 from cache_producers.network import (
     sync_network,
@@ -98,8 +96,6 @@ class AnalyticsService:
     get_crm_medico_alertas = staticmethod(get_crm_medico_alertas)
     get_crm_timeline_dataset = staticmethod(get_crm_timeline_dataset)
     sync_crm_raiox_tx = staticmethod(sync_crm_raiox_tx)
-    sync_mediana_autorizacoes_horaria = staticmethod(sync_mediana_autorizacoes_horaria)
-    sync_mediana_autorizacoes_horaria_movel = staticmethod(sync_mediana_autorizacoes_horaria_movel)
     get_crm_raio_x = staticmethod(get_crm_raio_x)
     get_dados_farmacia = staticmethod(get_dados_farmacia)
     get_cnpj_access_status = staticmethod(get_cnpj_access_status)

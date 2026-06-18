@@ -48,6 +48,12 @@ from data_cache import (
     _sync_sentinela_metadados_base,
     _sync_teia_expansao_completa,
     _sync_volume_atipico_semestral,
+    _sync_geografico_global,
+    _sync_crm_concentracao_unico_alertas_global,
+    _sync_crm_concentracao_multiplo_alertas_global,
+    _sync_crm_timeline_dia_global,
+    _sync_crm_timeline_hora_global,
+    _sync_crm_timeline_eventos_global,
 )
 
 
@@ -202,11 +208,17 @@ MODULOS = sorted([
     {"id": 30, "name": "Clinica municipal", "func": _sync_analise_gtin_inconsistencia_clinica_municipio, "peso": "rapido", "ordem": 30},
     {"id": 31, "name": "Clinica regiao", "func": _sync_analise_gtin_inconsistencia_clinica_regiao, "peso": "rapido", "ordem": 31},
     {"id": 32, "name": "Geo origem UF", "func": _sync_geografico_origem_uf, "peso": "rapido", "ordem": 32},
+    {"id": 33, "name": "CRM Geo Global", "func": _sync_geografico_global, "peso": "pesado", "ordem": 33},
+    {"id": 34, "name": "CRM ConcUnico Global", "func": _sync_crm_concentracao_unico_alertas_global, "peso": "pesado", "ordem": 34},
+    {"id": 35, "name": "CRM ConcMulti Global", "func": _sync_crm_concentracao_multiplo_alertas_global, "peso": "pesado", "ordem": 35},
+    {"id": 36, "name": "CRM Dia Global", "func": _sync_crm_timeline_dia_global, "peso": "pesado", "ordem": 36},
+    {"id": 37, "name": "CRM Hora Global", "func": _sync_crm_timeline_hora_global, "peso": "pesado", "ordem": 37},
+    {"id": 38, "name": "CRM Eventos Global", "func": _sync_crm_timeline_eventos_global, "peso": "pesado", "ordem": 38},
 ], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {
     8: {7},
-    9: {7, 8, 16},
+    9: {7, 8, 16, 33, 34, 35, 36, 37, 38},
     22: {21},
 }
 

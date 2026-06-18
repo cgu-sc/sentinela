@@ -5,6 +5,14 @@ from dataclasses import dataclass
 import polars as pl
 
 import cache_files
+from cache_files import (
+    GEOGRAFICO_GLOBAL_PARQUET,
+    CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET,
+    CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET,
+    CRM_TIMELINE_DIA_GLOBAL_PARQUET,
+    CRM_TIMELINE_HORA_GLOBAL_PARQUET,
+    CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET,
+)
 
 
 @dataclass(frozen=True)
@@ -75,6 +83,139 @@ def _crm_raiox_tx_global_schema() -> dict:
         "id_medico": pl.Utf8,
         "valor_pago": pl.Float64,
         "_crm_raiox_tx_cache_version": pl.Int32,
+    }
+
+
+def _geografico_global_schema() -> dict:
+    """Schema do parquet global de alertas geográficos CRM (sem id_cnpj; filtro por cnpj_a/cnpj_b)."""
+    return {
+        "id_medico": pl.Utf8,
+        "competencia": pl.Int32,
+        "cnpj_a": pl.Utf8,
+        "no_municipio_a": pl.Utf8,
+        "sg_uf_a": pl.Utf8,
+        "dt_ini_a": pl.Utf8,
+        "dt_fim_a": pl.Utf8,
+        "nu_prescricoes_a": pl.Int32,
+        "vl_autorizacoes_a": pl.Float64,
+        "cnpj_b": pl.Utf8,
+        "no_municipio_b": pl.Utf8,
+        "sg_uf_b": pl.Utf8,
+        "dt_ini_b": pl.Utf8,
+        "dt_fim_b": pl.Utf8,
+        "nu_prescricoes_b": pl.Int32,
+        "vl_autorizacoes_b": pl.Float64,
+        "vl_autorizacoes_total": pl.Float64,
+        "distancia_km": pl.Float64,
+    }
+
+
+def _crm_concentracao_unico_alertas_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "id_medico": pl.Utf8,
+        "competencia": pl.Int32,
+        "dt_alerta": pl.Utf8,
+        "hr_janela": pl.Int32,
+        "nu_prescricoes_dia": pl.Int32,
+        "nu_minutos_dia": pl.Int32,
+        "nu_minutos_intervalo": pl.Int32,
+        "taxa_hora": pl.Float64,
+        "dt_ini_hora": pl.Datetime,
+        "dt_fim_hora": pl.Datetime,
+        "id_severidade": pl.Int32,
+        "severidade": pl.Utf8,
+        "criterio_pior_ritmo": pl.Utf8,
+        "_crm_alerts_cache_version": pl.Int32,
+        "nu_5min": pl.Int32,
+        "nu_10min": pl.Int32,
+        "nu_15min": pl.Int32,
+        "nu_20min": pl.Int32,
+        "nu_25min": pl.Int32,
+        "nu_30min": pl.Int32,
+        "nu_60min": pl.Int32,
+    }
+
+
+def _crm_concentracao_multiplo_alertas_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "competencia": pl.Int32,
+        "dt_dia": pl.Utf8,
+        "dt_alerta": pl.Utf8,
+        "hr_janela": pl.Int32,
+        "dt_ini_concentracao": pl.Utf8,
+        "dt_fim_concentracao": pl.Utf8,
+        "nu_prescricoes": pl.Int32,
+        "nu_crms": pl.Int32,
+        "nu_60min": pl.Int32,
+        "nu_minutos_intervalo": pl.Int32,
+        "nu_minutos_span": pl.Int32,
+        "taxa_hora": pl.Float64,
+        "id_severidade": pl.Int32,
+        "nu_crms_distintos": pl.Int32,
+        "severidade": pl.Utf8,
+        "criterio_pior_ritmo": pl.Utf8,
+        "_crm_alerts_cache_version": pl.Int32,
+        "nu_5min": pl.Int32,
+        "nu_10min": pl.Int32,
+        "nu_15min": pl.Int32,
+        "nu_20min": pl.Int32,
+        "nu_25min": pl.Int32,
+        "nu_30min": pl.Int32,
+    }
+
+
+def _crm_timeline_dia_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "dt_janela": pl.Utf8,
+        "competencia": pl.Int32,
+        "nu_prescricoes_dia": pl.Int32,
+        "nu_crms_distintos": pl.Int32,
+        "mediana_diaria": pl.Float64,
+        "is_dia_com_volume_horario_anomalo": pl.Int8,
+        "is_anomalo_unico": pl.Int8,
+        "is_crm_multiplo": pl.Int8,
+        "score_crm_unico_hora": pl.Float64,
+        "score_crm_unico_qtd": pl.Int32,
+        "score_crm_unico_minutos": pl.Int32,
+        "score_crm_unico_medico": pl.Utf8,
+        "score_crm_multiplo_hora": pl.Float64,
+        "score_crm_multiplo_qtd": pl.Int32,
+        "score_crm_multiplo_minutos": pl.Int32,
+        "score_crm_multiplo_crms": pl.Int32,
+    }
+
+
+def _crm_timeline_hora_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "dt_janela": pl.Utf8,
+        "hr_janela": pl.Int32,
+        "nu_prescricoes": pl.Int32,
+        "nu_crms_diferentes": pl.Int32,
+        "mediana_hora": pl.Float64,
+        "mad_hora": pl.Float64,
+        "is_hora_com_alerta": pl.Int8,
+        "is_volume_horario_anomalo": pl.Int8,
+        "is_crm_unico": pl.Int8,
+        "is_crm_multiplo": pl.Int8,
+    }
+
+
+def _crm_timeline_eventos_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "dt_janela": pl.Utf8,
+        "tipo": pl.Utf8,
+        "hora_inicio": pl.Utf8,
+        "hora_fim": pl.Utf8,
+        "minuto_inicio": pl.Int32,
+        "minuto_fim": pl.Int32,
+        "severidade": pl.Utf8,
+        "id_medico": pl.Utf8,
+        "nu_crms_distintos": pl.Int32,
     }
 
 
@@ -242,6 +383,22 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("dados_par", cache_files.DADOS_PAR_PARQUET, "global"),
     CacheDefinition("par_teia_alvos", cache_files.PAR_TEIA_ALVOS_PARQUET, "global"),
     CacheDefinition("falecidos", cache_files.FALECIDOS_PARQUET, "global", _falecidos_schema()),
+    CacheDefinition("geografico_global", GEOGRAFICO_GLOBAL_PARQUET, "global", _geografico_global_schema()),
+    CacheDefinition(
+        "crm_concentracao_unico_alertas_global",
+        CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET,
+        "global",
+        _crm_concentracao_unico_alertas_global_schema(),
+    ),
+    CacheDefinition(
+        "crm_concentracao_multiplo_alertas_global",
+        CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET,
+        "global",
+        _crm_concentracao_multiplo_alertas_global_schema(),
+    ),
+    CacheDefinition("crm_timeline_dia_global", CRM_TIMELINE_DIA_GLOBAL_PARQUET, "global", _crm_timeline_dia_global_schema()),
+    CacheDefinition("crm_timeline_hora_global", CRM_TIMELINE_HORA_GLOBAL_PARQUET, "global", _crm_timeline_hora_global_schema()),
+    CacheDefinition("crm_timeline_eventos_global", CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET, "global", _crm_timeline_eventos_global_schema()),
 )
 
 

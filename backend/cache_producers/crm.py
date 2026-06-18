@@ -18,6 +18,12 @@ from cache_files import (
     CRM_PRESCRITORES_GLOBAL_PARQUET,
     CRM_PRESCRITORES_PARQUET,
     GEOGRAFICO_PARQUET,
+    GEOGRAFICO_GLOBAL_PARQUET,
+    CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET,
+    CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET,
+    CRM_TIMELINE_DIA_GLOBAL_PARQUET,
+    CRM_TIMELINE_HORA_GLOBAL_PARQUET,
+    CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET,
 )
 from cache_producers.types import CacheLoadResult
 
@@ -282,12 +288,36 @@ def load_or_sync_geografico(cnpj: str, engine=None) -> CacheLoadResult:
     schema = _empty_schema(GEOGRAFICO_PARQUET)
     required = set(schema)
     parquet_path = _path(cnpj, GEOGRAFICO_PARQUET)
+    from data_cache import get_cache_dir
+    global_path = os.path.join(get_cache_dir(), GEOGRAFICO_GLOBAL_PARQUET)
+    
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         missing_cols = sorted(required - set(df.columns))
-        if not missing_cols:
+        global_is_newer = os.path.exists(global_path) and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        if not missing_cols and not global_is_newer:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-        print(f"[ CACHE ] {cnpj} - geografico - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+        print(f"[ CACHE ] {cnpj} - geografico - cache defasado; regenerando parquet.")
+
+    if os.path.exists(global_path):
+        try:
+            from data_cache import scan_geografico_global
+            started_at = time.perf_counter()
+            df_global = (
+                scan_geografico_global()
+                .filter((pl.col("cnpj_a") == cnpj) | (pl.col("cnpj_b") == cnpj))
+                .collect()
+            )
+            df_global = df_global.select(list(schema.keys()))
+            source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+            
+            t1 = time.perf_counter()
+            df_global.write_parquet(parquet_path, compression="zstd")
+            save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+            print(f"[ CACHE ] {cnpj} - {GEOGRAFICO_PARQUET} derivado do global.")
+            return CacheLoadResult(df_global, from_cache=False, read_time_ms=source_time_ms, save_time_ms=save_time_ms)
+        except Exception as exc:
+            print(f"[ ANALYTICS ] {cnpj} - geografico global invalido: {exc}")
 
     result = _load_or_sync_sql_cache(
         cnpj,
@@ -321,12 +351,43 @@ def load_or_sync_crm_timeline_dia(cnpj: str, engine=None) -> CacheLoadResult:
     schema = _empty_schema(CRM_TIMELINE_DIA_PARQUET)
     required = set(schema)
     parquet_path = _path(cnpj, CRM_TIMELINE_DIA_PARQUET)
+    from data_cache import get_cache_dir
+    global_path = os.path.join(get_cache_dir(), CRM_TIMELINE_DIA_GLOBAL_PARQUET)
+
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         missing_cols = sorted(required - set(df.columns))
-        if not missing_cols:
+        global_is_newer = (
+            os.path.exists(global_path)
+            and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        )
+        if not missing_cols and not global_is_newer:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-        print(f"[ CACHE ] {cnpj} - timeline dia - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+        print(f"[ CACHE ] {cnpj} - timeline dia - cache defasado; regenerando parquet.")
+
+    if os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_timeline_dia_global
+            perfil = get_df_perfil_estabelecimento()
+            perfil_cnpj = perfil.filter(pl.col("cnpj").cast(pl.Utf8) == cnpj).select("id_cnpj").unique()
+            if perfil_cnpj.height == 1:
+                id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+                started_at = time.perf_counter()
+                df_global = (
+                    scan_crm_timeline_dia_global()
+                    .filter(pl.col("id_cnpj") == id_cnpj)
+                    .drop("id_cnpj")
+                    .collect()
+                )
+                df_global = df_global.select(list(schema.keys()))
+                source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+                t1 = time.perf_counter()
+                df_global.write_parquet(parquet_path, compression="zstd")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+                print(f"[ CACHE ] {cnpj} - {CRM_TIMELINE_DIA_PARQUET} derivado do global.")
+                return CacheLoadResult(df_global, from_cache=False, read_time_ms=source_time_ms, save_time_ms=save_time_ms)
+        except Exception as exc:
+            print(f"[ ANALYTICS ] {cnpj} - {CRM_TIMELINE_DIA_GLOBAL_PARQUET} invalido: {exc}")
 
     return _load_or_sync_sql_cache(
         cnpj,
@@ -353,12 +414,43 @@ def load_or_sync_crm_timeline_hora(cnpj: str, engine=None) -> CacheLoadResult:
     schema = _empty_schema(CRM_TIMELINE_HORA_PARQUET)
     required = set(schema)
     parquet_path = _path(cnpj, CRM_TIMELINE_HORA_PARQUET)
+    from data_cache import get_cache_dir
+    global_path = os.path.join(get_cache_dir(), CRM_TIMELINE_HORA_GLOBAL_PARQUET)
+
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         missing_cols = sorted(required - set(df.columns))
-        if not missing_cols:
+        global_is_newer = (
+            os.path.exists(global_path)
+            and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        )
+        if not missing_cols and not global_is_newer:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-        print(f"[ CACHE ] {cnpj} - timeline hora - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+        print(f"[ CACHE ] {cnpj} - timeline hora - cache defasado; regenerando parquet.")
+
+    if os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_timeline_hora_global
+            perfil = get_df_perfil_estabelecimento()
+            perfil_cnpj = perfil.filter(pl.col("cnpj").cast(pl.Utf8) == cnpj).select("id_cnpj").unique()
+            if perfil_cnpj.height == 1:
+                id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+                started_at = time.perf_counter()
+                df_global = (
+                    scan_crm_timeline_hora_global()
+                    .filter(pl.col("id_cnpj") == id_cnpj)
+                    .drop("id_cnpj")
+                    .collect()
+                )
+                df_global = df_global.select(list(schema.keys()))
+                source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+                t1 = time.perf_counter()
+                df_global.write_parquet(parquet_path, compression="zstd")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+                print(f"[ CACHE ] {cnpj} - {CRM_TIMELINE_HORA_PARQUET} derivado do global.")
+                return CacheLoadResult(df_global, from_cache=False, read_time_ms=source_time_ms, save_time_ms=save_time_ms)
+        except Exception as exc:
+            print(f"[ ANALYTICS ] {cnpj} - {CRM_TIMELINE_HORA_GLOBAL_PARQUET} invalido: {exc}")
 
     return _load_or_sync_sql_cache(
         cnpj,
@@ -383,12 +475,43 @@ def load_or_sync_crm_timeline_eventos(cnpj: str, engine=None) -> CacheLoadResult
     schema = _empty_schema(CRM_TIMELINE_EVENTOS_PARQUET)
     required = set(schema)
     parquet_path = _path(cnpj, CRM_TIMELINE_EVENTOS_PARQUET)
+    from data_cache import get_cache_dir
+    global_path = os.path.join(get_cache_dir(), CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET)
+
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         missing_cols = sorted(required - set(df.columns))
-        if not missing_cols:
+        global_is_newer = (
+            os.path.exists(global_path)
+            and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        )
+        if not missing_cols and not global_is_newer:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
-        print(f"[ CACHE ] {cnpj} - timeline eventos - cache sem {', '.join(missing_cols)}; regenerando parquet.")
+        print(f"[ CACHE ] {cnpj} - timeline eventos - cache defasado; regenerando parquet.")
+
+    if os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_timeline_eventos_global
+            perfil = get_df_perfil_estabelecimento()
+            perfil_cnpj = perfil.filter(pl.col("cnpj").cast(pl.Utf8) == cnpj).select("id_cnpj").unique()
+            if perfil_cnpj.height == 1:
+                id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+                started_at = time.perf_counter()
+                df_global = (
+                    scan_crm_timeline_eventos_global()
+                    .filter(pl.col("id_cnpj") == id_cnpj)
+                    .drop("id_cnpj")
+                    .collect()
+                )
+                df_global = df_global.select(list(schema.keys()))
+                source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+                t1 = time.perf_counter()
+                df_global.write_parquet(parquet_path, compression="zstd")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+                print(f"[ CACHE ] {cnpj} - {CRM_TIMELINE_EVENTOS_PARQUET} derivado do global.")
+                return CacheLoadResult(df_global, from_cache=False, read_time_ms=source_time_ms, save_time_ms=save_time_ms)
+        except Exception as exc:
+            print(f"[ ANALYTICS ] {cnpj} - {CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET} invalido: {exc}")
 
     return _load_or_sync_sql_cache(
         cnpj,
@@ -408,17 +531,53 @@ def load_or_sync_crm_timeline_eventos(cnpj: str, engine=None) -> CacheLoadResult
     )
 
 
+
 def load_or_sync_crm_unico_alertas(cnpj: str, engine=None) -> CacheLoadResult:
     schema = _empty_schema(CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET)
     required = set(schema)
     parquet_path = _path(cnpj, CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET)
+    from data_cache import get_cache_dir
+    global_path = os.path.join(get_cache_dir(), CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET)
+
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         version_ok = "_crm_alerts_cache_version" in df.columns and (
             df.height == 0 or _to_int(df["_crm_alerts_cache_version"].max()) >= _CRM_ALERTS_CACHE_VERSION
         )
-        if required.issubset(df.columns) and version_ok:
+        global_is_newer = (
+            os.path.exists(global_path)
+            and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        )
+        if required.issubset(df.columns) and version_ok and not global_is_newer:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+        print(f"[ CACHE ] {cnpj} - unico alertas - cache defasado; regenerando parquet.")
+
+    if os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_concentracao_unico_alertas_global
+            perfil = get_df_perfil_estabelecimento()
+            perfil_cnpj = perfil.filter(pl.col("cnpj").cast(pl.Utf8) == cnpj).select("id_cnpj").unique()
+            if perfil_cnpj.height == 1:
+                id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+                started_at = time.perf_counter()
+                df_global = (
+                    scan_crm_concentracao_unico_alertas_global()
+                    .filter(pl.col("id_cnpj") == id_cnpj)
+                    .drop("id_cnpj")
+                    .collect()
+                )
+                df_global = df_global.with_columns(
+                    pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version")
+                )
+                df_global = df_global.select(list(schema.keys()))
+                source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+                t1 = time.perf_counter()
+                df_global.write_parquet(parquet_path, compression="zstd")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+                print(f"[ CACHE ] {cnpj} - {CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET} derivado do global.")
+                return CacheLoadResult(df_global, from_cache=False, read_time_ms=source_time_ms, save_time_ms=save_time_ms)
+        except Exception as exc:
+            print(f"[ ANALYTICS ] {cnpj} - {CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET} invalido: {exc}")
 
     query = text("""
         SELECT A.id_medico, YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
@@ -459,6 +618,46 @@ def load_or_sync_crm_multi_alertas(cnpj: str, engine=None) -> CacheLoadResult:
         )
         if required.issubset(df.columns) and version_ok:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
+
+    
+    from data_cache import get_cache_dir
+    global_path = os.path.join(get_cache_dir(), CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET)
+    if df is not None:
+        global_is_newer = os.path.exists(global_path) and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        
+        version_ok = "_crm_alerts_cache_version" in df.columns and (
+            df.height == 0 or _to_int(df["_crm_alerts_cache_version"].max()) >= _CRM_ALERTS_CACHE_VERSION
+        )
+        if not version_ok: global_is_newer = True
+
+        if global_is_newer:
+            df = None # force re-generation
+
+    if df is None and os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_concentracao_multiplo_alertas_global
+            perfil = get_df_perfil_estabelecimento()
+            perfil_cnpj = perfil.filter(pl.col("cnpj").cast(pl.Utf8) == cnpj).select("id_cnpj").unique()
+            if perfil_cnpj.height == 1:
+                id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+                started_at = time.perf_counter()
+                df_global = (
+                    scan_crm_concentracao_multiplo_alertas_global()
+                    .filter(pl.col("id_cnpj") == id_cnpj)
+                    
+                    .collect()
+                )
+                df_global = df_global.with_columns(pl.lit(_CRM_ALERTS_CACHE_VERSION).alias("_crm_alerts_cache_version"))
+                df_global = df_global.select(list(schema.keys()))
+                source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+                
+                t1 = time.perf_counter()
+                df_global.write_parquet(parquet_path, compression="zstd")
+                save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+                print(f"[ CACHE ] {cnpj} - {CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET} derivado do global.")
+                return CacheLoadResult(df_global, from_cache=False, read_time_ms=source_time_ms, save_time_ms=save_time_ms)
+        except Exception as exc:
+            print(f"[ ANALYTICS ] {cnpj} - CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET invalido: {exc}")
 
     query = text("""
         SELECT A.id_cnpj, YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,

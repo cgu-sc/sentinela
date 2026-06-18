@@ -282,6 +282,43 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "percentual_cpfs_incompativeis_regiao",
         "dt_processamento",
     },
+    "geografico_global": {
+        "cnpj_a",
+        "cnpj_b",
+        "id_medico",
+        "competencia",
+        "distancia_km",
+    },
+    "crm_concentracao_unico_alertas_global": {
+        "id_cnpj",
+        "id_medico",
+        "dt_alerta",
+        "hr_janela",
+        "severidade",
+        "_crm_alerts_cache_version",
+    },
+    "crm_concentracao_multiplo_alertas_global": {
+        "id_cnpj",
+        "dt_alerta",
+        "hr_janela",
+        "severidade",
+        "_crm_alerts_cache_version",
+    },
+    "crm_timeline_dia_global": {
+        "id_cnpj",
+        "dt_janela",
+        "competencia",
+    },
+    "crm_timeline_hora_global": {
+        "id_cnpj",
+        "dt_janela",
+        "hr_janela",
+    },
+    "crm_timeline_eventos_global": {
+        "id_cnpj",
+        "dt_janela",
+        "tipo",
+    },
     "crm_prescricoes_brasil_semestre": {
         "id_medico",
         "chave_semestre",
@@ -378,6 +415,13 @@ _ESOCIAL_CNPJ_ULTIMA_MOVIMENTACAO_PARQUET_PATH = _global_cache_path("esocial_cnp
 _SENTINELA_METADADOS_BASE_PARQUET_PATH = _global_cache_path("sentinela_metadados_base")
 _DADOS_PAR_PARQUET_PATH = _global_cache_path("dados_par")
 _PAR_TEIA_ALVOS_PARQUET_PATH = _global_cache_path("par_teia_alvos")
+_GEOGRAFICO_GLOBAL_PARQUET_PATH = _global_cache_path("geografico_global")
+_CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH = _global_cache_path("crm_concentracao_unico_alertas_global")
+_CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH = _global_cache_path("crm_concentracao_multiplo_alertas_global")
+_CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH = _global_cache_path("crm_timeline_dia_global")
+_CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH = _global_cache_path("crm_timeline_hora_global")
+_CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH = _global_cache_path("crm_timeline_eventos_global")
+
 
 for _dir in (get_modules_dir(), _CACHE_DIR, get_cnpj_cache_root()):
     if not os.path.exists(_dir):
@@ -962,6 +1006,142 @@ def _sync_crm_prescritores_global(engine, progress_callback=None):
     manifest["final_file"] = os.path.basename(final_path)
     write_manifest(manifest)
     _mark_on_demand_global_cache_ready("crm_prescritores_global", final_path)
+    if progress_callback:
+        progress_callback(100)
+
+
+
+def _sync_geografico_global(engine, progress_callback=None):
+    print("Sincronizando CRM Geografico Global...")
+    query = text("""
+        SELECT A.id_medico, A.competencia,
+               A.cnpj_a, A.no_municipio_a, A.sg_uf_a,
+               CONVERT(VARCHAR(10), A.dt_ini_a, 23) AS dt_ini_a,
+               CONVERT(VARCHAR(10), A.dt_fim_a, 23) AS dt_fim_a,
+               A.nu_prescricoes_a, A.vl_autorizacoes_a,
+               A.cnpj_b, A.no_municipio_b, A.sg_uf_b,
+               CONVERT(VARCHAR(10), A.dt_ini_b, 23) AS dt_ini_b,
+               CONVERT(VARCHAR(10), A.dt_fim_b, 23) AS dt_fim_b,
+               A.nu_prescricoes_b, A.vl_autorizacoes_b,
+               A.vl_autorizacoes_total, A.distancia_km
+        FROM temp_CGUSC.fp.app_alertas_crm_geografico A
+    """)
+    _load_or_sync_global_cache_simple("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH, query, engine, progress_callback)
+
+
+def _sync_crm_concentracao_unico_alertas_global(engine, progress_callback=None):
+    print("Sincronizando CRM Concentracao Unico Alertas Global...")
+    query = text("""
+        SELECT A.id_cnpj, A.id_medico, YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
+               A.dt_dia AS dt_alerta, DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
+               A.nu_autorizacoes_pior_ritmo AS nu_prescricoes_dia,
+               A.janela_pior_ritmo_minutos AS nu_minutos_dia,
+               A.nu_minutos_span AS nu_minutos_intervalo,
+               A.taxa_hora_pior_ritmo AS taxa_hora,
+               A.dt_ini_concentracao AS dt_ini_hora,
+               A.dt_fim_concentracao AS dt_fim_hora,
+               A.id_severidade,
+               CASE A.id_severidade WHEN 4 THEN 'EXTREMO' WHEN 3 THEN 'CRITICO'
+                    WHEN 2 THEN 'GRAVE' WHEN 1 THEN 'ALTO' ELSE 'ALERTA' END AS severidade,
+               A.criterio_pior_ritmo, A.nu_5min, A.nu_10min, A.nu_15min,
+               A.nu_20min, A.nu_25min, A.nu_30min, A.nu_60min
+        FROM temp_CGUSC.fp.app_crm_concentracao_unico_alertas A
+    """)
+    _load_or_sync_global_cache_simple(
+        "crm_concentracao_unico_alertas_global",
+        _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH,
+        query, engine, progress_callback,
+        extra_columns={"_crm_alerts_cache_version": 4} # _CRM_ALERTS_CACHE_VERSION from crm.py
+    )
+
+def _sync_crm_concentracao_multiplo_alertas_global(engine, progress_callback=None):
+    print("Sincronizando CRM Concentracao Multiplo Alertas Global...")
+    query = text("""
+        SELECT A.id_cnpj, YEAR(A.dt_dia) * 100 + MONTH(A.dt_dia) AS competencia,
+               A.dt_dia, A.dt_ini_concentracao AS dt_alerta,
+               DATEPART(HOUR, A.dt_ini_concentracao) AS hr_janela,
+               A.dt_ini_concentracao, A.dt_fim_concentracao,
+               A.nu_autorizacoes_pior_ritmo AS nu_prescricoes,
+               A.nu_crms_distintos AS nu_crms, A.nu_60min,
+               A.nu_minutos_span AS nu_minutos_intervalo,
+               A.janela_pior_ritmo_minutos AS nu_minutos_span,
+               A.taxa_hora_pior_ritmo AS taxa_hora,
+               A.id_severidade,
+               A.nu_crms_distintos,
+               CASE A.id_severidade WHEN 4 THEN 'EXTREMO' WHEN 3 THEN 'CRITICO'
+                    WHEN 2 THEN 'GRAVE' WHEN 1 THEN 'ALTO' ELSE 'ALERTA' END AS severidade,
+               A.criterio_pior_ritmo, A.nu_5min, A.nu_10min, A.nu_15min,
+               A.nu_20min, A.nu_25min, A.nu_30min
+        FROM temp_CGUSC.fp.app_crm_concentracao_multiplo_alertas A
+    """)
+    _load_or_sync_global_cache_simple(
+        "crm_concentracao_multiplo_alertas_global",
+        _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH,
+        query, engine, progress_callback,
+        extra_columns={"_crm_alerts_cache_version": 4}
+    )
+
+def _sync_crm_timeline_dia_global(engine, progress_callback=None):
+    print("Sincronizando CRM Timeline Dia Global...")
+    query = text("""
+        SELECT CONVERT(VARCHAR(10), P.dt_janela, 23) AS dt_janela,
+               P.id_cnpj, P.competencia, P.nu_prescricoes_dia, P.nu_crms_distintos, P.mediana_diaria,
+               P.is_dia_com_volume_horario_anomalo, P.is_anomalo_unico, P.is_crm_multiplo,
+               P.score_crm_unico_hora, P.score_crm_unico_qtd, P.score_crm_unico_minutos,
+               P.score_crm_unico_medico, P.score_crm_multiplo_hora, P.score_crm_multiplo_qtd,
+               P.score_crm_multiplo_minutos, P.score_crm_multiplo_crms
+        FROM temp_CGUSC.fp.app_crm_timeline_dia P
+    """)
+    _load_or_sync_global_cache_simple("crm_timeline_dia_global", _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH, query, engine, progress_callback)
+
+def _sync_crm_timeline_hora_global(engine, progress_callback=None):
+    print("Sincronizando CRM Timeline Hora Global...")
+    query = text("""
+        SELECT CONVERT(VARCHAR(10), P.dt_janela, 23) AS dt_janela,
+               P.id_cnpj, P.hr_janela, P.nu_prescricoes, P.nu_crms_diferentes, P.mediana_hora,
+               P.mad_hora, P.is_hora_com_alerta, P.is_volume_horario_anomalo,
+               P.is_crm_unico, P.is_crm_multiplo
+        FROM temp_CGUSC.fp.app_crm_timeline_hora P
+    """)
+    _load_or_sync_global_cache_simple("crm_timeline_hora_global", _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH, query, engine, progress_callback)
+
+def _sync_crm_timeline_eventos_global(engine, progress_callback=None):
+    print("Sincronizando CRM Timeline Eventos Global...")
+    query = text("""
+        SELECT CONVERT(VARCHAR(10), P.dt_janela, 23) AS dt_janela,
+               P.id_cnpj, P.tipo, P.hora_inicio, P.hora_fim, P.minuto_inicio, P.minuto_fim,
+               P.severidade, P.id_medico, P.nu_crms_distintos
+        FROM temp_CGUSC.fp.app_crm_timeline_eventos P
+    """)
+    _load_or_sync_global_cache_simple("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH, query, engine, progress_callback)
+
+def _load_or_sync_global_cache_simple(name, filepath, query, engine, progress_callback=None, extra_columns=None):
+    import pandas as pd
+    t0 = time.perf_counter()
+    with engine.connect() as conn:
+        pdf = pd.read_sql(query, conn)
+
+    df = pl.from_pandas(pdf)
+
+    if extra_columns:
+        df = df.with_columns([pl.lit(v).alias(k) for k, v in extra_columns.items()])
+
+    schema = _GLOBAL_PARQUET_SCHEMAS.get(name)
+    if schema:
+        missing_schema_cols = [k for k in schema if k not in df.columns]
+        if missing_schema_cols:
+            raise ValueError(
+                f"[ CACHE ] _load_or_sync_global_cache_simple ({name}): "
+                f"colunas obrigatorias ausentes no resultado SQL: {', '.join(missing_schema_cols)}"
+            )
+        df = df.with_columns([pl.col(k).cast(v) for k, v in schema.items() if k in df.columns])
+        df = df.select(list(schema.keys()))
+
+    tmp_path = filepath + ".tmp"
+    df.write_parquet(tmp_path, compression="zstd")
+    os.replace(tmp_path, filepath)
+    _mark_on_demand_global_cache_ready(name, filepath)
+    print(f"[{time.perf_counter() - t0:.1f}s] {name} salvo com {df.height} linhas.")
     if progress_callback:
         progress_callback(100)
 
@@ -3364,6 +3544,12 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _try_mark_on_demand("crm_prescritores_global", _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)
         _try_mark_on_demand("crm_raiox_tx_global", _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("crm_concentracao_unico_alertas_global", _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("crm_concentracao_multiplo_alertas_global", _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("crm_timeline_dia_global", _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("crm_timeline_hora_global", _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH)
         _df_esocial_cnpj_ano = None
         _df_esocial_cnpj_trabalhador_ano = None
         _df_esocial_cnpj_movimentacao_ano = None
@@ -3423,6 +3609,12 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "Expansão Nacional (N4)",  "weight": 8, "func": lambda cb: _sync_teia_fonte_nivel4(engine, cb)},
         {"name": "PAR na Teia dos Alvos",   "weight": 1,  "func": lambda cb: _sync_par_teia_alvos(engine, cb)},
         {"name": "Movimentação (Vendas)", "weight": 42, "func": lambda cb: _sync_movimentacao(engine, cb)},
+        {"name": "CRM Geografico Global", "weight": 2, "func": lambda cb: _sync_geografico_global(engine, cb)},
+        {"name": "CRM Conc. Unico Global", "weight": 2, "func": lambda cb: _sync_crm_concentracao_unico_alertas_global(engine, cb)},
+        {"name": "CRM Conc. Multiplo Global", "weight": 2, "func": lambda cb: _sync_crm_concentracao_multiplo_alertas_global(engine, cb)},
+        {"name": "CRM Timeline Dia Global", "weight": 2, "func": lambda cb: _sync_crm_timeline_dia_global(engine, cb)},
+        {"name": "CRM Timeline Hora Global", "weight": 2, "func": lambda cb: _sync_crm_timeline_hora_global(engine, cb)},
+        {"name": "CRM Timeline Eventos Global", "weight": 2, "func": lambda cb: _sync_crm_timeline_eventos_global(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -3595,6 +3787,25 @@ def scan_geografico_origem_uf() -> pl.LazyFrame:
         _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH,
     )
 
+
+def scan_geografico_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)
+
+def scan_crm_concentracao_unico_alertas_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("crm_concentracao_unico_alertas_global", _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH)
+
+def scan_crm_concentracao_multiplo_alertas_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("crm_concentracao_multiplo_alertas_global", _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH)
+
+def scan_crm_timeline_dia_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("crm_timeline_dia_global", _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH)
+
+def scan_crm_timeline_hora_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("crm_timeline_hora_global", _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH)
+
+def scan_crm_timeline_eventos_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH)
+
 def scan_crm_raiox_tx_global() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet(
         "crm_raiox_tx_global",
@@ -3655,6 +3866,12 @@ def get_cache_status() -> dict:
         "dados_medico": {"label": "Dados Medico", "path": _DADOS_MEDICO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("dados_medico", _DADOS_MEDICO_PARQUET_PATH)},
         "crm_prescritores_global": {"label": "CRM Prescritores Global", "path": _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescritores_global", _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH)},
         "crm_raiox_tx_global": {"label": "CRM Raio-X Global", "path": _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_raiox_tx_global", _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH)},
+        "geografico_global": {"label": "CRM Geografico Global", "path": _GEOGRAFICO_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)},
+        "crm_concentracao_unico_alertas_global": {"label": "CRM Concentracao Unico Global", "path": _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_concentracao_unico_alertas_global", _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH)},
+        "crm_concentracao_multiplo_alertas_global": {"label": "CRM Concentracao Multiplo Global", "path": _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_concentracao_multiplo_alertas_global", _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH)},
+        "crm_timeline_dia_global": {"label": "CRM Timeline Dia Global", "path": _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_timeline_dia_global", _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH)},
+        "crm_timeline_hora_global": {"label": "CRM Timeline Hora Global", "path": _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_timeline_hora_global", _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH)},
+        "crm_timeline_eventos_global": {"label": "CRM Timeline Eventos Global", "path": _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH)},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "dados_farmacia_cnaes_secundarios": {
             "label": "CNAEs Secundarios das Farmacias",

@@ -63,7 +63,7 @@ const alertTooltipTemplates = {
   socio_idade_atipica:
     '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo ativo e idade inferior a 21 anos ou superior a 80 anos na data de referência do período selecionado.',
   socio_esocial:
-    '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo societário ativo que possui vínculo empregatício ativo em outro CNPJ registrado no eSocial.',
+    '{qtd} estabelecimentos possuem sócios ativos que possuem vínculos em outros CNPJs em funções não gerenciais, conforme registros do eSocial.',
 };
 
 function normalizeLabel(label) {
@@ -281,6 +281,46 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
           </div>
         </article>
 
+        <!-- Card Integridade — template dedicado -->
+        <article class="priority-card priority-card--warning priority-card--alerts priority-card--integrity">
+          <div class="integrity-header">
+            <div class="priority-icon">
+              <i :class="alertasPanoramaLoading ? 'pi pi-spin pi-spinner' : 'pi pi-shield'" />
+            </div>
+            <div class="integrity-header__text">
+              <span class="priority-eyebrow">Integridade</span>
+              <strong>Quadro de Alertas</strong>
+            </div>
+          </div>
+          <div class="integrity-hero">
+            <span class="integrity-hero__value">
+              {{ displayAlertasPanorama?.total_cnpjs_com_alerta ?? (alertasPanoramaLoading ? '...' : '—') }}
+            </span>
+            <span class="integrity-hero__label">estabelecimentos com ao menos 1 alerta identificado</span>
+          </div>
+          <div v-if="displayAlertasPanorama" class="alerts-grid">
+            <div
+              v-for="alerta in displayAlertasPanorama.alertas"
+              :key="alerta.tipo"
+              class="alert-cell"
+              :class="`alert-cell--${alerta.severidade}`"
+            >
+              <span class="alert-cell__count">
+                {{ alerta.qtd_cnpjs }}
+                <i
+                  v-tooltip.top="getAlertaTooltip(alerta)"
+                  class="pi pi-info-circle alert-cell__info"
+                  :aria-label="`Critério do alerta ${alerta.titulo}`"
+                />
+              </span>
+              <span class="alert-cell__titulo">{{ alerta.titulo }}</span>
+            </div>
+          </div>
+          <div v-else-if="showAlertasSkeleton" class="alerts-grid alerts-grid--loading">
+            <div v-for="n in 6" :key="n" class="alert-cell alert-cell--skeleton" />
+          </div>
+        </article>
+
         <!-- Card Escopo da análise — template dedicado -->
         <article class="priority-card priority-card--info priority-card--escopo">
           <div class="escopo-header">
@@ -343,45 +383,6 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
           </div>
         </article>
 
-        <!-- 4º card: Panorama de Alertas -->
-        <article class="priority-card priority-card--warning priority-card--alerts priority-card--integrity">
-          <div class="integrity-header">
-            <div class="priority-icon">
-              <i :class="alertasPanoramaLoading ? 'pi pi-spin pi-spinner' : 'pi pi-shield'" />
-            </div>
-            <div class="integrity-header__text">
-              <span class="priority-eyebrow">Integridade</span>
-              <strong>Quadro de Alertas</strong>
-            </div>
-          </div>
-          <div class="integrity-hero">
-            <span class="integrity-hero__value">
-              {{ displayAlertasPanorama?.total_cnpjs_com_alerta ?? (alertasPanoramaLoading ? '...' : '—') }}
-            </span>
-            <span class="integrity-hero__label">estabelecimentos com ao menos 1 alerta identificado</span>
-          </div>
-          <div v-if="displayAlertasPanorama" class="alerts-grid">
-            <div
-              v-for="alerta in displayAlertasPanorama.alertas"
-              :key="alerta.tipo"
-              class="alert-cell"
-              :class="`alert-cell--${alerta.severidade}`"
-            >
-              <span class="alert-cell__count">
-                {{ alerta.qtd_cnpjs }}
-                <i
-                  v-tooltip.top="getAlertaTooltip(alerta)"
-                  class="pi pi-info-circle alert-cell__info"
-                  :aria-label="`Critério do alerta ${alerta.titulo}`"
-                />
-              </span>
-              <span class="alert-cell__titulo">{{ alerta.titulo }}</span>
-            </div>
-          </div>
-          <div v-else-if="showAlertasSkeleton" class="alerts-grid alerts-grid--loading">
-            <div v-for="n in 6" :key="n" class="alert-cell alert-cell--skeleton" />
-          </div>
-        </article>
       </div>
     </section>
 
@@ -429,7 +430,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 
 .priority-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.9fr) minmax(0, 0.9fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
 }
@@ -1065,7 +1066,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 
 .alerts-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-auto-rows: 1fr;
   flex: 1;
   gap: 0.28rem;

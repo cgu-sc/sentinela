@@ -18,8 +18,19 @@ SOCIO_BENEFICIO_REQUIRED_COLUMNS = {
     "has_seguro_defeso_n3",
 }
 
+SOCIO_ESOCIAL_SCOPES = {
+    "direto",
+    "n3",
+    "direto_n3",
+}
 
-def _scope_expr(scope: str) -> pl.Expr:
+SOCIO_ESOCIAL_REQUIRED_COLUMNS = {
+    "has_esocial_direto",
+    "has_esocial_n3",
+}
+
+
+def _socio_beneficio_scope_expr(scope: str) -> pl.Expr:
     if scope == "direto":
         return pl.col("has_cadunico_direto") | pl.col("has_seguro_defeso_direto")
     if scope == "n3":
@@ -36,6 +47,22 @@ def _scope_expr(scope: str) -> pl.Expr:
         detail=(
             f"Filtro socio_beneficio invalido: {scope}. "
             f"Valores aceitos: {sorted(SOCIO_BENEFICIO_SCOPES)}"
+        ),
+    )
+
+
+def _socio_esocial_scope_expr(scope: str) -> pl.Expr:
+    if scope == "direto":
+        return pl.col("has_esocial_direto")
+    if scope == "n3":
+        return pl.col("has_esocial_n3")
+    if scope == "direto_n3":
+        return pl.col("has_esocial_direto") | pl.col("has_esocial_n3")
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"Filtro socio_esocial invalido: {scope}. "
+            f"Valores aceitos: {sorted(SOCIO_ESOCIAL_SCOPES)}"
         ),
     )
 
@@ -58,5 +85,27 @@ def apply_socio_beneficio_filter(
         )
 
     scope = socio_beneficio.strip().lower()
-    filter_expr = _scope_expr(scope)
+    filter_expr = _socio_beneficio_scope_expr(scope)
+    return df.filter(filter_expr)
+
+
+def apply_socio_esocial_filter(
+    df: pl.DataFrame,
+    socio_esocial: Optional[str],
+) -> pl.DataFrame:
+    if not socio_esocial or socio_esocial == "Todos":
+        return df
+
+    missing_columns = SOCIO_ESOCIAL_REQUIRED_COLUMNS - set(df.columns)
+    if missing_columns:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Filtro socio_esocial exige colunas no perfil do estabelecimento: "
+                + ", ".join(sorted(missing_columns))
+            ),
+        )
+
+    scope = socio_esocial.strip().lower()
+    filter_expr = _socio_esocial_scope_expr(scope)
     return df.filter(filter_expr)

@@ -144,6 +144,7 @@ const porteOptions = FILTER_OPTIONS.porte;
 const grandeRedeOptions = FILTER_OPTIONS.grandeRede;
 const parTeiaOptions = FILTER_OPTIONS.parTeia;
 const socioBeneficioOptions = FILTER_OPTIONS.socioBeneficio;
+const socioEsocialOptions = FILTER_OPTIONS.socioEsocial;
 const clusterOptions = FILTER_OPTIONS.cluster;
 const rfaOptions = FILTER_OPTIONS.rfa;
 const parTeiaTooltip =
@@ -154,6 +155,10 @@ const parTeiaTooltip =
 const socioBeneficioTooltip =
   "Sócio direto: vínculo ativo na farmácia alvo e cadastro no CadÚnico ou Seguro Defeso.\n" +
   "Sócio N3: vínculo ativo em empresa do nível 2 e cadastro no CadÚnico ou Seguro Defeso.\n" +
+  "Sócio direto ou N3: considera qualquer um desses dois níveis.";
+const socioEsocialTooltip =
+  "Sócio direto: vínculo societário ativo na farmácia alvo e vínculo em outro CNPJ em função não gerencial no eSocial.\n" +
+  "Sócio N3: vínculo ativo em empresa do nível 2 e vínculo em outro CNPJ em função não gerencial no eSocial.\n" +
   "Sócio direto ou N3: considera qualquer um desses dois níveis.";
 
 const { formatBRL: formatCurrency } = useFormatting();
@@ -359,6 +364,7 @@ const isFilterActive = (field) => {
     selectedGrandeRede: FILTER_DEFAULTS.GRANDE_REDE,
     selectedParTeia: FILTER_DEFAULTS.PAR_TEIA,
     selectedSocioBeneficio: FILTER_DEFAULTS.SOCIO_BENEFICIO,
+    selectedSocioEsocial: FILTER_DEFAULTS.SOCIO_ESOCIAL,
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
@@ -397,6 +403,7 @@ const activeFilterCount = computed(() => {
     "selectedGrandeRede",
     "selectedParTeia",
     "selectedSocioBeneficio",
+    "selectedSocioEsocial",
     "selectedCnpjRaiz",
     "percentualNaoComprovacaoRange",
     "valorMinSemComp",
@@ -435,6 +442,7 @@ const integrityFilterCount = computed(() =>
   countActiveFilters([
     "selectedParTeia",
     "selectedSocioBeneficio",
+    "selectedSocioEsocial",
   ]),
 );
 
@@ -916,6 +924,36 @@ onBeforeUnmount(() => {
           class="w-full filter-input"
           panelClass="sidebar-panel"
           :class="{ 'filter-active': isFilterActive('selectedSocioBeneficio') }"
+        />
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio com vínculo eSocial
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioEsocialTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioEsocial')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioEsocial = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedSocioEsocial"
+          :options="socioEsocialOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedSocioEsocial') }"
         />
       </div>
 

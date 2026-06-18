@@ -336,7 +336,7 @@ def get_alertas_panorama(
         ("socio_falecido",                "Sócio ativo falecido",                         "atencao"),
         ("socio_beneficio_social",        "Sócio em programa social (CadÚnico/Defeso)",   "atencao"),
         ("socio_idade_atipica",           "Sócio com idade atípica (< 21 ou > 80 anos)", "atencao"),
-        ("socio_esocial",                 "Sócio com vínculo em outro CNPJ",             "atencao"),
+        ("socio_esocial",                 "Sócio com vínculo eSocial",                  "atencao"),
     ]
 
     alertas = [

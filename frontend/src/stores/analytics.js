@@ -43,6 +43,7 @@ export function buildAnalyticsParams(filters = {}) {
     estabelecimento = null,
     parTeia = null,
     socioBeneficio = null,
+    socioEsocial = null,
     volumeAtipicoEnabled = false,
     volumeAtipicoPercentual = null,
   } = filters || {};
@@ -66,6 +67,7 @@ export function buildAnalyticsParams(filters = {}) {
   if (estabelecimento) params.estabelecimento = estabelecimento;
   if (parTeia) params.par_teia = parTeia;
   if (socioBeneficio) params.socio_beneficio = socioBeneficio;
+  if (socioEsocial) params.socio_esocial = socioEsocial;
   if (volumeAtipicoEnabled) {
     params.volume_atipico = true;
     if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {

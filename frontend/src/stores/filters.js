@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, reactive, watch } from 'vue';
 import axios from 'axios';
 import { FILTER_DEFAULTS, FILTER_ALL_VALUE, TIMING } from '@/config/constants';
-import { SOCIO_BENEFICIO_FILTER_OPTIONS } from '@/config/filterOptions';
+import { SOCIO_BENEFICIO_FILTER_OPTIONS, SOCIO_ESOCIAL_FILTER_OPTIONS } from '@/config/filterOptions';
 import { useGeoStore } from './geo';
 import { API_ENDPOINTS } from '@/config/api';
 import { extractCnpjFilter } from '@/composables/useParsing';
@@ -45,11 +45,20 @@ function withoutEmptyValues(params) {
 const SOCIO_BENEFICIO_FILTER_VALUES = new Set(
   SOCIO_BENEFICIO_FILTER_OPTIONS.map(({ value }) => value)
 );
+const SOCIO_ESOCIAL_FILTER_VALUES = new Set(
+  SOCIO_ESOCIAL_FILTER_OPTIONS.map(({ value }) => value)
+);
 
 function normalizeSocioBeneficioFilter(value) {
   return SOCIO_BENEFICIO_FILTER_VALUES.has(value)
     ? value
     : FILTER_DEFAULTS.SOCIO_BENEFICIO;
+}
+
+function normalizeSocioEsocialFilter(value) {
+  return SOCIO_ESOCIAL_FILTER_VALUES.has(value)
+    ? value
+    : FILTER_DEFAULTS.SOCIO_ESOCIAL;
 }
 
 export const useFilterStore = defineStore('filters', () => {
@@ -77,6 +86,9 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedParTeia = ref(saved?.selectedParTeia ?? FILTER_DEFAULTS.PAR_TEIA);
   const selectedSocioBeneficio = ref(
     normalizeSocioBeneficioFilter(saved?.selectedSocioBeneficio)
+  );
+  const selectedSocioEsocial = ref(
+    normalizeSocioEsocialFilter(saved?.selectedSocioEsocial)
   );
   const selectedUnidadePf = ref(saved?.selectedUnidadePf ?? FILTER_ALL_VALUE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
@@ -167,6 +179,7 @@ export const useFilterStore = defineStore('filters', () => {
       volumeAtipicoPercentual,
       parTeia: selectedParTeia.value !== FILTER_ALL_VALUE ? selectedParTeia.value : null,
       socioBeneficio: selectedSocioBeneficio.value !== FILTER_ALL_VALUE ? selectedSocioBeneficio.value : null,
+      socioEsocial: selectedSocioEsocial.value !== FILTER_ALL_VALUE ? selectedSocioEsocial.value : null,
     };
   });
 
@@ -186,6 +199,7 @@ export const useFilterStore = defineStore('filters', () => {
       unidadePf,
       parTeia,
       socioBeneficio,
+      socioEsocial,
       volumeAtipicoEnabled,
       volumeAtipicoPercentual,
     } = apiParams.value;
@@ -203,6 +217,7 @@ export const useFilterStore = defineStore('filters', () => {
       unidadePf,
       parTeia,
       socioBeneficio,
+      socioEsocial,
       volumeAtipicoEnabled,
       volumeAtipicoPercentual,
     });
@@ -226,6 +241,7 @@ export const useFilterStore = defineStore('filters', () => {
       unidadePf,
       parTeia,
       socioBeneficio,
+      socioEsocial,
       inicio,
       fim,
       percMin,
@@ -249,6 +265,7 @@ export const useFilterStore = defineStore('filters', () => {
       unidade_pf: unidadePf,
       par_teia: parTeia,
       socio_beneficio: socioBeneficio,
+      socio_esocial: socioEsocial,
       perc_min: percMin,
       perc_max: percMax,
       val_min: valMin,
@@ -301,6 +318,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedGrandeRede: selectedGrandeRede.value,
     selectedParTeia: selectedParTeia.value,
     selectedSocioBeneficio: selectedSocioBeneficio.value,
+    selectedSocioEsocial: selectedSocioEsocial.value,
     selectedUnidadePf: selectedUnidadePf.value,
     selectedCnpjRaiz: selectedCnpjRaiz.value,
     percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
@@ -339,6 +357,9 @@ export const useFilterStore = defineStore('filters', () => {
     if ('selectedParTeia' in filters) selectedParTeia.value = filters.selectedParTeia;
     if ('selectedSocioBeneficio' in filters) {
       selectedSocioBeneficio.value = normalizeSocioBeneficioFilter(filters.selectedSocioBeneficio);
+    }
+    if ('selectedSocioEsocial' in filters) {
+      selectedSocioEsocial.value = normalizeSocioEsocialFilter(filters.selectedSocioEsocial);
     }
     if ('selectedUnidadePf' in filters) selectedUnidadePf.value = filters.selectedUnidadePf;
     if ('selectedCnpjRaiz' in filters) selectedCnpjRaiz.value = filters.selectedCnpjRaiz;
@@ -462,7 +483,7 @@ export const useFilterStore = defineStore('filters', () => {
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedCnpjRaiz,
+    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedSocioEsocial, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, volumeAtipicoEnabled, volumeAtipicoPercentual, volumeAtipicoPercentualFilter, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -480,6 +501,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedGrandeRede.value = FILTER_ALL_VALUE;
     selectedParTeia.value = FILTER_ALL_VALUE;
     selectedSocioBeneficio.value = FILTER_ALL_VALUE;
+    selectedSocioEsocial.value = FILTER_ALL_VALUE;
     selectedUnidadePf.value = FILTER_ALL_VALUE;
     selectedCnpjRaiz.value = '';
     percentualNaoComprovacaoRange.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
@@ -561,6 +583,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedGrandeRede,
     selectedParTeia,
     selectedSocioBeneficio,
+    selectedSocioEsocial,
     selectedUnidadePf,
     selectedCnpjRaiz,
     percentualNaoComprovacaoRange,

@@ -24,7 +24,7 @@ from .matriz_risco_dinamica import (
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
 from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
-from .alertas_alvos import apply_socio_beneficio_filter
+from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
@@ -246,6 +246,7 @@ _INDICADOR_SCOPE_FILTER_FIELDS = (
     ("unidade_pf", _normalize_cache_text),
     ("par_teia", _normalize_cache_text),
     ("socio_beneficio", _normalize_cache_text),
+    ("socio_esocial", _normalize_cache_text),
     ("perc_min", _normalize_cache_float),
     ("perc_max", _normalize_cache_float),
     ("val_min", _normalize_cache_float),
@@ -577,6 +578,7 @@ def _build_indicador_scope_base(
     id_ibge7: int | None = None,
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
+    socio_esocial: str | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -629,6 +631,7 @@ def _build_indicador_scope_base(
     scope_base = _apply_estabelecimento_search(scope_base.filter(mask), estabelecimento)
     scope_base = apply_par_teia_filter(scope_base, par_teia)
     scope_base = apply_socio_beneficio_filter(scope_base, socio_beneficio)
+    scope_base = apply_socio_esocial_filter(scope_base, socio_esocial)
     if perc_min is not None:
         scope_base = scope_base.filter(pl.col("perc_val_sem_comp") >= perc_min)
     if perc_max is not None:
@@ -776,6 +779,7 @@ def _build_indicador_dataset_cached(
     id_ibge7: int | None = None,
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
+    socio_esocial: str | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
@@ -1236,6 +1240,7 @@ def get_indicadores_analise(
     id_ibge7: int | None = None,
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
+    socio_esocial: str | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
 ) -> IndicadorAnaliseResponse:
@@ -1294,6 +1299,7 @@ def get_indicadores_analise(
             id_ibge7=id_ibge7,
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
+            socio_esocial=socio_esocial,
             volume_atipico=volume_atipico,
             volume_atipico_limite=volume_atipico_limite,
         )
@@ -1426,6 +1432,7 @@ def get_indicadores_analise_cnpjs(
     id_ibge7: int | None = None,
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
+    socio_esocial: str | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
     page: int = 1,
@@ -1453,6 +1460,7 @@ def get_indicadores_analise_cnpjs(
             id_ibge7=id_ibge7,
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
+            socio_esocial=socio_esocial,
             volume_atipico=volume_atipico,
             volume_atipico_limite=volume_atipico_limite,
         )

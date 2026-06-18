@@ -11,7 +11,7 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from data_cache import get_df, get_rede_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_perfil_estabelecimento, get_cache_dir
-from .alertas_alvos import apply_socio_beneficio_filter
+from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
 from .matriz_risco_dinamica import build_dynamic_matriz_risco
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
@@ -58,7 +58,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, estabelecimento: Optional[str] = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, socio_esocial: Optional[str] = None, estabelecimento: Optional[str] = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -139,6 +139,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         )
         perfil_filtrado = apply_par_teia_filter(perfil_filtrado, par_teia)
         perfil_filtrado = apply_socio_beneficio_filter(perfil_filtrado, socio_beneficio)
+        perfil_filtrado = apply_socio_esocial_filter(perfil_filtrado, socio_esocial)
         period_df = (
             df.filter(mov_mask)
             .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")
@@ -286,7 +287,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         raise HTTPException(status_code=503, detail="Resumo analitico indisponivel: matriz dinamica de risco ou cache base invalido.") from e
 
 
-def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, estabelecimento: Optional[str] = None) -> ProducaoSemestralResponse:
+def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, socio_esocial: Optional[str] = None, estabelecimento: Optional[str] = None) -> ProducaoSemestralResponse:
     """Retorna a producao acumulada por semestre para a Home, respeitando os filtros globais."""
     try:
         MIN_DATA = date(2015, 7, 1)
@@ -327,6 +328,7 @@ def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, pe
         )
         perfil_filtrado = apply_par_teia_filter(perfil_filtrado, par_teia)
         perfil_filtrado = apply_socio_beneficio_filter(perfil_filtrado, socio_beneficio)
+        perfil_filtrado = apply_socio_esocial_filter(perfil_filtrado, socio_esocial)
 
         period_df = (
             df.filter(mov_mask)

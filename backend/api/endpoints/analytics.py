@@ -218,13 +218,14 @@ def get_analytics_summary(
     volume_atipico_limite: Optional[float] = Query(None),
     par_teia: Optional[str] = Query(None),
     socio_beneficio: Optional[str] = Query(None),
+    socio_esocial: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     if regiao_saude and regiao_saude != "Todos":
         raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
     if municipio and municipio != "Todos":
         raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
-    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia, socio_beneficio=socio_beneficio, estabelecimento=estabelecimento)
+    return AnalyticsService.get_dashboard_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, cnpjs, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia, socio_beneficio=socio_beneficio, socio_esocial=socio_esocial, estabelecimento=estabelecimento)
 
 
 @router.get("/producao-semestral", response_model=ProducaoSemestralResponse)
@@ -252,6 +253,7 @@ def get_producao_semestral(
     volume_atipico_limite: Optional[float] = Query(None),
     par_teia: Optional[str] = Query(None),
     socio_beneficio: Optional[str] = Query(None),
+    socio_esocial: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Retorna valor de producao semestral e acumulado para o dashboard Home."""
@@ -281,6 +283,7 @@ def get_producao_semestral(
         volume_atipico_limite=volume_atipico_limite,
         par_teia=par_teia,
         socio_beneficio=socio_beneficio,
+        socio_esocial=socio_esocial,
         estabelecimento=estabelecimento,
     )
 
@@ -308,13 +311,14 @@ def get_resultado_faixas_risco(
     volume_atipico_limite: Optional[float] = Query(None),
     par_teia: Optional[str] = Query(None),
     socio_beneficio: Optional[str] = Query(None),
+    socio_esocial: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     if regiao_saude and regiao_saude != "Todos":
         raise HTTPException(status_code=400, detail="Use regiao_id para filtros regionais; regiao_saude textual e apenas label.")
     if municipio and municipio != "Todos":
         raise HTTPException(status_code=400, detail="Use id_ibge7 para filtros municipais; municipio textual e apenas label.")
-    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia, socio_beneficio=socio_beneficio, estabelecimento=estabelecimento)
+    return AnalyticsService.get_fator_risco_data(db, data_inicio, data_fim, perc_min, perc_max, val_min, uf, regiao_saude, municipio, situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, unidade_pf, razao_social, regiao_id=regiao_id, id_ibge7=id_ibge7, volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite, par_teia=par_teia, socio_beneficio=socio_beneficio, socio_esocial=socio_esocial, estabelecimento=estabelecimento)
 
 @router.get("/cnpj/{cnpj}/evolucao", response_model=EvolucaoFinanceiraResponse)
 def get_evolucao_financeira(
@@ -546,6 +550,7 @@ def get_indicadores_analise(
     regiao_id: Optional[int] = Query(None),
     par_teia: Optional[str] = Query(None),
     socio_beneficio: Optional[str] = Query(None),
+    socio_esocial: Optional[str] = Query(None),
     volume_atipico: bool = Query(False),
     volume_atipico_limite: Optional[float] = Query(None)
 ):
@@ -561,7 +566,7 @@ def get_indicadores_analise(
         indicador, data_inicio, data_fim, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, estabelecimento, unidade_pf,
         perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id, id_ibge7=id_ibge7, par_teia=par_teia,
-        socio_beneficio=socio_beneficio,
+        socio_beneficio=socio_beneficio, socio_esocial=socio_esocial,
         volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite
     )
 
@@ -588,6 +593,7 @@ def get_indicadores_analise_cnpjs(
     regiao_id: Optional[int] = Query(None),
     par_teia: Optional[str] = Query(None),
     socio_beneficio: Optional[str] = Query(None),
+    socio_esocial: Optional[str] = Query(None),
     volume_atipico: bool = Query(False),
     volume_atipico_limite: Optional[float] = Query(None),
     page: int = Query(1, ge=1),
@@ -604,7 +610,7 @@ def get_indicadores_analise_cnpjs(
         indicador, data_inicio, data_fim, uf, regiao_saude, municipio,
         situacao_rf, conexao_ms, porte_empresa, grande_rede, cnpj_raiz, estabelecimento, unidade_pf,
         perc_min=perc_min, perc_max=perc_max, val_min=val_min, regiao_id=regiao_id,
-        id_ibge7=id_ibge7, par_teia=par_teia, socio_beneficio=socio_beneficio, page=page, page_size=page_size,
+        id_ibge7=id_ibge7, par_teia=par_teia, socio_beneficio=socio_beneficio, socio_esocial=socio_esocial, page=page, page_size=page_size,
         sort_field=sort_field, sort_order=sort_order,
         volume_atipico=volume_atipico, volume_atipico_limite=volume_atipico_limite
     )

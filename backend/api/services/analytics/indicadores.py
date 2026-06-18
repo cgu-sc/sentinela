@@ -658,6 +658,10 @@ def _build_indicador_dataset(
         data_fim=data_fim,
     )
     risco_cols = ["id_cnpj", "_total_regiao_benchmark", c_val, c_mr, c_mu, c_rr, c_ru, c_aten, c_crit, score_col]
+    # Para volume_atipico, inclui a coluna monetária de aumento para exibição na tabela
+    display_col = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador)
+    if display_col and display_col not in risco_cols:
+        risco_cols.append(display_col)
     missing_cols = [col for col in risco_cols if col not in df_risco.columns]
     if missing_cols:
         raise RuntimeError(
@@ -1442,9 +1446,17 @@ def get_indicadores_analise_cnpjs(
             .slice(offset, page_size)
         )
 
+        # Para indicadores com coluna de exibição distinta (ex: volume_atipico usa valor monetário),
+        # substituir c_val pelo display col na construção das rows
+        display_c_val = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador, c_val)
+        if display_c_val != c_val and display_c_val not in df_page.columns:
+            raise RuntimeError(
+                f"Coluna de display obrigatoria ausente para indicador '{indicador}': {display_c_val}"
+            )
+
         return IndicadorCnpjPageResponse(
             indicador=indicador,
-            items=_build_indicador_cnpj_rows(df_page, c_val, c_mr, rr_col, score_col),
+            items=_build_indicador_cnpj_rows(df_page, display_c_val, c_mr, rr_col, score_col),
             kpis=_build_status_kpis(df_joined),
             total=total,
             page=page,

@@ -27,6 +27,7 @@ from data_cache import (
     _sync_analise_gtin_inconsistencia_clinica_municipio,
     _sync_analise_gtin_inconsistencia_clinica_regiao,
     _sync_crm_benchmarks,
+    _sync_crm_prescritores_global,
     _sync_crm_prescricoes_brasil_semestre,
     _sync_crm_raiox_tx_global,
     _sync_dados_farmacia,
@@ -51,7 +52,6 @@ from data_cache import (
 
 
 CRM_CNPJ_CACHE_KEYS = [
-    ("crm_prescritores", "CRM prescritores"),
     ("geografico", "CRM geografico"),
     ("crm_concentracao_unico_alertas", "CRM concentracao unico"),
     ("crm_concentracao_multiplo_alertas", "CRM concentracao multiplo"),
@@ -60,8 +60,8 @@ CRM_CNPJ_CACHE_KEYS = [
     ("crm_timeline_eventos", "CRM timeline eventos"),
 ]
 
-CRM_COMPLETO_ID = 8
-CRM_INDIVIDUAL_IDS = frozenset(range(9, 16))
+CRM_COMPLETO_ID = 9
+CRM_INDIVIDUAL_IDS = frozenset(range(10, 16))
 
 
 def _buscar_cnpjs_crm(engine) -> list[str]:
@@ -177,8 +177,8 @@ MODULOS = sorted([
     {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido", "ordem": 5},
     {"id": 6, "name": "CRM Brasil semestre", "func": _sync_crm_prescricoes_brasil_semestre, "peso": "rapido", "ordem": 6},
     {"id": 7, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 7},
-    {"id": 8, "name": "CRM Completo", "func": _sync_crm_cnpj_completo, "peso": "pesado", "ordem": 8},
-    {"id": 9, "name": "CRM prescritores", "func": _criar_sync_crm_cnpj("crm_prescritores"), "peso": "medio", "ordem": 9},
+    {"id": 8, "name": "CRM prescritores global", "func": _sync_crm_prescritores_global, "peso": "muito pesado", "ordem": 8},
+    {"id": 9, "name": "CRM Completo", "func": _sync_crm_cnpj_completo, "peso": "pesado", "ordem": 9},
     {"id": 10, "name": "CRM geografico", "func": _criar_sync_crm_cnpj("geografico"), "peso": "medio", "ordem": 10},
     {"id": 11, "name": "CRM conc. unico", "func": _criar_sync_crm_cnpj("crm_concentracao_unico_alertas"), "peso": "medio", "ordem": 11},
     {"id": 12, "name": "CRM conc. multiplo", "func": _criar_sync_crm_cnpj("crm_concentracao_multiplo_alertas"), "peso": "medio", "ordem": 12},
@@ -205,8 +205,8 @@ MODULOS = sorted([
 ], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {
-    8: {7, 16},
-    9: {7},
+    8: {7},
+    9: {7, 8, 16},
     22: {21},
 }
 

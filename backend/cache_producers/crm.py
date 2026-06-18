@@ -9,18 +9,20 @@ from cache_files import (
     CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
     CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
     CRM_RAIOX_TX_CACHE_VERSION,
+    CRM_PRESCRITORES_CACHE_VERSION,
     CRM_RAIOX_TX_GLOBAL_PARQUET,
     CRM_RAIOX_TX_PARQUET,
     CRM_TIMELINE_DIA_PARQUET,
     CRM_TIMELINE_EVENTOS_PARQUET,
     CRM_TIMELINE_HORA_PARQUET,
+    CRM_PRESCRITORES_GLOBAL_PARQUET,
     CRM_PRESCRITORES_PARQUET,
     GEOGRAFICO_PARQUET,
 )
 from cache_producers.types import CacheLoadResult
 
 _CRM_ALERTS_CACHE_VERSION = 4
-_CRM_PRESCRITORES_CACHE_VERSION = 2
+_CRM_PRESCRITORES_CACHE_VERSION = CRM_PRESCRITORES_CACHE_VERSION
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 
@@ -75,21 +77,117 @@ def _empty_schema(filename: str) -> dict:
 
 def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
     parquet_path = _path(cnpj, CRM_PRESCRITORES_PARQUET)
+    from data_cache import get_cache_dir
+
+    global_path = os.path.join(get_cache_dir(), CRM_PRESCRITORES_GLOBAL_PARQUET)
+    schema = _empty_schema(CRM_PRESCRITORES_PARQUET)
+    required_columns = set(schema)
+
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
-        missing_cols = [
-            col
-            for col in ["no_medico", "dt_inscricao_crm", "_crm_prescritores_cache_version"]
-            if col not in df.columns
-        ]
+        missing_cols = sorted(required_columns - set(df.columns))
         version_ok = (
             "_crm_prescritores_cache_version" in df.columns
             and (df.height == 0 or _to_int(df["_crm_prescritores_cache_version"].max()) >= _CRM_PRESCRITORES_CACHE_VERSION)
         )
-        if not missing_cols and version_ok:
+        global_is_newer = (
+            os.path.exists(global_path)
+            and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        )
+        if not missing_cols and version_ok and not global_is_newer:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
         motivo = f"cache sem {', '.join(missing_cols)}" if missing_cols else "versao de cache defasada"
         print(f"[ CACHE ] {cnpj} - CRM - {motivo}; regenerando parquet.")
+
+    def write_final(df_final: pl.DataFrame) -> float:
+        missing_columns = sorted(required_columns - set(df_final.columns))
+        if missing_columns:
+            raise RuntimeError(
+                f"Contrato invalido de {CRM_PRESCRITORES_PARQUET}: "
+                f"colunas ausentes {', '.join(missing_columns)}."
+            )
+        df_final = df_final.select(list(schema.keys()))
+        tmp_final_path = parquet_path + ".tmp"
+        started_at = time.perf_counter()
+        df_final.write_parquet(tmp_final_path, compression="zstd")
+        os.replace(tmp_final_path, parquet_path)
+        return round((time.perf_counter() - started_at) * 1000, 1)
+
+    if os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_prescritores_global
+
+            global_version = pl.read_parquet(
+                global_path,
+                columns=["_crm_prescritores_cache_version"],
+                n_rows=1,
+            )
+            if global_version.is_empty():
+                raise RuntimeError("o modulo global esta vazio")
+            if (
+                _to_int(global_version["_crm_prescritores_cache_version"].max())
+                < _CRM_PRESCRITORES_CACHE_VERSION
+            ):
+                raise RuntimeError(
+                    "versao do modulo global inferior a "
+                    f"{_CRM_PRESCRITORES_CACHE_VERSION}"
+                )
+
+            perfil = get_df_perfil_estabelecimento()
+            required_profile = {"id_cnpj", "cnpj"}
+            missing_profile = sorted(required_profile - set(perfil.columns))
+            if missing_profile:
+                raise RuntimeError(
+                    "perfil_estabelecimento sem colunas obrigatorias para derivar CRM prescritores: "
+                    + ", ".join(missing_profile)
+                )
+
+            perfil_cnpj = (
+                perfil
+                .filter(pl.col("cnpj").cast(pl.Utf8) == cnpj)
+                .select("id_cnpj")
+                .unique()
+            )
+            if perfil_cnpj.height != 1:
+                raise RuntimeError(
+                    f"CNPJ {cnpj} sem mapeamento unico de id_cnpj no perfil_estabelecimento."
+                )
+            id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+
+            started_at = time.perf_counter()
+            df_global = (
+                scan_crm_prescritores_global()
+                .filter(pl.col("id_cnpj") == id_cnpj)
+                .drop("id_cnpj")
+                .collect()
+                .sort(["competencia", "id_medico"])
+                .select(list(schema.keys()))
+            )
+            source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+            save_time_ms = write_final(df_global)
+            print(
+                f"[ CACHE ] {cnpj} - {CRM_PRESCRITORES_PARQUET} "
+                f"derivado de {CRM_PRESCRITORES_GLOBAL_PARQUET}."
+            )
+            return CacheLoadResult(
+                df_global,
+                from_cache=False,
+                read_time_ms=source_time_ms,
+                save_time_ms=save_time_ms,
+            )
+        except Exception as exc:
+            print(
+                f"[ ANALYTICS ] {cnpj} - {CRM_PRESCRITORES_GLOBAL_PARQUET} "
+                f"invalido: {exc}"
+            )
+            return CacheLoadResult(
+                pl.DataFrame(schema=schema),
+                from_cache=False,
+                error=(
+                    f"Modulo global {CRM_PRESCRITORES_GLOBAL_PARQUET} existente, "
+                    f"mas invalido: {exc}"
+                ),
+            )
 
     query_time_ms: float | None = None
     save_time_ms: float | None = None
@@ -113,7 +211,7 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
             )
             query_time_ms = round((time.perf_counter() - t0) * 1000, 1)
 
-        df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema=_empty_schema(CRM_PRESCRITORES_PARQUET))
+        df = pl.from_pandas(pdf) if not pdf.empty else pl.DataFrame(schema=schema)
         if not df.is_empty():
             from data_cache import scan_dados_medico
 
@@ -145,9 +243,7 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
                 df = df.with_columns(pl.col(col).cast(pl.Int8))
         df = df.with_columns(pl.lit(_CRM_PRESCRITORES_CACHE_VERSION).alias("_crm_prescritores_cache_version"))
 
-        t1 = time.perf_counter()
-        df.write_parquet(parquet_path, compression="zstd")
-        save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+        save_time_ms = write_final(df)
         return CacheLoadResult(df, from_cache=False, query_time_ms=query_time_ms, save_time_ms=save_time_ms)
     except Exception:
         print(f"[ ANALYTICS ] {cnpj} - CRM - indisponivel (sem cache e banco offline)")

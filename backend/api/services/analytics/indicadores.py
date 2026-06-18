@@ -117,6 +117,10 @@ _INDICADOR_DISPLAY_VALUE_COLS = {
     "volume_atipico": "volume_atipico_valor_aumento_atipico",
 }
 
+_INDICADOR_EXTRA_COLS: dict[str, list[str]] = {
+    "volume_atipico": ["volume_atipico_maior_taxa_crescimento_pct"],
+}
+
 _INDICADOR_BENCHMARK_LOCAL_KEYS = {
     "falecidos",
     "incompatibilidade_patologica",
@@ -662,6 +666,11 @@ def _build_indicador_dataset(
     display_col = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador)
     if display_col and display_col not in risco_cols:
         risco_cols.append(display_col)
+
+    extra_cols = _INDICADOR_EXTRA_COLS.get(indicador, [])
+    for extra_col in extra_cols:
+        if extra_col not in risco_cols:
+            risco_cols.append(extra_col)
     missing_cols = [col for col in risco_cols if col not in df_risco.columns]
     if missing_cols:
         raise RuntimeError(
@@ -781,6 +790,7 @@ def _build_indicador_cnpj_rows(
     c_mr: str,
     rr_col: str | None,
     score_col: str,
+    indicador: str | None = None,
 ) -> list[IndicadorCnpjRowSchema]:
     rows: list[IndicadorCnpjRowSchema] = []
     for row in df.iter_rows(named=True):
@@ -810,6 +820,10 @@ def _build_indicador_cnpj_rows(
             valor_movimentado=_optional_float(row.get("total_vendas")),
             val_sem_comp=_optional_float(row.get("total_sem_comprovacao")),
             perc_val_sem_comp=_optional_float(row.get("perc_val_sem_comp")),
+            detalhes_extras={
+                k: row.get(k)
+                for k in _INDICADOR_EXTRA_COLS.get(indicador, [])
+            } if indicador else None,
         ))
     return rows
 
@@ -1416,12 +1430,16 @@ def get_indicadores_analise_cnpjs(
                 sort_order=normalized_order,
             )
 
+        # Para indicadores com coluna de exibição distinta (ex: volume_atipico usa valor monetário),
+        # substituir c_val pelo display col na construção das rows e ordenação
+        display_c_val = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador, c_val)
+
         sort_columns = {
             "cnpj": "cnpj",
             "razao_social": "razao_social",
             "municipio": "no_municipio",
             "uf": "uf",
-            "valor": c_val,
+            "valor": display_c_val,
             "med_reg": c_mr,
             "risco_reg": "risco_benchmark",
             "risco_benchmark": "risco_benchmark",
@@ -1446,9 +1464,6 @@ def get_indicadores_analise_cnpjs(
             .slice(offset, page_size)
         )
 
-        # Para indicadores com coluna de exibição distinta (ex: volume_atipico usa valor monetário),
-        # substituir c_val pelo display col na construção das rows
-        display_c_val = _INDICADOR_DISPLAY_VALUE_COLS.get(indicador, c_val)
         if display_c_val != c_val and display_c_val not in df_page.columns:
             raise RuntimeError(
                 f"Coluna de display obrigatoria ausente para indicador '{indicador}': {display_c_val}"
@@ -1456,7 +1471,7 @@ def get_indicadores_analise_cnpjs(
 
         return IndicadorCnpjPageResponse(
             indicador=indicador,
-            items=_build_indicador_cnpj_rows(df_page, display_c_val, c_mr, rr_col, score_col),
+            items=_build_indicador_cnpj_rows(df_page, display_c_val, c_mr, rr_col, score_col, indicador),
             kpis=_build_status_kpis(df_joined),
             total=total,
             page=page,

@@ -881,6 +881,7 @@ class IndicadorCnpjRowSchema(BaseModel):
     valor_movimentado: Optional[float] = None
     val_sem_comp: Optional[float] = None
     perc_val_sem_comp: Optional[float] = None
+    detalhes_extras: Optional[Dict[str, float | str | None]] = None
 
 
 class IndicadorMunicipioRowSchema(BaseModel):

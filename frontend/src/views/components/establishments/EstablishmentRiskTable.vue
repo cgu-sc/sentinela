@@ -7,7 +7,7 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
 import { extractCnpjRaiz } from '@/composables/useParsing';
 import { FILTER_OPTIONS } from '@/config/filterOptions';
-import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
+import { AUDIT_THRESHOLDS, indicadorExtraColumns } from '@/config/riskConfig';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
@@ -52,12 +52,26 @@ const tableSnapshot = useFrozenData(
   loadingRef,
 );
 
+const extraColumns = computed(() => {
+  return props.indicadorKey ? (indicadorExtraColumns[props.indicadorKey] || []) : [];
+});
+
+function formatValueExtra(valor, type) {
+  if (valor == null) return '—';
+  if (type === 'currency' || type === 'val') return formatCurrencyFull(valor);
+  if (type === 'val_compact')                return formatCurrencyCompact(valor);
+  if (type === 'number') return valor.toString();
+  if (type === 'percentage' || type === 'pct') return valor.toFixed(2) + '%';
+  return valor;
+}
+
 function formatValue(valor) {
   if (valor == null) return '—';
   const fmt = props.formato;
-  if (fmt === 'pct')  return valor.toFixed(2) + '%';
-  if (fmt === 'pct3') return valor.toFixed(3) + '%';
-  if (fmt === 'val')  return formatCurrencyFull(valor);
+  if (fmt === 'pct')         return valor.toFixed(2) + '%';
+  if (fmt === 'pct3')        return valor.toFixed(3) + '%';
+  if (fmt === 'val')         return formatCurrencyFull(valor);
+  if (fmt === 'val_compact') return formatCurrencyCompact(valor);
   return valor.toFixed(2);
 }
 
@@ -148,7 +162,10 @@ const tableFooter = computed(() => {
   };
 });
 
-const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'Indicador');
+const indicatorColumnHeader = computed(() => {
+  const label = props.indicadorLabel?.trim() || 'Indicador';
+  return label.toLowerCase() === 'crescimento semestral atípico' ? 'Crescimento Semestral' : label;
+});
 </script>
 
 <template>
@@ -240,6 +257,27 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
         </template>
         <template #footer>
           <span class="table-total-label">TOTAL</span>
+        </template>
+      </Column>
+
+      <!-- Colunas Dinâmicas Extras (Configuradas por Indicador) -->
+      <Column
+        v-for="col in extraColumns"
+        :key="col.field"
+        :field="`detalhes_extras.${col.field}`"
+        :header="col.header"
+        :sortable="false"
+        headerClass="col-extra"
+        bodyClass="col-extra"
+        :style="{ minWidth: col.minWidth, width: col.width }"
+      >
+        <template #body="{ data }">
+          <div :class="`text-${col.align || 'right'}`">
+            {{ formatValueExtra(data.detalhes_extras?.[col.field], col.type) }}
+          </div>
+        </template>
+        <template #footer>
+          <span class="table-total-value">—</span>
         </template>
       </Column>
 
@@ -674,7 +712,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .indicator-median {
@@ -734,7 +772,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   max-width: 100%;
   overflow: hidden;
   color: var(--text-color-85);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -770,7 +808,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .noncomp-percent {
@@ -842,7 +880,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 :deep(.ind-cnpj-table .col-name) {
-  width: 29%;
+  width: 28%;
 }
 
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th:first-child),
@@ -859,22 +897,27 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 :deep(.ind-cnpj-table .col-indicator) {
-  width: 11%;
+  width: 12%;
   text-align: right;
 }
 
+:deep(.ind-cnpj-table .col-extra) {
+  font-size: 0.86rem;
+  text-align: center;
+}
+
 :deep(.ind-cnpj-table .col-risk) {
-  width: 7%;
+  width: 8%;
   text-align: center;
 }
 
 :deep(.ind-cnpj-table .col-movement) {
-  width: 10%;
+  width: 11%;
   text-align: right;
 }
 
 :deep(.ind-cnpj-table .col-noncomp) {
-  width: 10%;
+  width: 12%;
   text-align: right;
 }
 
@@ -922,6 +965,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 :deep(.ind-cnpj-table .col-risk .p-column-header-content),
+:deep(.ind-cnpj-table .col-extra .p-column-header-content),
 :deep(.ind-cnpj-table .col-network-flag .p-column-header-content),
 :deep(.ind-cnpj-table .col-network-count .p-column-header-content),
 :deep(.ind-cnpj-table .col-badge-filter .p-column-header-content) {
@@ -959,6 +1003,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 :deep(.ind-cnpj-table .p-datatable-thead > tr > th) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  font-size: 0.7rem !important;
 }
 
 :deep(.ind-cnpj-table .p-datatable-tfoot > tr > td) {

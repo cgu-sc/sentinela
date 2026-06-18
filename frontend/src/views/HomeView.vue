@@ -146,6 +146,28 @@ const cacheSummaryText = computed(() => {
   return `${loaded}/${total} módulos carregados`;
 });
 
+const cacheModuleSummary = computed(() => {
+  const total = cacheModules.value.length;
+  const loaded = cacheModules.value.filter((module) => module.loaded).length;
+
+  if (!cacheStatus.value || total === 0) {
+    return {
+      value: '...',
+      label: 'verificando módulos',
+      modulesValue: '...',
+    };
+  }
+
+  const percent = Math.round((loaded / total) * 100);
+  const isComplete = loaded === total;
+
+  return {
+    value: isComplete ? `${percent}%` : `${loaded}/${total}`,
+    label: isComplete ? 'módulos carregados' : 'módulos carregados',
+    modulesValue: `${loaded}/${total}`,
+  };
+});
+
 function getModuleTone(module) {
   if (module.loaded) return 'ok';
   if (module.exists) return 'error';
@@ -155,47 +177,6 @@ function getModuleTone(module) {
 function goToMunicipios() {
   router.push('/municipios');
 }
-
-const statusCardMetrics = computed(() => [
-  {
-    label: 'Módulos',
-    value: cacheSummaryText.value,
-  },
-  {
-    label: 'Última atualização',
-    value: syncText.value,
-  },
-]);
-
-const coverageCardMetrics = computed(() => [
-  {
-    label: 'Municípios',
-    value: getKpiValue('MUNICIPIOS'),
-  },
-  {
-    label: 'UFs',
-    value: `${ufCount.value || '-'}`,
-  },
-  {
-    label: 'Período',
-    value: periodText.value,
-    wide: true,
-  },
-]);
-
-const financialCardMetrics = computed(() => [
-  {
-    label: 'Valor sem comprovação',
-    value: getKpiValue('SEM COMPROVACAO'),
-    tone: 'critical',
-  },
-  {
-    label: '% sem comprovação',
-    value: getKpiValue('% SEM COMPROVACAO'),
-    tone: 'critical',
-  },
-  financialScopeMetric.value,
-]);
 
 const displayAlertasPanorama = computed(() => {
   if (alertasPanorama.value) return alertasPanorama.value;
@@ -226,43 +207,46 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
             </div>
           </div>
 
-          <div class="sys-status-row">
-            <span class="sys-status-badge" :class="`sys-status-badge--${statusInfo.tone}`">
-              {{ statusInfo.label }}
-            </span>
+          <div class="system-hero">
+            <span class="system-hero__value">{{ cacheModuleSummary.value }}</span>
+            <span class="system-hero__label">{{ cacheModuleSummary.label }}</span>
           </div>
 
-          <div class="sys-info-list">
-            <div class="sys-info-row">
-              <i class="pi pi-database sys-info-icon" />
-              <span class="sys-info-label">Módulos</span>
-              <span class="sys-info-value">{{ cacheSummaryText }}</span>
-            </div>
-            <div class="sys-info-row">
-              <i class="pi pi-clock sys-info-icon" />
-              <span class="sys-info-label">Atualizado</span>
-              <span class="sys-info-value">{{ syncText }}</span>
-            </div>
-          </div>
+          <div class="system-stats">
+            <div class="system-stat system-stat--modules" tabindex="0">
+              <span class="system-stat__label">Módulos</span>
+              <strong class="system-stat__value">{{ cacheModuleSummary.modulesValue }}</strong>
 
-          <div class="operational-panel">
-            <div class="operational-panel__header">
-              <strong>Integridade dos módulos</strong>
-              <span>{{ cacheSummaryText }}</span>
-            </div>
-            <div class="operational-panel__list">
-              <div
-                v-for="module in cacheModules"
-                :key="module.key"
-                class="operational-module"
-                :class="`operational-module--${getModuleTone(module)}`"
-              >
-                <span class="operational-module__status">
-                  {{ module.loaded ? 'OK' : module.exists ? 'Erro' : 'Ausente' }}
-                </span>
-                <span class="operational-module__name">{{ module.label }}</span>
-                <strong>{{ module.loaded ? 'Carregado' : 'Não carregado' }}</strong>
+              <div class="operational-panel">
+                <div class="operational-panel__header">
+                  <strong>Integridade dos módulos</strong>
+                  <span>{{ cacheSummaryText }}</span>
+                </div>
+                <div class="operational-panel__list">
+                  <div
+                    v-for="module in cacheModules"
+                    :key="module.key"
+                    class="operational-module"
+                    :class="`operational-module--${getModuleTone(module)}`"
+                  >
+                    <span class="operational-module__status">
+                      {{ module.loaded ? 'OK' : module.exists ? 'Erro' : 'Ausente' }}
+                    </span>
+                    <span class="operational-module__name">{{ module.label }}</span>
+                    <strong>{{ module.loaded ? 'Carregado' : 'Não carregado' }}</strong>
+                  </div>
+                </div>
               </div>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat__label">Status</span>
+              <strong class="system-stat__value" :class="`system-stat__value--${statusInfo.tone}`">
+                {{ statusInfo.label }}
+              </strong>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat__label">Atualizado</span>
+              <strong class="system-stat__value">{{ syncText }}</strong>
             </div>
           </div>
         </article>
@@ -490,11 +474,6 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
   overflow: visible;
 }
 
-.priority-card--operational:hover,
-.priority-card--operational:focus-within {
-  z-index: 30;
-}
-
 .operational-toggle {
   width: 2rem;
   height: 2rem;
@@ -544,8 +523,8 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
   height: 100%;
 }
 
-.priority-card--operational:hover .operational-panel,
-.priority-card--operational:focus-within .operational-panel {
+.system-stat--modules:hover .operational-panel,
+.system-stat--modules:focus-within .operational-panel {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
@@ -815,72 +794,61 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
   line-height: 1.2;
 }
 
-.sys-status-row {
-  display: flex;
-  align-items: center;
-  margin: 0.1rem 0 0.05rem;
-}
-
-.sys-status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border: 1px solid transparent;
-}
-
-.sys-status-badge--success {
-  color: var(--status-success);
-  border-color: color-mix(in srgb, var(--status-success) 30%, transparent);
-  background: color-mix(in srgb, var(--status-success) 10%, transparent);
-}
-
-.sys-status-badge--warning {
-  color: var(--risk-medium);
-  border-color: color-mix(in srgb, var(--risk-medium) 30%, transparent);
-  background: color-mix(in srgb, var(--risk-medium) 10%, transparent);
-}
-
-.sys-status-badge--loading {
-  color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-}
-
-.sys-info-list {
+.system-hero {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.3rem;
+  gap: 0.15rem;
+  padding: 0.2rem 0 0.1rem;
 }
 
-.sys-info-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 0.4rem;
-  row-gap: 0.05rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 5px;
-  border: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
-  background: color-mix(in srgb, var(--card-border) 18%, transparent);
-  min-width: 0;
+.system-hero__value {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-color-85);
+  letter-spacing: -0.01em;
 }
 
-.sys-info-icon {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  grid-row: 1 / 3;
-  align-self: center;
-  flex-shrink: 0;
-}
-
-.sys-info-label {
+.system-hero__label {
   font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.system-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.36rem;
+  margin-top: 0.1rem;
+}
+
+.system-stat {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--priority-color) 16%, transparent);
+  background: color-mix(in srgb, var(--priority-color) 6%, transparent);
+}
+
+.system-stat--modules {
+  cursor: help;
+}
+
+.system-stat--modules:hover,
+.system-stat--modules:focus-visible,
+.system-stat--modules:focus-within {
+  border-color: color-mix(in srgb, var(--priority-color) 30%, transparent);
+  background: color-mix(in srgb, var(--priority-color) 9%, transparent);
+  outline: none;
+}
+
+.system-stat__label {
+  font-size: 0.66rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -888,13 +856,27 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
   line-height: 1;
 }
 
-.sys-info-value {
-  font-size: 0.92rem;
+.system-stat__value {
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-color-85);
-  min-width: 0;
-  line-height: 1.2;
-  word-break: break-word;
+  line-height: 1.15;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-stat__value--success {
+  color: var(--status-success);
+}
+
+.system-stat__value--warning {
+  color: var(--risk-medium);
+}
+
+.system-stat__value--loading {
+  color: var(--primary-color);
 }
 
 .priority-card--alerts {

@@ -60,7 +60,8 @@ CRM_CNPJ_CACHE_KEYS = [
     ("crm_raiox_tx", "CRM Raio-X transacoes"),
 ]
 
-CRM_CNPJ_INDIVIDUAL_IDS = frozenset(range(26, 34))
+CRM_COMPLETO_ID = 8
+CRM_INDIVIDUAL_IDS = frozenset(range(9, 17))
 
 
 def _buscar_cnpjs_crm(engine) -> list[str]:
@@ -174,46 +175,46 @@ MODULOS = sorted([
     {"id": 3, "name": "Matriz risco", "func": _sync_matriz_risco, "peso": "medio", "ordem": 3},
     {"id": 4, "name": "Falecidos global", "func": _sync_falecidos, "peso": "medio", "ordem": 4},
     {"id": 5, "name": "Bench CRM", "func": _sync_crm_benchmarks, "peso": "rapido", "ordem": 5},
-    {"id": 23, "name": "CRM Brasil semestre", "func": _sync_crm_prescricoes_brasil_semestre, "peso": "rapido", "ordem": 5.1},
-    {"id": 24, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 5.2},
-    {"id": 25, "name": "CRM CNPJ completo", "func": _sync_crm_cnpj_completo, "peso": "pesado", "ordem": 5.3},
-    {"id": 26, "name": "CRM prescritores", "func": _criar_sync_crm_cnpj("crm_prescritores"), "peso": "medio", "ordem": 5.4},
-    {"id": 27, "name": "CRM geografico", "func": _criar_sync_crm_cnpj("geografico"), "peso": "medio", "ordem": 5.5},
-    {"id": 28, "name": "CRM conc. unico", "func": _criar_sync_crm_cnpj("crm_concentracao_unico_alertas"), "peso": "medio", "ordem": 5.6},
-    {"id": 29, "name": "CRM conc. multiplo", "func": _criar_sync_crm_cnpj("crm_concentracao_multiplo_alertas"), "peso": "medio", "ordem": 5.7},
-    {"id": 30, "name": "CRM timeline dia", "func": _criar_sync_crm_cnpj("crm_timeline_dia"), "peso": "medio", "ordem": 5.8},
-    {"id": 31, "name": "CRM timeline hora", "func": _criar_sync_crm_cnpj("crm_timeline_hora"), "peso": "medio", "ordem": 5.9},
-    {"id": 32, "name": "CRM timeline eventos", "func": _criar_sync_crm_cnpj("crm_timeline_eventos"), "peso": "medio", "ordem": 6.0},
-    {"id": 33, "name": "CRM Raio-X", "func": _criar_sync_crm_cnpj("crm_raiox_tx"), "peso": "medio", "ordem": 6.1},
-    {"id": 7, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio", "ordem": 7},
-    {"id": 13, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio", "ordem": 7.5},
-    {"id": 8, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado", "ordem": 8},
-    {"id": 9, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido", "ordem": 9},
-    {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio", "ordem": 10},
-    {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado", "ordem": 11},
-    {"id": 12, "name": "Volume atipico", "func": _sync_volume_atipico_semestral, "peso": "medio", "ordem": 12},
-    {"id": 14, "name": "PAR", "func": _sync_dados_par, "peso": "rapido", "ordem": 14},
-    {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido", "ordem": 15},
-    {"id": 16, "name": "eSocial", "func": _sync_esocial, "peso": "rapido", "ordem": 16},
-    {"id": 17, "name": "Metadados", "func": _sync_sentinela_metadados_base, "peso": "rapido", "ordem": 17},
-    {"id": 18, "name": "Clinica anual completa", "func": _sync_clinica_anual_completa, "peso": "rapido", "ordem": 18},
-    {"id": 19, "name": "Demografia", "func": _sync_dados_ibge_demografia, "peso": "rapido", "ordem": 19},
-    {"id": 20, "name": "Clinica municipal", "func": _sync_analise_gtin_inconsistencia_clinica_municipio, "peso": "rapido", "ordem": 20},
-    {"id": 21, "name": "Clinica regiao", "func": _sync_analise_gtin_inconsistencia_clinica_regiao, "peso": "rapido", "ordem": 21},
-    {"id": 22, "name": "Geo origem UF", "func": _sync_geografico_origem_uf, "peso": "rapido", "ordem": 22},
+    {"id": 6, "name": "CRM Brasil semestre", "func": _sync_crm_prescricoes_brasil_semestre, "peso": "rapido", "ordem": 6},
+    {"id": 7, "name": "Dados medico", "func": _sync_dados_medico, "peso": "rapido", "ordem": 7},
+    {"id": 8, "name": "CRM Completo", "func": _sync_crm_cnpj_completo, "peso": "pesado", "ordem": 8},
+    {"id": 9, "name": "CRM prescritores", "func": _criar_sync_crm_cnpj("crm_prescritores"), "peso": "medio", "ordem": 9},
+    {"id": 10, "name": "CRM geografico", "func": _criar_sync_crm_cnpj("geografico"), "peso": "medio", "ordem": 10},
+    {"id": 11, "name": "CRM conc. unico", "func": _criar_sync_crm_cnpj("crm_concentracao_unico_alertas"), "peso": "medio", "ordem": 11},
+    {"id": 12, "name": "CRM conc. multiplo", "func": _criar_sync_crm_cnpj("crm_concentracao_multiplo_alertas"), "peso": "medio", "ordem": 12},
+    {"id": 13, "name": "CRM timeline dia", "func": _criar_sync_crm_cnpj("crm_timeline_dia"), "peso": "medio", "ordem": 13},
+    {"id": 14, "name": "CRM timeline hora", "func": _criar_sync_crm_cnpj("crm_timeline_hora"), "peso": "medio", "ordem": 14},
+    {"id": 15, "name": "CRM timeline eventos", "func": _criar_sync_crm_cnpj("crm_timeline_eventos"), "peso": "medio", "ordem": 15},
+    {"id": 16, "name": "CRM Raio-X", "func": _criar_sync_crm_cnpj("crm_raiox_tx"), "peso": "medio", "ordem": 16},
+    {"id": 17, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio", "ordem": 17},
+    {"id": 18, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio", "ordem": 18},
+    {"id": 19, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado", "ordem": 19},
+    {"id": 20, "name": "Medicamentos", "func": _sync_medicamentos, "peso": "rapido", "ordem": 20},
+    {"id": 21, "name": "Socios", "func": _sync_dados_socios, "peso": "medio", "ordem": 21},
+    {"id": 22, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado", "ordem": 22},
+    {"id": 23, "name": "Volume atipico", "func": _sync_volume_atipico_semestral, "peso": "medio", "ordem": 23},
+    {"id": 24, "name": "PAR", "func": _sync_dados_par, "peso": "rapido", "ordem": 24},
+    {"id": 25, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido", "ordem": 25},
+    {"id": 26, "name": "eSocial", "func": _sync_esocial, "peso": "rapido", "ordem": 26},
+    {"id": 27, "name": "Metadados", "func": _sync_sentinela_metadados_base, "peso": "rapido", "ordem": 27},
+    {"id": 28, "name": "Clinica anual completa", "func": _sync_clinica_anual_completa, "peso": "rapido", "ordem": 28},
+    {"id": 29, "name": "Demografia", "func": _sync_dados_ibge_demografia, "peso": "rapido", "ordem": 29},
+    {"id": 30, "name": "Clinica municipal", "func": _sync_analise_gtin_inconsistencia_clinica_municipio, "peso": "rapido", "ordem": 30},
+    {"id": 31, "name": "Clinica regiao", "func": _sync_analise_gtin_inconsistencia_clinica_regiao, "peso": "rapido", "ordem": 31},
+    {"id": 32, "name": "Geo origem UF", "func": _sync_geografico_origem_uf, "peso": "rapido", "ordem": 32},
 ], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {
-    11: {10},
-    25: {24},
-    26: {24},
+    8: {7},
+    9: {7},
+    22: {21},
 }
 
 
 def _incluir_dependencias(selecionados: list[dict]) -> list[dict]:
     ids = {modulo["id"] for modulo in selecionados}
-    if 25 in ids:
-        ids.difference_update(CRM_CNPJ_INDIVIDUAL_IDS)
+    if CRM_COMPLETO_ID in ids:
+        ids.difference_update(CRM_INDIVIDUAL_IDS)
 
     pendentes = list(ids)
 
@@ -248,7 +249,7 @@ def selecionar_modulos() -> list[dict]:
     if entrada == "0":
         modulos_todos = [
             modulo for modulo in MODULOS
-            if modulo["id"] not in CRM_CNPJ_INDIVIDUAL_IDS
+            if modulo["id"] not in CRM_INDIVIDUAL_IDS
         ]
         return _incluir_dependencias(modulos_todos)
 

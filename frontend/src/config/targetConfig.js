@@ -70,7 +70,7 @@ export const TARGET_GROUPS = [
     targets: [
       {
         key: 'aumento_atipico_vendas',
-        label: 'Aumento atípico de vendas',
+        label: 'Crescimento semestral atípico',
         description: 'Recorte de produção ainda não habilitado.',
         enabled: false,
       },

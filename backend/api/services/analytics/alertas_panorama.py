@@ -7,13 +7,13 @@ from datetime import date
 import polars as pl
 
 from data_cache import (
-    get_df_matriz_risco,
     get_df_perfil_estabelecimento,
     get_df_dados_socios,
     scan_geografico_origem_uf,
 )
 from ...schemas.analytics import AlertaPanoramaItemSchema, AlertasPanoramaResponse
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS, LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT
+from .volume_atipico import get_volume_atipico_id_cnpjs_df
 
 
 # ---------------------------------------------------------------------------
@@ -86,20 +86,10 @@ def _ids_por_cnpj(cnpjs: pl.Series) -> pl.Series:
 
 def _ids_volume_atipico(
     id_cnpjs: pl.Series | None,
-    ano_base_min: int | None,
-    ano_base_max: int | None,
+    data_inicio: date | None,
+    data_fim: date | None,
 ) -> pl.Series:
-    df = get_df_matriz_risco()
-    required = {"id_cnpj", "volume_atipico_total_semestres_atipicos"}
-    missing = required - set(df.columns)
-    if missing:
-        raise RuntimeError(f"matriz_risco sem colunas: {missing}")
-
-    df = df.filter(pl.col("volume_atipico_total_semestres_atipicos") > 0)
-    if ano_base_min:
-        df = df.filter(pl.col("ano_base") >= ano_base_min)
-    if ano_base_max:
-        df = df.filter(pl.col("ano_base") <= ano_base_max)
+    df = get_volume_atipico_id_cnpjs_df(data_inicio, data_fim, 50.0)
     if id_cnpjs is not None:
         df = df.filter(pl.col("id_cnpj").is_in(id_cnpjs))
 
@@ -311,7 +301,7 @@ def get_alertas_panorama(
     id_cnpjs = _filtrar_id_cnpjs_por_escopo(uf, regiao_id, id_ibge7)
 
     ids_por_alerta = {
-        "volume_atipico": _ids_volume_atipico(id_cnpjs, ano_base_min, ano_base_max),
+        "volume_atipico": _ids_volume_atipico(id_cnpjs, data_inicio, data_fim),
         "cnpj_cnae_farmacia_ausente": _ids_cnae_incompativel(id_cnpjs),
         "cnpj_dispersao_uf_nao_vizinha": _ids_dispersao_uf_nao_vizinha(
             id_cnpjs, uf, ano_base_min, ano_base_max
@@ -326,7 +316,7 @@ def get_alertas_panorama(
     }
 
     DEFINICOES = [
-        ("volume_atipico",                "Aumento atípico de vendas",                    "critico"),
+        ("volume_atipico",                "Crescimento semestral atípico",                "critico"),
         ("cnpj_dispersao_uf_nao_vizinha", "Vendas para UFs sem fronteira",              "critico"),
         ("cnpj_cnae_farmacia_ausente",    "CNAE incompatível",                            "atencao"),
         ("socio_falecido",                "Sócio ativo falecido",                         "atencao"),

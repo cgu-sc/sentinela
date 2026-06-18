@@ -107,7 +107,7 @@ def _build_alerta_volume_atipico(
         entidade_id=cadastro.cnpj,
         entidade_nome=cadastro.nome_fantasia or cadastro.razao_social or cadastro.cnpj,
         severidade="critico",
-        titulo="Aumento atípico de vendas",
+        titulo="Crescimento semestral atípico",
         fonte="Evolução financeira semestral",
         data_referencia=(
             cadastro.data_processamento.date()

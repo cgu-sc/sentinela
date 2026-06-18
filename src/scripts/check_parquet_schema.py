@@ -1,7 +1,7 @@
 """
 check_parquet_schema.py
 -----------------------
-Utilitário profissional para inspeção de arquivos Parquet do Sentinela.
+Utilitário profissional para inspeção de módulos de cache do Sentinela.
 Permite visualizar colunas, tipos de dados, contagem de registros e amostras.
 
 Uso:
@@ -38,17 +38,25 @@ try:
         _TEIA_FONTE_NIVEL4_PARQUET_PATH,
         _MEDICAMENTOS_PARQUET_PATH,
     )
+    from cache_files import (
+        TEIA_GRAFO_NIVEL2_NODES_PARQUET,
+        TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
+        TEIA_GRAFO_NIVEL3_NODES_PARQUET,
+        TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
+        TEIA_GRAFO_NIVEL4_NODES_PARQUET,
+        TEIA_GRAFO_NIVEL4_EDGES_PARQUET,
+    )
 except ImportError as e:
     print(f"Erro: Nao foi possivel importar as definicoes do backend.\n   Detalhe: {e}")
     sys.exit(1)
 
 CNPJ_PARQUET_NAMES = [
-    "teia_grafo_nivel2_nodes.parquet",
-    "teia_grafo_nivel2_edges.parquet",
-    "teia_grafo_nivel3_nodes.parquet",
-    "teia_grafo_nivel3_edges.parquet",
-    "teia_grafo_nivel4_nodes.parquet",
-    "teia_grafo_nivel4_edges.parquet",
+    TEIA_GRAFO_NIVEL2_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL2_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL3_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL3_EDGES_PARQUET,
+    TEIA_GRAFO_NIVEL4_NODES_PARQUET,
+    TEIA_GRAFO_NIVEL4_EDGES_PARQUET,
 ]
 
 # ── Configuração dos Arquivos ──────────────────────────────────────────────────
@@ -74,7 +82,7 @@ ARQUIVOS = [
 
 def exibir_menu():
     print("\n" + "=" * 60)
-    print("   SENTINELA - INSPECAO DE ARQUIVOS PARQUET (CACHE)")
+    print("   SENTINELA - INSPECAO DE MODULOS DE CACHE")
     print("=" * 60)
     for a in ARQUIVOS:
         status = "[OK]" if os.path.exists(a["path"]) else "[--]"

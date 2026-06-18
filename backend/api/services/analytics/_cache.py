@@ -13,6 +13,7 @@ import unicodedata
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from cache_files import (
     CRM_RAIOX_TX_PARQUET,
+    DADOS_PAR_PARQUET,
     FARMACIAS_PARQUET,
     FARMACIAS_CNAES_SECUNDARIOS_PARQUET,
     MEDIANA_AUTORIZACOES_HORARIA_PARQUET,
@@ -136,7 +137,7 @@ def _classify_company_node(row: dict) -> str:
     return "PJ_DEMAIS_EMPRESAS"
 
 _known_cnpj_dirs: set[str] = set()
-_CRM_RAIOX_TX_CACHE_VERSION = 2
+_CRM_RAIOX_TX_CACHE_VERSION = 3
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
     """Retorna (e garante a existência de) modules/cnpjs/{cnpj}/.
@@ -175,7 +176,8 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
                     )
                 )
             )
-            if "codigo_barra" in header.columns and has_current_version:
+            required_columns = {"dt_janela", "hr_janela", "data_hora", "num_autorizacao", "id_medico", "valor_pago"}
+            if required_columns.issubset(set(header.columns)) and "codigo_barra" not in header.columns and has_current_version:
                 return
         except Exception: pass
 
@@ -183,26 +185,27 @@ def sync_crm_raiox_tx(cnpj: str) -> None:
         print(f"🗄️ [SYNC] Buscando transações Raio-X unificadas no banco para {cnpj}...")
         with _engine.connect() as conn:
             pdf_tx = pd.read_sql(
-                text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, P.id_medico, MED.codigo_barra, P.valor_pago "
+                text("SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
+                     "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
                      "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
                      "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                     "INNER JOIN temp_CGUSC.fp.medicamentos_patologia MED ON MED.id = P.id_gtin "
                      "WHERE F.cnpj = :cnpj "
-                     "ORDER BY P.data_hora ASC, P.num_autorizacao ASC"),
+                     "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
+                     "ORDER BY MIN(P.data_hora) ASC, P.num_autorizacao ASC"),
                 conn, params={"cnpj": cnpj}
             )
         df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
             "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8,
             "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8,
-            "codigo_barra": pl.Utf8, "valor_pago": pl.Float64
+            "valor_pago": pl.Float64
         })
 
         if not df_tx.is_empty():
             df_tx = df_tx.with_columns([
                 pl.col("num_autorizacao").cast(pl.Utf8),
                 pl.col("id_medico").cast(pl.Utf8),
-                pl.col("codigo_barra").cast(pl.Utf8),
                 pl.col("data_hora").cast(pl.Utf8),
+                pl.col("valor_pago").cast(pl.Float64),
                 pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version")
             ])
         else:
@@ -339,7 +342,7 @@ def sync_network(cnpj: str) -> None:
             if os.path.getmtime(CNAES_SECUNDARIOS_PATH) > graph_mtime:
                 raise ValueError("teia anterior ao cache de CNAEs secundarios")
 
-            DADOS_PAR_PATH = os.path.join(get_cache_dir(), "dados_par.parquet")
+            DADOS_PAR_PATH = os.path.join(get_cache_dir(), DADOS_PAR_PARQUET)
             if os.path.exists(DADOS_PAR_PATH):
                 par_mtime = os.path.getmtime(DADOS_PAR_PATH)
                 if par_mtime > graph_mtime:

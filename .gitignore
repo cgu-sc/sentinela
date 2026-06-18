@@ -1,4 +1,4 @@
-# === PYTHON (BACKEND) ===
+﻿# === PYTHON (BACKEND) ===
 __pycache__/
 *.py[cod]
 *$py.class
@@ -48,6 +48,7 @@ src-tauri/bin/
 sentinela_cache/
 *.exe
 *.parquet
+*.smod
 *.db
 *.csv
 *.json
@@ -78,6 +79,7 @@ src-tauri/bin/
 sentinela_cache/
 *.exe
 *.parquet
+*.smod
 *.db
 *.csv
 *.json
@@ -85,7 +87,7 @@ sentinela_cache/
 !package.json
 
 # === EXTERNAL MODELS ===
-# Incluído conforme solicitado
+# IncluÃ­do conforme solicitado
 arbflow-frontend-models/
 
 

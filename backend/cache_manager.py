@@ -59,7 +59,7 @@ def sync_cnpj_producers(cnpj: str, engine) -> list[str]:
     return synced
 
 
-def list_missing_cnpj_parquets(cnpj: str) -> list[str]:
+def list_missing_cnpj_modules(cnpj: str) -> list[str]:
     cnpj_dir = _get_cnpj_cache_dir(cnpj)
     expected_files = cache_registry.get_cnpj_parquet_files()
     return [
@@ -71,7 +71,7 @@ def list_missing_cnpj_parquets(cnpj: str) -> list[str]:
 def sync_cnpj_caches(engine, cnpjs: Iterable[str], progress_callback=None) -> None:
     cnpjs = [cnpj.strip() for cnpj in cnpjs if cnpj.strip()]
     total = len(cnpjs)
-    print(f"Sincronizando todos os parquets por CNPJ para {total} estabelecimento(s)...")
+    print(f"Sincronizando todos os modulos por CNPJ para {total} estabelecimento(s)...")
 
     if total == 0:
         if progress_callback:
@@ -82,9 +82,9 @@ def sync_cnpj_caches(engine, cnpjs: Iterable[str], progress_callback=None) -> No
         print(f"\n  [{index}/{total}] CNPJ {cnpj}")
 
         sync_cnpj_producers(cnpj, engine)
-        still_missing = list_missing_cnpj_parquets(cnpj)
+        still_missing = list_missing_cnpj_modules(cnpj)
         if still_missing:
-            print(f"    Aviso: parquets faltantes: {', '.join(still_missing)}")
+            print(f"    Aviso: modulos faltantes: {', '.join(still_missing)}")
 
         if progress_callback:
             progress_callback(int((index / total) * 100))

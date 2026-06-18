@@ -919,10 +919,8 @@ class CrmHourlyTransactionSchema(BaseModel):
     data_hora: str
     num_autorizacao: str
     id_medico: str
-    codigo_barra: str
+    no_medico: Optional[str] = None
     valor_pago: float
-    produto: Optional[str] = None
-    principio_ativo: Optional[str] = None
 
 
 class CrmUnicoAlertaSchema(BaseModel):

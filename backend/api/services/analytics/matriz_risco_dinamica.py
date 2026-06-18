@@ -237,7 +237,7 @@ def _compute_dynamic_matriz_risco(
     missing_cols = _MATRIX_COMPONENT_COLUMNS - set(matriz.columns)
     if missing_cols:
         raise RuntimeError(
-            "matriz_risco.parquet sem colunas obrigatorias para calculo dinamico: "
+            "Modulo matriz_risco sem colunas obrigatorias para calculo dinamico: "
             + ", ".join(sorted(missing_cols))
         )
 
@@ -334,7 +334,7 @@ def _compute_dynamic_matriz_risco(
     missing_perfil = perfil_required - set(perfil.columns)
     if missing_perfil:
         raise RuntimeError(
-            "perfil_estabelecimento.parquet sem colunas obrigatorias para matriz dinamica: "
+            "Modulo perfil_estabelecimento sem colunas obrigatorias para matriz dinamica: "
             + ", ".join(sorted(missing_perfil))
         )
 
@@ -580,7 +580,7 @@ def build_annual_indicator_benchmark_matriz(
     missing_cols = _MATRIX_COMPONENT_COLUMNS - set(matriz.columns)
     if missing_cols:
         raise RuntimeError(
-            "matriz_risco.parquet sem colunas obrigatorias para evolucao anual: "
+            "Modulo matriz_risco sem colunas obrigatorias para evolucao anual: "
             + ", ".join(sorted(missing_cols))
         )
 
@@ -611,7 +611,7 @@ def build_annual_indicator_benchmark_matriz(
     missing_perfil = perfil_required - set(perfil.columns)
     if missing_perfil:
         raise RuntimeError(
-            "perfil_estabelecimento.parquet sem colunas obrigatorias para evolucao anual: "
+            "Modulo perfil_estabelecimento sem colunas obrigatorias para evolucao anual: "
             + ", ".join(sorted(missing_perfil))
         )
 

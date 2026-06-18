@@ -1247,7 +1247,6 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                 "data_hora",
                 "num_autorizacao",
                 "id_medico",
-                "codigo_barra",
                 "valor_pago",
             ]
 
@@ -1261,17 +1260,23 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
             read_time_ms = round((_time.perf_counter() - t0) * 1000, 1)
 
             if not filtered_df.is_empty():
-                from data_cache import get_medicamentos_df
+                from data_cache import scan_dados_medico
 
-                df_med = get_medicamentos_df().select(["codigo_barra", "produto", "principio_ativo"]).with_columns(
-                    pl.col("codigo_barra").cast(pl.Utf8)
+                id_medicos = filtered_df["id_medico"].cast(pl.Utf8).unique().to_list()
+                df_med = (
+                    scan_dados_medico()
+                    .filter(pl.col("id_medico").cast(pl.Utf8).is_in(id_medicos))
+                    .select(["id_medico", "no_medico"])
+                    .with_columns(pl.col("id_medico").cast(pl.Utf8))
+                    .collect()
                 )
-                filtered_df = filtered_df.with_columns(pl.col("codigo_barra").cast(pl.Utf8))
-                enriched_df = filtered_df.join(df_med, on="codigo_barra", how="left")
+                filtered_df = filtered_df.with_columns(pl.col("id_medico").cast(pl.Utf8))
+                enriched_df = filtered_df.join(df_med, on="id_medico", how="left")
                 enriched_df = enriched_df.with_columns([
                     pl.col("num_autorizacao").cast(pl.Utf8),
                     pl.col("id_medico").cast(pl.Utf8),
                     pl.col("data_hora").cast(pl.Utf8),
+                    pl.col("valor_pago").cast(pl.Float64),
                 ])
                 transactions = [
                     CrmHourlyTransactionSchema(**row)

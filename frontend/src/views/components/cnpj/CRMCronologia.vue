@@ -289,7 +289,6 @@ const selectedDay = ref(null);
 const selectedHourlyHour = ref(null);
 const hourlyTransactions = ref([]);
 const hourlyTransactionsLoading = ref(false);
-const expandedRaioxRows = ref(new Set());
 const hoveredAlert = ref(null);
 const raioxCache = new Map();
 const raioxRequests = new Map();
@@ -408,17 +407,15 @@ function clearHoveredAlert() {
 }
 
 const groupedRaiox = computed(() => {
-  const groups = {};
-  hourlyTransactions.value.forEach(item => {
-    const key = item.num_autorizacao;
-    if (!groups[key]) {
-      groups[key] = { num_autorizacao: key, data_hora: item.data_hora, id_medico: item.id_medico, nu_medicamentos: 0, vl_autorizacao: 0, items: [] };
-    }
-    groups[key].nu_medicamentos += 1;
-    groups[key].vl_autorizacao += (item.valor_pago || 0);
-    groups[key].items.push(item);
-  });
-  return Object.values(groups).sort((a, b) => a.data_hora.localeCompare(b.data_hora));
+  return hourlyTransactions.value
+    .map(item => ({
+      num_autorizacao: item.num_autorizacao,
+      data_hora: item.data_hora,
+      id_medico: item.id_medico,
+      no_medico: item.no_medico,
+      vl_autorizacao: item.valor_pago || 0,
+    }))
+    .sort((a, b) => a.data_hora.localeCompare(b.data_hora));
 });
 
 const crmFrequencies = computed(() => {
@@ -439,12 +436,6 @@ function getCRMColor(idMedico) {
   const h = Math.abs(hash % 360);
   const lightness = themeStore.isDark ? 65 : 35;
   return `hsl(${h}, 75%, ${lightness}%)`;
-}
-
-function toggleRaioxRow(auth) {
-  if (expandedRaioxRows.value.has(auth)) { expandedRaioxRows.value.delete(auth); }
-  else { expandedRaioxRows.value.add(auth); }
-  expandedRaioxRows.value = new Set(expandedRaioxRows.value);
 }
 
 function buildRaioxKey(dt_janela, hourInt) {
@@ -1207,7 +1198,6 @@ function getRaioxRowClasses(tx) {
   const hasUnico = isGatilhoTx(tx);
   const hoveredType = getHoveredAlertaType(tx);
   return {
-    'row-expanded-main': activeRowExpanded(tx.num_autorizacao),
     'row-gatilho': hasUnico,
     'row-multi-alerta': isMultiAlertaTx(tx) && !hasUnico,
     'row-alert-highlight-unico': hoveredType === 'unico',
@@ -1237,14 +1227,6 @@ const activeTransactionsLoading = computed(() =>
   hourlyTransactionsLoading.value
 );
 
-function activeRowExpanded(auth) {
-  return selectedDay.value ? expandedRaioxRows.value.has(auth) : false;
-}
-
-function toggleActiveRow(auth) {
-  if (!selectedDay.value) return;
-  toggleRaioxRow(auth);
-}
 </script>
 
 <template>
@@ -1580,22 +1562,17 @@ function toggleActiveRow(auth) {
         <table class="premium-table row-hover raiox-table flat-mode">
           <thead class="sticky-thead">
             <tr>
-              <th width="8%" class="col-center">Horário</th>
-              <th width="13%">Nº Autorização</th>
-              <th width="14%">CRM</th>
-              <th width="8%" class="col-center">Qtd.</th>
-              <th width="42%">Descrição / Princípio Ativo</th>
-              <th width="15%" class="col-right">Valor Total</th>
+              <th width="12%" class="col-center">Horário</th>
+              <th width="18%">Nº Autorização</th>
+              <th width="16%">CRM</th>
+              <th width="34%">Médico</th>
+              <th width="20%" class="col-right">Valor Total</th>
             </tr>
           </thead>
           <tbody>
             <template v-for="tx in activeGroupedRaiox" :key="tx.num_autorizacao">
-              <tr :class="getRaioxRowClasses(tx)"
-                  @click="toggleActiveRow(tx.num_autorizacao)"
-                  class="cursor-pointer">
+              <tr :class="getRaioxRowClasses(tx)">
                 <td class="col-center raiox-time align-top">
-                  <i :class="['pi', activeRowExpanded(tx.num_autorizacao) ? 'pi-chevron-down' : 'pi-chevron-right']"
-                     style="font-size: 0.6rem; margin-right: 4px; opacity: 0.5;" />
                   {{ (tx.data_hora.split(' ')[1] || tx.data_hora).split('.')[0] }}
                 </td>
                 <td class="raiox-auth align-top">{{ tx.num_autorizacao }}</td>
@@ -1627,41 +1604,18 @@ function toggleActiveRow(auth) {
                     </span>
                   </div>
                 </td>
-                <td class="col-center align-top">
-                  <span class="count-pill">{{ tx.items.length }}</span>
-                </td>
                 <td class="align-top">
-                  <div class="raiox-item-summary">
-                    <span class="flat-item-prod">{{ truncate(tx.items[0].produto || 'PRODUTO NÃO IDENTIFICADO', 40) }}</span>
-                    <span class="flat-item-princ"> ({{ truncate(tx.items[0].principio_ativo || '—', 30) }})</span>
-                    <span v-if="tx.items.length > 1" class="more-items-pill">
-                      <i class="pi pi-plus"></i> {{ tx.items.length - 1 }}
-                    </span>
-                  </div>
+                  <span class="raiox-doctor-name">{{ truncate(tx.no_medico || 'Médico não identificado', 48) }}</span>
                 </td>
                 <td class="col-right raiox-val-cell align-top">
                   R$ {{ tx.vl_autorizacao.toFixed(2) }}
-                </td>
-              </tr>
-              <tr v-if="activeRowExpanded(tx.num_autorizacao)" class="raiox-details-expanded-row">
-                <td colspan="6" class="p-0">
-                  <div class="expanded-items-list animate-fade-in">
-                    <div v-for="(item, idx) in tx.items" :key="idx" class="expanded-item-entry">
-                      <div class="item-main-info">
-                        <span class="item-name">{{ item.produto }}</span>
-                        <span class="item-active">({{ item.principio_ativo || '—' }})</span>
-                        <span class="item-gtin">GTIN: {{ item.codigo_barra }}</span>
-                      </div>
-                      <div class="item-price">R$ {{ item.valor_pago.toFixed(2) }}</div>
-                    </div>
-                  </div>
                 </td>
               </tr>
             </template>
           </tbody>
           <tfoot v-if="activeGroupedRaiox.length > 0">
             <tr class="raiox-footer-row">
-              <td colspan="5" class="col-right footer-label">VALOR TOTAL DO PERÍODO SELECIONADO:</td>
+              <td colspan="4" class="col-right footer-label">VALOR TOTAL DO PERÍODO SELECIONADO:</td>
               <td class="col-right footer-value">R$ {{ activeRaioxTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
             </tr>
           </tfoot>
@@ -2132,19 +2086,8 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .issue-tag { font-size: 0.68rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px; }
 .crm-recurrence-badge { font-size: 0.6rem; font-weight: 800; padding: 1px 4px; border-radius: 3px; }
 .count-pill { background: var(--tabs-border); padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 0.7rem; }
-.raiox-item-summary { display: flex; align-items: center; gap: 0.5rem; }
-.flat-item-prod { font-weight: 700; color: var(--primary-color); }
-.flat-item-princ { opacity: 0.5; font-size: 0.65rem; }
-.more-items-pill { background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); padding: 1px 6px; border-radius: 99px; font-size: 0.6rem; }
+.raiox-doctor-name { color: var(--text-color-85); font-weight: 600; }
 .raiox-val-cell { font-weight: 700; font-family: var(--font-mono); }
-
-.expanded-items-list { background: rgba(0,0,0,0.04); padding: 0.5rem 0; }
-:global(.dark-mode) .expanded-items-list { background: rgba(255,255,255,0.04); }
-.expanded-item-entry { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 2rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
-.item-name { font-size: 0.75rem; font-weight: 600; color: var(--primary-color); }
-.item-active { font-size: 0.68rem; opacity: 0.6; margin-left: 0.5rem; }
-.item-gtin { font-size: 0.6rem; opacity: 0.3; margin-left: 0.5rem; }
-.item-price { font-size: 0.75rem; font-weight: 700; font-family: var(--font-mono); }
 
 .col-center { text-align: center; }
 .col-right { text-align: right; }

@@ -6,6 +6,11 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, os.path.join(ROOT_DIR, "backend"))
 
 from data_cache import get_cache_dir
+from cache_files import (
+    BENCH_CRM_BR_PARQUET,
+    BENCH_CRM_UF_PARQUET,
+    BENCH_CRM_REGIAO_PARQUET,
+)
 
 def format_size(size_bytes):
     if size_bytes < 0: return "-" + format_size(abs(size_bytes))
@@ -55,13 +60,18 @@ def run_comparison(new_path, old_path, label):
     print(f"\nCOLUNAS NO ANTIGO:")
     print(f"   {df_old.columns}")
 
+
+def old_module_name(filename: str) -> str:
+    stem, ext = os.path.splitext(filename)
+    return f"{stem}_old{ext}"
+
 if __name__ == "__main__":
     cache_dir = get_cache_dir()
     
     targets = [
-        ("bench_crm_br.parquet", "bench_crm_br_old.parquet", "Nacional"),
-        ("bench_crm_uf.parquet", "bench_crm_uf_old.parquet", "Estadual"),
-        ("bench_crm_regiao.parquet", "bench_crm_regiao_old.parquet", "Regional"),
+        (BENCH_CRM_BR_PARQUET, old_module_name(BENCH_CRM_BR_PARQUET), "Nacional"),
+        (BENCH_CRM_UF_PARQUET, old_module_name(BENCH_CRM_UF_PARQUET), "Estadual"),
+        (BENCH_CRM_REGIAO_PARQUET, old_module_name(BENCH_CRM_REGIAO_PARQUET), "Regional"),
     ]
     
     for new_f, old_f, label in targets:

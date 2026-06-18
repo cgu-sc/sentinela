@@ -49,7 +49,7 @@ from data_cache import (
 
 
 def _sync_clinica_anual_completa(engine, progress_callback=None):
-    """Sincroniza os parquets clinicos anual por CNPJ, municipio e regiao."""
+    """Sincroniza os modulos clinicos anual por CNPJ, municipio e regiao."""
     def progress_cnpj(p: int):
         if progress_callback:
             progress_callback(int(p / 3))
@@ -94,7 +94,7 @@ MODULOS = sorted([
     {"id": 10, "name": "Socios", "func": _sync_dados_socios, "peso": "medio"},
     {"id": 11, "name": "Teia completa", "func": _sync_teia_expansao_completa, "peso": "pesado"},
     {"id": 15, "name": "PAR teia", "func": _sync_par_teia_alvos, "peso": "rapido"},
-    {"id": 6, "name": "CNPJ parquets", "func": _sync_cnpj_parquets, "peso": "muito pesado", "ordem": 11.5},
+    {"id": 6, "name": "CNPJ modulos", "func": _sync_cnpj_parquets, "peso": "muito pesado", "ordem": 11.5},
 ], key=lambda modulo: modulo["id"])
 
 DEPENDENCIAS_MODULOS = {

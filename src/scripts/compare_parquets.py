@@ -1,5 +1,11 @@
 import polars as pl
 import os
+import sys
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT_DIR, "backend"))
+
+from cache_files import MOVIMENTACAO_PARQUET
 
 def format_size(size_bytes):
     for unit in ['B', 'KB', 'MB', 'GB']:
@@ -74,8 +80,9 @@ def compare_parquets(file_new, file_old):
             print(f"   - {col:<25}: {unique_count:,} valores únicos em {len_new:,} linhas.")
 
 if __name__ == "__main__":
-    path_old = "movimentacao_old.parquet"
-    path_new = "movimentacao.parquet"
+    stem, ext = os.path.splitext(MOVIMENTACAO_PARQUET)
+    path_old = f"{stem}_old{ext}"
+    path_new = MOVIMENTACAO_PARQUET
     
     if os.path.exists(path_old) and os.path.exists(path_new):
         compare_parquets(path_new, path_old)

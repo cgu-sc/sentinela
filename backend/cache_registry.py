@@ -368,7 +368,6 @@ def _build_cnpj_cache_definitions() -> tuple[CacheDefinition, ...]:
                 "data_hora": pl.Utf8,
                 "num_autorizacao": pl.Utf8,
                 "id_medico": pl.Utf8,
-                "codigo_barra": pl.Utf8,
                 "valor_pago": pl.Float64,
                 "_crm_raiox_tx_cache_version": pl.Int32,
             },

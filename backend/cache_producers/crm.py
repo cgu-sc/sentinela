@@ -483,21 +483,26 @@ def sync_crm_raiox_tx(cnpj: str, engine=None) -> CacheLoadResult:
         version_ok = "_crm_raiox_tx_cache_version" in df.columns and (
             df.height == 0 or _to_int(df["_crm_raiox_tx_cache_version"].max()) >= _CRM_RAIOX_TX_CACHE_VERSION
         )
-        if "codigo_barra" in df.columns and version_ok:
+        required_columns = {"dt_janela", "hr_janela", "data_hora", "num_autorizacao", "id_medico", "valor_pago"}
+        if required_columns.issubset(set(df.columns)) and "codigo_barra" not in df.columns and version_ok:
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
 
-    query = text("SELECT P.dt_janela, P.hr_janela, P.data_hora, P.num_autorizacao, P.id_medico, MED.codigo_barra, P.valor_pago "
+    query = text("SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
+                 "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
                  "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
                  "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                 "INNER JOIN temp_CGUSC.fp.medicamentos_patologia MED ON MED.id = P.id_gtin "
                  "WHERE F.cnpj = :cnpj "
-                 "ORDER BY P.data_hora ASC, P.num_autorizacao ASC")
+                 "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
+                 "ORDER BY MIN(P.data_hora) ASC, P.num_autorizacao ASC")
     result = _load_or_sync_sql_cache(cnpj, CRM_RAIOX_TX_PARQUET, query, {"cnpj": cnpj}, engine, read_existing=False)
     if result.error or result.df is None:
         return result
 
     df = result.df.with_columns([
-        pl.col("codigo_barra").cast(pl.Utf8),
+        pl.col("num_autorizacao").cast(pl.Utf8),
+        pl.col("id_medico").cast(pl.Utf8),
+        pl.col("data_hora").cast(pl.Utf8),
+        pl.col("valor_pago").cast(pl.Float64),
         pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"),
     ])
     df.write_parquet(parquet_path, compression="zstd")

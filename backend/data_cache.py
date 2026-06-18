@@ -2361,7 +2361,7 @@ def _sync_movimentacao(engine, progress_callback):
     if missing_id_cnpj:
         raise RuntimeError("movimentacao_mensal_cnpj possui CNPJs sem id correspondente em dados_farmacia.")
     
-    # Tabela fato mensal enxuta. Perfil/geografia ficam em perfil_estabelecimento.parquet.
+    # Tabela fato mensal enxuta. Perfil/geografia ficam no modulo perfil_estabelecimento.
     sql = """
         SELECT DF.id AS id_cnpj,
                M.periodo,

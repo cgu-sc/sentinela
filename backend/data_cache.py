@@ -164,7 +164,6 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
     "crm_prescritores_global": {
         "id_cnpj",
         "id_medico",
-        "no_medico",
         "competencia",
         "vl_total_prescricoes",
         "nu_prescricoes_mes",
@@ -174,7 +173,6 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "alerta_concentracao_multiplos_crms",
         "flag_concentracao_mesmo_crm",
         "flag_distancia_geografica",
-        "dt_primeira_prescricao",
         "dt_inscricao_crm",
         "nu_estabelecimentos",
         "_crm_prescritores_cache_version",
@@ -866,14 +864,6 @@ def _sync_crm_prescritores_global(engine, progress_callback=None):
         if not isinstance(parts, dict):
             raise RuntimeError("manifesto de CRM prescritores global com campo parts invalido")
 
-        medicos_df = (
-            scan_dados_medico()
-            .select(["id_medico", "no_medico"])
-            .collect()
-            .with_columns(pl.col("id_medico").cast(pl.Utf8))
-            .unique("id_medico")
-        )
-
         query = text("""
             SELECT
                 E.id_cnpj,
@@ -887,7 +877,6 @@ def _sync_crm_prescritores_global(engine, progress_callback=None):
                 E.alerta_concentracao_multiplos_crms,
                 E.flag_concentracao_mesmo_crm,
                 E.flag_distancia_geografica,
-                E.dt_primeira_prescricao,
                 E.dt_inscricao_crm,
                 E.nu_estabelecimentos
             FROM temp_CGUSC.fp.app_crm_export E
@@ -917,20 +906,17 @@ def _sync_crm_prescritores_global(engine, progress_callback=None):
                         pl.col("id_medico").cast(pl.Utf8),
                         pl.col("competencia").cast(pl.Int32),
                         pl.col("vl_total_prescricoes").cast(pl.Float64),
-                        pl.col("nu_prescricoes_mes").cast(pl.Int64),
-                        pl.col("nu_prescricoes_total_brasil").cast(pl.Int64),
+                        pl.col("nu_prescricoes_mes").cast(pl.Int32),
+                        pl.col("nu_prescricoes_total_brasil").cast(pl.Int32),
                         pl.col("flag_crm_invalido").cast(pl.Int8),
                         pl.col("flag_prescricao_antes_registro").cast(pl.Int8),
                         pl.col("alerta_concentracao_multiplos_crms").cast(pl.Int8),
                         pl.col("flag_concentracao_mesmo_crm").cast(pl.Int8),
                         pl.col("flag_distancia_geografica").cast(pl.Int8),
-                        pl.col("dt_primeira_prescricao").cast(pl.Utf8),
                         pl.col("dt_inscricao_crm").cast(pl.Date),
-                        pl.col("nu_estabelecimentos").cast(pl.Int64),
+                        pl.col("nu_estabelecimentos").cast(pl.Int32),
                     ])
-                    .join(medicos_df, on="id_medico", how="left")
                     .with_columns([
-                        pl.col("no_medico").cast(pl.Utf8),
                         pl.lit(CRM_PRESCRITORES_CACHE_VERSION)
                         .alias("_crm_prescritores_cache_version"),
                     ])
@@ -3166,7 +3152,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             "crm_prescritores_global": {
                 "id_cnpj",
                 "id_medico",
-                "no_medico",
                 "competencia",
                 "vl_total_prescricoes",
                 "nu_prescricoes_mes",
@@ -3176,7 +3161,6 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "alerta_concentracao_multiplos_crms",
                 "flag_concentracao_mesmo_crm",
                 "flag_distancia_geografica",
-                "dt_primeira_prescricao",
                 "dt_inscricao_crm",
                 "nu_estabelecimentos",
                 "_crm_prescritores_cache_version",

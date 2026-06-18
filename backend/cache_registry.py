@@ -78,24 +78,27 @@ def _crm_raiox_tx_global_schema() -> dict:
     }
 
 
-def _crm_prescritores_schema(include_id_cnpj: bool = False) -> dict:
+def _crm_prescritores_schema(
+    include_id_cnpj: bool = False,
+    include_no_medico: bool = True,
+) -> dict:
     schema = {
         "id_medico": pl.Utf8,
-        "no_medico": pl.Utf8,
         "competencia": pl.Int32,
         "vl_total_prescricoes": pl.Float64,
-        "nu_prescricoes_mes": pl.Int64,
-        "nu_prescricoes_total_brasil": pl.Int64,
+        "nu_prescricoes_mes": pl.Int32,
+        "nu_prescricoes_total_brasil": pl.Int32,
         "flag_crm_invalido": pl.Int8,
         "flag_prescricao_antes_registro": pl.Int8,
         "alerta_concentracao_multiplos_crms": pl.Int8,
         "flag_concentracao_mesmo_crm": pl.Int8,
         "flag_distancia_geografica": pl.Int8,
-        "dt_primeira_prescricao": pl.Utf8,
         "dt_inscricao_crm": pl.Date,
-        "nu_estabelecimentos": pl.Int64,
+        "nu_estabelecimentos": pl.Int32,
         "_crm_prescritores_cache_version": pl.Int32,
     }
+    if include_no_medico:
+        schema = {"id_medico": schema.pop("id_medico"), "no_medico": pl.Utf8, **schema}
     if include_id_cnpj:
         return {"id_cnpj": pl.Int32, **schema}
     return schema
@@ -205,7 +208,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("bench_crm_br", cache_files.BENCH_CRM_BR_PARQUET, "global"),
     CacheDefinition("crm_prescricoes_brasil_semestre", cache_files.CRM_PRESCRICOES_BRASIL_SEMESTRE_PARQUET, "global", _crm_prescricoes_brasil_semestre_schema()),
     CacheDefinition("dados_medico", cache_files.DADOS_MEDICO_PARQUET, "global", _dados_medico_schema()),
-    CacheDefinition("crm_prescritores_global", cache_files.CRM_PRESCRITORES_GLOBAL_PARQUET, "global", _crm_prescritores_schema(include_id_cnpj=True)),
+    CacheDefinition("crm_prescritores_global", cache_files.CRM_PRESCRITORES_GLOBAL_PARQUET, "global", _crm_prescritores_schema(include_id_cnpj=True, include_no_medico=False)),
     CacheDefinition("crm_raiox_tx_global", cache_files.CRM_RAIOX_TX_GLOBAL_PARQUET, "global", _crm_raiox_tx_global_schema()),
     CacheDefinition("dados_farmacia", cache_files.FARMACIAS_PARQUET, "global"),
     CacheDefinition(

@@ -155,14 +155,33 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
             id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
 
             started_at = time.perf_counter()
-            df_global = (
+            df_global_base = (
                 scan_crm_prescritores_global()
                 .filter(pl.col("id_cnpj") == id_cnpj)
                 .drop("id_cnpj")
                 .collect()
                 .sort(["competencia", "id_medico"])
-                .select(list(schema.keys()))
             )
+            if df_global_base.is_empty():
+                df_global = pl.DataFrame(schema=schema)
+            else:
+                from data_cache import scan_dados_medico
+
+                id_medicos = df_global_base["id_medico"].cast(pl.Utf8).unique().to_list()
+                df_medicos = (
+                    scan_dados_medico()
+                    .filter(pl.col("id_medico").is_in(id_medicos))
+                    .select(["id_medico", "no_medico"])
+                    .collect()
+                    .with_columns(pl.col("id_medico").cast(pl.Utf8))
+                    .unique("id_medico")
+                )
+                df_global = (
+                    df_global_base
+                    .with_columns(pl.col("id_medico").cast(pl.Utf8))
+                    .join(df_medicos, on="id_medico", how="left")
+                    .select(list(schema.keys()))
+                )
             source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
             save_time_ms = write_final(df_global)
             print(
@@ -201,7 +220,7 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
                      "E.flag_crm_invalido, "
                      "E.flag_prescricao_antes_registro, E.alerta_concentracao_multiplos_crms, "
                      "E.flag_concentracao_mesmo_crm, E.flag_distancia_geografica, "
-                     "E.dt_primeira_prescricao, E.dt_inscricao_crm, "
+                     "E.dt_inscricao_crm, "
                      "E.nu_estabelecimentos"
                      " FROM temp_CGUSC.fp.app_crm_export E"
                      " INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = E.id_cnpj"
@@ -236,9 +255,18 @@ def load_or_sync_crm_data(cnpj: str, engine=None) -> CacheLoadResult:
 
         df = df.with_columns([
             pl.col("no_medico").cast(pl.Utf8),
+            pl.col("nu_prescricoes_mes").cast(pl.Int32),
+            pl.col("nu_prescricoes_total_brasil").cast(pl.Int32),
             pl.col("dt_inscricao_crm").cast(pl.Date),
+            pl.col("nu_estabelecimentos").cast(pl.Int32),
         ])
-        for col in ["flag_crm_invalido", "flag_prescricao_antes_registro", "alerta_concentracao_multiplos_crms"]:
+        for col in [
+            "flag_crm_invalido",
+            "flag_prescricao_antes_registro",
+            "alerta_concentracao_multiplos_crms",
+            "flag_concentracao_mesmo_crm",
+            "flag_distancia_geografica",
+        ]:
             if col in df.columns:
                 df = df.with_columns(pl.col(col).cast(pl.Int8))
         df = df.with_columns(pl.lit(_CRM_PRESCRITORES_CACHE_VERSION).alias("_crm_prescritores_cache_version"))

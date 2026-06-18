@@ -538,7 +538,6 @@ def get_crm_data(
             pl.max("flag_concentracao_mesmo_crm").cast(pl.Int8).alias("alerta_concentracao_unico_crm"),
             pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta_distancia_geografica"),
             pl.max("flag_distancia_geografica").cast(pl.Int8).alias("alerta5_geografico"),
-            pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
             pl.col("dt_inscricao_crm").first().alias("dt_inscricao_crm"),
             pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
         ])
@@ -571,7 +570,6 @@ def get_crm_data(
             pl.max("alerta_concentracao_unico_crm").alias("alerta_concentracao_unico_crm"),
             pl.max("alerta_distancia_geografica").alias("alerta_distancia_geografica"),
             pl.max("alerta5_geografico").alias("alerta5_geografico"),
-            pl.min("dt_primeira_prescricao").alias("dt_primeira_prescricao"),
             pl.col("dt_inscricao_crm").drop_nulls().first().alias("dt_inscricao_crm"),
             pl.max("nu_estabelecimentos").alias("nu_estabelecimentos"),
         ])

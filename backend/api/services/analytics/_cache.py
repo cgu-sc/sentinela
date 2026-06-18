@@ -12,7 +12,6 @@ import copy
 import unicodedata
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from cache_files import (
-    CRM_RAIOX_TX_PARQUET,
     DADOS_PAR_PARQUET,
     FARMACIAS_PARQUET,
     FARMACIAS_CNAES_SECUNDARIOS_PARQUET,
@@ -94,27 +93,6 @@ def _is_truthy_flag(value) -> bool:
     return bool(value)
 
 
-def _is_cache_version_at_least(value: object, minimum: int) -> bool:
-    if value is None or isinstance(value, bool):
-        return False
-    if isinstance(value, int):
-        return value >= minimum
-    if isinstance(value, float):
-        return value.is_integer() and int(value) >= minimum
-    if isinstance(value, Decimal):
-        try:
-            return value == value.to_integral_value() and value >= Decimal(minimum)
-        except InvalidOperation:
-            return False
-    if isinstance(value, str):
-        try:
-            parsed = Decimal(value.strip())
-            return parsed == parsed.to_integral_value() and parsed >= Decimal(minimum)
-        except (InvalidOperation, ValueError):
-            return False
-    return False
-
-
 def _is_pharmacy_by_activity_or_name(row: dict) -> bool:
     if _normalize_cnae(row.get("id_cnae_principal")) in PHARMACY_CNAES:
         return True
@@ -136,7 +114,6 @@ def _classify_company_node(row: dict) -> str:
     return "PJ_DEMAIS_EMPRESAS"
 
 _known_cnpj_dirs: set[str] = set()
-_CRM_RAIOX_TX_CACHE_VERSION = 3
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
     """Retorna (e garante a existência de) modules/cnpjs/{cnpj}/.
@@ -150,75 +127,6 @@ def _get_cnpj_cache_dir(cnpj: str) -> str:
         os.makedirs(cnpj_dir, exist_ok=True)
         _known_cnpj_dirs.add(cnpj_dir)
     return cnpj_dir
-
-def sync_crm_raiox_tx(cnpj: str) -> None:
-    """Sincroniza o cache parquet de transações literais unificadas (Raio-X) para um CNPJ."""
-    import pandas as pd
-    import polars as pl
-    from sqlalchemy import text
-    from database import engine as _engine
-    
-    cnpj_dir = _get_cnpj_cache_dir(cnpj)
-    TX_PARQUET_PATH = os.path.join(cnpj_dir, CRM_RAIOX_TX_PARQUET)
-
-     # Se o cache já existe e parece saudável, não faz nada
-    if os.path.exists(TX_PARQUET_PATH):
-        try:
-            header = pl.read_parquet(TX_PARQUET_PATH, n_rows=1)
-            has_current_version = (
-                "_crm_raiox_tx_cache_version" in header.columns
-                and (
-                    header.height == 0
-                    or _is_cache_version_at_least(
-                        header["_crm_raiox_tx_cache_version"].max(),
-                        _CRM_RAIOX_TX_CACHE_VERSION,
-                    )
-                )
-            )
-            required_columns = {"dt_janela", "hr_janela", "data_hora", "num_autorizacao", "id_medico", "valor_pago"}
-            if required_columns.issubset(set(header.columns)) and "codigo_barra" not in header.columns and has_current_version:
-                return
-        except Exception: pass
-
-    try:
-        print(f"🗄️ [SYNC] Buscando transações Raio-X unificadas no banco para {cnpj}...")
-        with _engine.connect() as conn:
-            pdf_tx = pd.read_sql(
-                text("SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
-                     "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
-                     "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
-                     "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                     "WHERE F.cnpj = :cnpj "
-                     "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
-                     "ORDER BY MIN(P.data_hora) ASC, P.num_autorizacao ASC"),
-                conn, params={"cnpj": cnpj}
-            )
-        df_tx = pl.from_pandas(pdf_tx) if not pdf_tx.empty else pl.DataFrame(schema={
-            "dt_janela": pl.Utf8, "hr_janela": pl.Int32, "data_hora": pl.Utf8,
-            "num_autorizacao": pl.Utf8, "id_medico": pl.Utf8,
-            "valor_pago": pl.Float64
-        })
-
-        if not df_tx.is_empty():
-            df_tx = df_tx.with_columns([
-                pl.col("num_autorizacao").cast(pl.Utf8),
-                pl.col("id_medico").cast(pl.Utf8),
-                pl.col("data_hora").cast(pl.Utf8),
-                pl.col("valor_pago").cast(pl.Float64),
-                pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version")
-            ])
-        else:
-            df_tx = df_tx.with_columns(
-                pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version")
-            )
-        
-        df_tx.write_parquet(TX_PARQUET_PATH, compression="zstd")
-        print(f"✅ Cache Raio-X salvo para {cnpj}")
-    except Exception as e:
-        if "IM002" in str(e) or "connection" in str(e).lower():
-            print(f"ℹ️  Modo Offline: Tabela de transações crm_raiox_tx não disponível.")
-        else:
-            print(f"⚠️ Erro ao sincronizar parquet de transações Raio-X '{cnpj}': {e}")
 
 def sync_network(cnpj: str) -> None:
     """Sincroniza o cache Parquet da Teia Societária para um CNPJ usando fontes Parquet.
@@ -793,5 +701,3 @@ def sync_network(cnpj: str) -> None:
         import traceback
         print(f"Erro ao gerar Teia Societaria para {cnpj}: {e}")
         print(traceback.format_exc())
-
-

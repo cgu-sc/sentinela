@@ -1,6 +1,7 @@
 """Nomes canonicos dos arquivos de cache do Sentinela."""
 
 MODULE_EXT = ".smod"
+CRM_RAIOX_TX_CACHE_VERSION = 3
 
 
 def _module(name: str) -> str:
@@ -43,6 +44,7 @@ MOVIMENTACAO_MENSAL_GTIN_PARQUET = _module("movimentacao_mensal_gtin")
 FALECIDOS_PARQUET = _module("falecidos")
 CRM_PRESCRITORES_PARQUET = _module("crm_prescritores")
 GEOGRAFICO_PARQUET = _module("geografico")
+CRM_RAIOX_TX_GLOBAL_PARQUET = _module("crm_raiox_tx_global")
 CRM_RAIOX_TX_PARQUET = _module("crm_raiox_tx")
 CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET = _module("crm_concentracao_unico_alertas")
 CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET = _module("crm_concentracao_multiplo_alertas")

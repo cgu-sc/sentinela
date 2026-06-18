@@ -235,8 +235,6 @@ GO
 USE temp_CGUSC;
 GO
 
-DECLARE @MaxPeriodo DATE = (SELECT MAX(periodo) FROM fp.movimentacao_mensal_cnpj);
-
 DROP TABLE IF EXISTS #perfil_alertas_diretos;
 DROP TABLE IF EXISTS #perfil_caminhos_n2;
 DROP TABLE IF EXISTS #perfil_alertas_n3;
@@ -248,12 +246,15 @@ SELECT
     END) AS qtd_cadunico_direto,
     COUNT(DISTINCT CASE
         WHEN DS.is_seguro_defeso = 1 THEN DS.cpf_cnpj_socio
-    END) AS qtd_seguro_defeso_direto
+    END) AS qtd_seguro_defeso_direto,
+    COUNT(DISTINCT CASE
+        WHEN DS.is_esocial = 1 THEN DS.cpf_cnpj_socio
+    END) AS qtd_esocial_direto
 INTO #perfil_alertas_diretos
 FROM fp.dados_socios DS
 WHERE DS.indicador_socio = 'PF'
   AND DS.data_exclusao_sociedade IS NULL
-  AND (DS.is_cadunico = 1 OR DS.is_seguro_defeso = 1)
+  AND (DS.is_cadunico = 1 OR DS.is_seguro_defeso = 1 OR DS.is_esocial = 1)
 GROUP BY DS.cnpj;
 
 CREATE UNIQUE CLUSTERED INDEX IX_perfil_alertas_diretos_cnpj
@@ -281,18 +282,25 @@ SELECT
     END) AS qtd_cadunico_n3,
     COUNT(DISTINCT CASE
         WHEN T3.is_seguro_defeso = 1 THEN T3.cpf_cnpj_socio
-    END) AS qtd_seguro_defeso_n3
+    END) AS qtd_seguro_defeso_n3,
+    COUNT(DISTINCT CASE
+        WHEN T3.is_esocial = 1 THEN T3.cpf_cnpj_socio
+    END) AS qtd_esocial_n3
 INTO #perfil_alertas_n3
 FROM #perfil_caminhos_n2 C
 INNER JOIN fp.teia_fonte_nivel3 T3
     ON T3.cnpj_empresa = C.cnpj_empresa
 WHERE T3.indicador_socio = 'PF'
   AND T3.data_exclusao_sociedade IS NULL
-  AND (T3.is_cadunico = 1 OR T3.is_seguro_defeso = 1)
+  AND (T3.is_cadunico = 1 OR T3.is_seguro_defeso = 1 OR T3.is_esocial = 1)
 GROUP BY C.cnpj_alvo;
 
 CREATE UNIQUE CLUSTERED INDEX IX_perfil_alertas_n3_cnpj
     ON #perfil_alertas_n3(cnpj);
+
+GO
+
+DECLARE @MaxPeriodo DATE = (SELECT MAX(periodo) FROM fp.movimentacao_mensal_cnpj);
 
 DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento_novo;
 
@@ -330,7 +338,13 @@ SELECT
     CAST(CASE WHEN ISNULL(AN3.qtd_seguro_defeso_n3, 0) > 0
         THEN 1 ELSE 0 END AS BIT) AS has_seguro_defeso_n3,
     CAST(ISNULL(AD.qtd_seguro_defeso_direto, 0) AS INT) AS qtd_seguro_defeso_direto,
-    CAST(ISNULL(AN3.qtd_seguro_defeso_n3, 0) AS INT) AS qtd_seguro_defeso_n3
+    CAST(ISNULL(AN3.qtd_seguro_defeso_n3, 0) AS INT) AS qtd_seguro_defeso_n3,
+    CAST(CASE WHEN ISNULL(AD.qtd_esocial_direto, 0) > 0
+        THEN 1 ELSE 0 END AS BIT) AS has_esocial_direto,
+    CAST(CASE WHEN ISNULL(AN3.qtd_esocial_n3, 0) > 0
+        THEN 1 ELSE 0 END AS BIT) AS has_esocial_n3,
+    CAST(ISNULL(AD.qtd_esocial_direto, 0) AS INT) AS qtd_esocial_direto,
+    CAST(ISNULL(AN3.qtd_esocial_n3, 0) AS INT) AS qtd_esocial_n3
 
 INTO fp.perfil_consolidado_estabelecimento_novo
 FROM fp.dados_farmacia DF
@@ -373,6 +387,10 @@ IF EXISTS (
        OR has_seguro_defeso_n3 IS NULL
        OR qtd_seguro_defeso_direto IS NULL
        OR qtd_seguro_defeso_n3 IS NULL
+       OR has_esocial_direto IS NULL
+       OR has_esocial_n3 IS NULL
+       OR qtd_esocial_direto IS NULL
+       OR qtd_esocial_n3 IS NULL
        OR is_cnae_incompativel_farmaceutico IS NULL
 )
 BEGIN
@@ -382,6 +400,12 @@ GO
 
 BEGIN TRY
     BEGIN TRANSACTION;
+
+    IF OBJECT_ID('fp.perfil_consolidado_estabelecimento_novo', 'U') IS NULL
+    BEGIN
+        THROW 50023, 'A tabela fp.perfil_consolidado_estabelecimento_novo nao existe. A publicacao foi cancelada.', 1;
+    END;
+
     DROP TABLE IF EXISTS fp.perfil_consolidado_estabelecimento;
     EXEC sys.sp_rename
         N'fp.perfil_consolidado_estabelecimento_novo',

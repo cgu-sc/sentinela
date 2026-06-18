@@ -28,6 +28,7 @@ from data_cache import (
     _sync_analise_gtin_inconsistencia_clinica_regiao,
     _sync_crm_benchmarks,
     _sync_crm_prescricoes_brasil_semestre,
+    _sync_crm_raiox_tx_global,
     _sync_dados_farmacia,
     _sync_dados_ibge_demografia,
     _sync_dados_medico,
@@ -57,11 +58,10 @@ CRM_CNPJ_CACHE_KEYS = [
     ("crm_timeline_dia", "CRM timeline dia"),
     ("crm_timeline_hora", "CRM timeline hora"),
     ("crm_timeline_eventos", "CRM timeline eventos"),
-    ("crm_raiox_tx", "CRM Raio-X transacoes"),
 ]
 
 CRM_COMPLETO_ID = 8
-CRM_INDIVIDUAL_IDS = frozenset(range(9, 17))
+CRM_INDIVIDUAL_IDS = frozenset(range(9, 16))
 
 
 def _buscar_cnpjs_crm(engine) -> list[str]:
@@ -185,7 +185,7 @@ MODULOS = sorted([
     {"id": 13, "name": "CRM timeline dia", "func": _criar_sync_crm_cnpj("crm_timeline_dia"), "peso": "medio", "ordem": 13},
     {"id": 14, "name": "CRM timeline hora", "func": _criar_sync_crm_cnpj("crm_timeline_hora"), "peso": "medio", "ordem": 14},
     {"id": 15, "name": "CRM timeline eventos", "func": _criar_sync_crm_cnpj("crm_timeline_eventos"), "peso": "medio", "ordem": 15},
-    {"id": 16, "name": "CRM Raio-X", "func": _criar_sync_crm_cnpj("crm_raiox_tx"), "peso": "pesado", "ordem": 16},
+    {"id": 16, "name": "CRM Raio-X global", "func": _sync_crm_raiox_tx_global, "peso": "muito pesado", "ordem": 16},
     {"id": 17, "name": "Farmacias e CNAEs", "func": _sync_dados_farmacia, "peso": "medio", "ordem": 17},
     {"id": 18, "name": "Perfil estab.", "func": _sync_perfil_estabelecimento, "peso": "medio", "ordem": 18},
     {"id": 19, "name": "Movimentacao", "func": _sync_movimentacao, "peso": "muito pesado", "ordem": 19},
@@ -205,7 +205,7 @@ MODULOS = sorted([
 ], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {
-    8: {7},
+    8: {7, 16},
     9: {7},
     22: {21},
 }

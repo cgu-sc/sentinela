@@ -62,6 +62,8 @@ const alertTooltipTemplates = {
     '{qtd} estabelecimentos possuem ao menos um sócio direto com vínculo ativo identificado no CadÚnico ou como beneficiário do Seguro Defeso.',
   socio_idade_atipica:
     '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo ativo e idade inferior a 21 anos ou superior a 80 anos na data de referência do período selecionado.',
+  socio_esocial:
+    '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo societário ativo que possui vínculo empregatício ativo em outro CNPJ registrado no eSocial.',
 };
 
 function normalizeLabel(label) {

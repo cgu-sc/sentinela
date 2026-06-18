@@ -65,6 +65,19 @@ def _dados_medico_schema() -> dict:
     }
 
 
+def _crm_raiox_tx_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "dt_janela": pl.Utf8,
+        "hr_janela": pl.Int32,
+        "data_hora": pl.Utf8,
+        "num_autorizacao": pl.Utf8,
+        "id_medico": pl.Utf8,
+        "valor_pago": pl.Float64,
+        "_crm_raiox_tx_cache_version": pl.Int32,
+    }
+
+
 def _farmacias_cnaes_secundarios_schema() -> dict:
     return {
         "id_cnpj": pl.Int32,
@@ -84,6 +97,10 @@ def _perfil_alertas_societarios_schema() -> dict:
         "has_seguro_defeso_n3": pl.Boolean,
         "qtd_seguro_defeso_direto": pl.Int32,
         "qtd_seguro_defeso_n3": pl.Int32,
+        "has_esocial_direto": pl.Boolean,
+        "has_esocial_n3": pl.Boolean,
+        "qtd_esocial_direto": pl.Int32,
+        "qtd_esocial_n3": pl.Int32,
     }
 
 
@@ -165,6 +182,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("bench_crm_br", cache_files.BENCH_CRM_BR_PARQUET, "global"),
     CacheDefinition("crm_prescricoes_brasil_semestre", cache_files.CRM_PRESCRICOES_BRASIL_SEMESTRE_PARQUET, "global", _crm_prescricoes_brasil_semestre_schema()),
     CacheDefinition("dados_medico", cache_files.DADOS_MEDICO_PARQUET, "global", _dados_medico_schema()),
+    CacheDefinition("crm_raiox_tx_global", cache_files.CRM_RAIOX_TX_GLOBAL_PARQUET, "global", _crm_raiox_tx_global_schema()),
     CacheDefinition("dados_farmacia", cache_files.FARMACIAS_PARQUET, "global"),
     CacheDefinition(
         "dados_farmacia_cnaes_secundarios",

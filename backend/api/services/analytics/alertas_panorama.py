@@ -234,6 +234,19 @@ def _ids_socio_beneficio_social(id_cnpjs: pl.Series | None) -> pl.Series:
     return _distinct_id_cnpjs(df)
 
 
+def _ids_socio_esocial(id_cnpjs: pl.Series | None) -> pl.Series:
+    """Conta CNPJs com sócio com vínculo trabalhista em outro CNPJ (eSocial)."""
+    perfil = get_df_perfil_estabelecimento()
+    if "has_esocial_direto" not in perfil.columns:
+        return _empty_id_cnpjs()
+
+    df = perfil.filter(pl.col("has_esocial_direto") == True)  # noqa: E712
+    if id_cnpjs is not None:
+        df = df.filter(pl.col("id_cnpj").is_in(id_cnpjs))
+
+    return _distinct_id_cnpjs(df)
+
+
 def _ids_socio_idade_atipica(
     id_cnpjs: pl.Series | None,
     data_referencia: date,
@@ -309,6 +322,7 @@ def get_alertas_panorama(
         "socio_falecido": _ids_socio_falecido(id_cnpjs),
         "socio_beneficio_social": _ids_socio_beneficio_social(id_cnpjs),
         "socio_idade_atipica": _ids_socio_idade_atipica(id_cnpjs, data_ref),
+        "socio_esocial": _ids_socio_esocial(id_cnpjs),
     }
     contagens = {
         tipo: ids.n_unique()
@@ -322,6 +336,7 @@ def get_alertas_panorama(
         ("socio_falecido",                "Sócio ativo falecido",                         "atencao"),
         ("socio_beneficio_social",        "Sócio em programa social (CadÚnico/Defeso)",   "atencao"),
         ("socio_idade_atipica",           "Sócio com idade atípica (< 21 ou > 80 anos)", "atencao"),
+        ("socio_esocial",                 "Sócio com vínculo em outro CNPJ",             "atencao"),
     ]
 
     alertas = [

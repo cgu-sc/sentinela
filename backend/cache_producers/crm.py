@@ -1,8 +1,5 @@
-import json
 import os
 import time
-from datetime import date
-from pathlib import Path
 
 import pandas as pd
 import polars as pl
@@ -11,6 +8,8 @@ from sqlalchemy import text
 from cache_files import (
     CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
     CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
+    CRM_RAIOX_TX_CACHE_VERSION,
+    CRM_RAIOX_TX_GLOBAL_PARQUET,
     CRM_RAIOX_TX_PARQUET,
     CRM_TIMELINE_DIA_PARQUET,
     CRM_TIMELINE_EVENTOS_PARQUET,
@@ -21,7 +20,6 @@ from cache_files import (
 from cache_producers.types import CacheLoadResult
 
 _CRM_ALERTS_CACHE_VERSION = 4
-_CRM_RAIOX_TX_CACHE_VERSION = 3
 _CRM_PRESCRITORES_CACHE_VERSION = 2
 _CRM_UNICO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
 _CRM_MULTIPLO_RHYTHM_WINDOWS = (5, 10, 15, 20, 25, 30, 60)
@@ -369,188 +367,174 @@ def load_or_sync_crm_multi_alertas(cnpj: str, engine=None) -> CacheLoadResult:
 
 def sync_crm_raiox_tx(cnpj: str, engine=None) -> CacheLoadResult:
     parquet_path = _path(cnpj, CRM_RAIOX_TX_PARQUET)
+    from data_cache import get_cache_dir
+
+    global_path = os.path.join(get_cache_dir(), CRM_RAIOX_TX_GLOBAL_PARQUET)
+    schema = _empty_schema(CRM_RAIOX_TX_PARQUET)
+    required_columns = set(schema)
+
     df, read_time_ms = _read_parquet(parquet_path)
     if df is not None:
         version_ok = "_crm_raiox_tx_cache_version" in df.columns and (
-            df.height == 0 or _to_int(df["_crm_raiox_tx_cache_version"].max()) >= _CRM_RAIOX_TX_CACHE_VERSION
+            df.height == 0 or _to_int(df["_crm_raiox_tx_cache_version"].max()) >= CRM_RAIOX_TX_CACHE_VERSION
         )
-        required_columns = {"dt_janela", "hr_janela", "data_hora", "num_autorizacao", "id_medico", "valor_pago"}
-        if required_columns.issubset(set(df.columns)) and "codigo_barra" not in df.columns and version_ok:
+        global_is_newer = (
+            os.path.exists(global_path)
+            and os.path.getmtime(global_path) > os.path.getmtime(parquet_path)
+        )
+        if (
+            required_columns.issubset(set(df.columns))
+            and "codigo_barra" not in df.columns
+            and version_ok
+            and not global_is_newer
+        ):
             return CacheLoadResult(df, from_cache=True, read_time_ms=read_time_ms)
 
-    schema = _empty_schema(CRM_RAIOX_TX_PARQUET)
-    engine = _engine_or_default(engine)
-    parts_dir = Path(_get_cnpj_cache_dir(cnpj)) / ".parts" / "crm_raiox_tx"
-    parts_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = parts_dir / "manifest.json"
-
-    def _month_floor(value) -> date:
-        value_date = value.date() if hasattr(value, "date") else value
-        return date(value_date.year, value_date.month, 1)
-
-    def _next_month(value: date) -> date:
-        if value.month == 12:
-            return date(value.year + 1, 1, 1)
-        return date(value.year, value.month + 1, 1)
-
-    def _month_key(value: date) -> str:
-        return f"{value.year:04d}-{value.month:02d}"
-
-    def _part_path(key: str) -> Path:
-        return parts_dir / f"{key}.smod.part"
-
-    def _read_manifest() -> dict:
-        if not manifest_path.exists():
-            return {}
-        with manifest_path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
-
-    def _write_manifest(data: dict) -> None:
-        tmp_path = manifest_path.with_suffix(".json.tmp")
-        with tmp_path.open("w", encoding="utf-8") as handle:
-            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        os.replace(tmp_path, manifest_path)
-
-    try:
-        with engine.connect() as conn:
-            bounds = conn.execute(
-                text(
-                    "SELECT MIN(P.dt_janela) AS dt_min, MAX(P.dt_janela) AS dt_max "
-                    "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
-                    "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                    "WHERE F.cnpj = :cnpj"
-                ),
-                {"cnpj": cnpj},
-            ).mappings().first()
-
-            if not bounds or bounds["dt_min"] is None or bounds["dt_max"] is None:
-                empty_df = pl.DataFrame(schema=schema)
-                empty_df.write_parquet(parquet_path, compression="zstd")
-                return CacheLoadResult(empty_df, from_cache=False)
-
-            start_month = _month_floor(bounds["dt_min"])
-            end_exclusive = _next_month(_month_floor(bounds["dt_max"]))
-            month_starts: list[date] = []
-            cursor = start_month
-            while cursor < end_exclusive:
-                month_starts.append(cursor)
-                cursor = _next_month(cursor)
-
-            manifest = _read_manifest()
-            manifest_valid = (
-                manifest.get("cnpj") == cnpj
-                and manifest.get("cache_key") == "crm_raiox_tx"
-                and manifest.get("version") == _CRM_RAIOX_TX_CACHE_VERSION
-                and manifest.get("start_month") == _month_key(start_month)
-                and manifest.get("end_month") == _month_key(_month_floor(bounds["dt_max"]))
+    def write_final(df_final: pl.DataFrame) -> float:
+        missing_columns = sorted(required_columns - set(df_final.columns))
+        if missing_columns:
+            raise RuntimeError(
+                f"Contrato invalido de {CRM_RAIOX_TX_PARQUET}: "
+                f"colunas ausentes {', '.join(missing_columns)}."
             )
-            if not manifest_valid:
-                manifest = {
-                    "cnpj": cnpj,
-                    "cache_key": "crm_raiox_tx",
-                    "version": _CRM_RAIOX_TX_CACHE_VERSION,
-                    "start_month": _month_key(start_month),
-                    "end_month": _month_key(_month_floor(bounds["dt_max"])),
-                    "parts": {},
-                }
-                _write_manifest(manifest)
-
-            query = text(
-                "SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
-                "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
-                "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
-                "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
-                "WHERE F.cnpj = :cnpj "
-                "AND P.dt_janela >= :dt_inicio "
-                "AND P.dt_janela < :dt_fim "
-                "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
-                "ORDER BY MIN(P.data_hora) ASC, P.num_autorizacao ASC"
-            )
-
-            query_time_ms = 0.0
-            save_time_ms = 0.0
-            total_parts = len(month_starts)
-            for index, dt_inicio in enumerate(month_starts, 1):
-                dt_fim = _next_month(dt_inicio)
-                key = _month_key(dt_inicio)
-                part_path = _part_path(key)
-                part_info = manifest["parts"].get(key, {})
-                if part_info.get("status") == "done" and part_path.exists():
-                    continue
-
-                print(f"[ CACHE ] {cnpj} - CRM Raio-X - parte {index}/{total_parts}: {key}")
-                t0 = time.perf_counter()
-                pdf = pd.read_sql(
-                    query,
-                    conn,
-                    params={"cnpj": cnpj, "dt_inicio": dt_inicio, "dt_fim": dt_fim},
-                )
-                query_time_ms += (time.perf_counter() - t0) * 1000
-
-                if pdf.empty:
-                    df_part = pl.DataFrame(schema=schema)
-                else:
-                    df_part = pl.from_pandas(pdf).with_columns([
-                        pl.col("dt_janela").cast(pl.Utf8),
-                        pl.col("hr_janela").cast(pl.Int32),
-                        pl.col("num_autorizacao").cast(pl.Utf8),
-                        pl.col("id_medico").cast(pl.Utf8),
-                        pl.col("data_hora").cast(pl.Utf8),
-                        pl.col("valor_pago").cast(pl.Float64),
-                        pl.lit(_CRM_RAIOX_TX_CACHE_VERSION).alias("_crm_raiox_tx_cache_version"),
-                    ])
-
-                missing_cols = sorted(set(schema) - set(df_part.columns))
-                if missing_cols:
-                    raise RuntimeError(
-                        f"Contrato invalido ao gerar parte {key} de {CRM_RAIOX_TX_PARQUET}: "
-                        f"colunas ausentes {', '.join(missing_cols)}."
-                    )
-                df_part = df_part.select(list(schema.keys()))
-
-                tmp_part_path = part_path.with_suffix(part_path.suffix + ".tmp")
-                t1 = time.perf_counter()
-                df_part.write_parquet(tmp_part_path, compression="zstd")
-                os.replace(tmp_part_path, part_path)
-                save_time_ms += (time.perf_counter() - t1) * 1000
-
-                manifest["parts"][key] = {
-                    "status": "done",
-                    "rows": df_part.height,
-                    "file": part_path.name,
-                }
-                _write_manifest(manifest)
-
-        part_paths = [_part_path(_month_key(dt_inicio)) for dt_inicio in month_starts]
-        missing_parts = [path.name for path in part_paths if not path.exists()]
-        if missing_parts:
-            raise RuntimeError(f"Partes pendentes para consolidar {CRM_RAIOX_TX_PARQUET}: {', '.join(missing_parts)}")
-
-        t_merge = time.perf_counter()
-        scan = pl.scan_parquet([str(path) for path in part_paths])
-        df_final = scan.collect().sort(["data_hora", "num_autorizacao"]).select(list(schema.keys()))
+        df_final = df_final.select(list(schema.keys()))
         tmp_final_path = parquet_path + ".tmp"
+        started_at = time.perf_counter()
         df_final.write_parquet(tmp_final_path, compression="zstd")
         os.replace(tmp_final_path, parquet_path)
-        save_time_ms = round(save_time_ms + ((time.perf_counter() - t_merge) * 1000), 1)
+        return round((time.perf_counter() - started_at) * 1000, 1)
 
-        manifest["status"] = "done"
-        manifest["final_rows"] = df_final.height
-        manifest["final_file"] = os.path.basename(parquet_path)
-        _write_manifest(manifest)
+    if os.path.exists(global_path):
+        try:
+            from data_cache import get_df_perfil_estabelecimento, scan_crm_raiox_tx_global
 
+            global_version = pl.read_parquet(
+                global_path,
+                columns=["_crm_raiox_tx_cache_version"],
+                n_rows=1,
+            )
+            if global_version.is_empty():
+                raise RuntimeError("o modulo global esta vazio")
+            if (
+                _to_int(global_version["_crm_raiox_tx_cache_version"].max())
+                < CRM_RAIOX_TX_CACHE_VERSION
+            ):
+                raise RuntimeError(
+                    "versao do modulo global inferior a "
+                    f"{CRM_RAIOX_TX_CACHE_VERSION}"
+                )
+
+            perfil = get_df_perfil_estabelecimento()
+            required_profile = {"id_cnpj", "cnpj"}
+            missing_profile = sorted(required_profile - set(perfil.columns))
+            if missing_profile:
+                raise RuntimeError(
+                    "perfil_estabelecimento sem colunas obrigatorias para derivar CRM Raio-X: "
+                    + ", ".join(missing_profile)
+                )
+
+            perfil_cnpj = (
+                perfil
+                .filter(pl.col("cnpj").cast(pl.Utf8) == cnpj)
+                .select("id_cnpj")
+                .unique()
+            )
+            if perfil_cnpj.height != 1:
+                raise RuntimeError(
+                    f"CNPJ {cnpj} sem mapeamento unico de id_cnpj no perfil_estabelecimento."
+                )
+            id_cnpj = int(perfil_cnpj.item(0, "id_cnpj"))
+
+            started_at = time.perf_counter()
+            df_global = (
+                scan_crm_raiox_tx_global()
+                .filter(pl.col("id_cnpj") == id_cnpj)
+                .drop("id_cnpj")
+                .collect()
+                .sort(["data_hora", "num_autorizacao"])
+                .select(list(schema.keys()))
+            )
+            source_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+            save_time_ms = write_final(df_global)
+            print(
+                f"[ CACHE ] {cnpj} - {CRM_RAIOX_TX_PARQUET} "
+                f"derivado de {CRM_RAIOX_TX_GLOBAL_PARQUET}."
+            )
+            return CacheLoadResult(
+                df_global,
+                from_cache=False,
+                read_time_ms=source_time_ms,
+                save_time_ms=save_time_ms,
+            )
+        except Exception as exc:
+            print(
+                f"[ ANALYTICS ] {cnpj} - {CRM_RAIOX_TX_GLOBAL_PARQUET} "
+                f"invalido: {exc}"
+            )
+            return CacheLoadResult(
+                pl.DataFrame(schema=schema),
+                from_cache=False,
+                error=(
+                    f"Modulo global {CRM_RAIOX_TX_GLOBAL_PARQUET} existente, "
+                    f"mas invalido: {exc}"
+                ),
+            )
+
+    try:
+        engine = _engine_or_default(engine)
+        query = text(
+            "SELECT P.dt_janela, P.hr_janela, MIN(P.data_hora) AS data_hora, "
+            "P.num_autorizacao, P.id_medico, SUM(P.valor_pago) AS valor_pago "
+            "FROM temp_CGUSC.fp.app_crm_raiox_tx P "
+            "INNER JOIN temp_CGUSC.fp.dados_farmacia F ON F.id = P.id_cnpj "
+            "WHERE F.cnpj = :cnpj "
+            "GROUP BY P.dt_janela, P.hr_janela, P.num_autorizacao, P.id_medico "
+            "ORDER BY MIN(P.data_hora), P.num_autorizacao"
+        )
+
+        with engine.connect() as conn:
+            started_at = time.perf_counter()
+            pdf = pd.read_sql(query, conn, params={"cnpj": cnpj})
+            query_time_ms = round((time.perf_counter() - started_at) * 1000, 1)
+
+        if pdf.empty:
+            df_final = pl.DataFrame(schema=schema)
+        else:
+            df_final = (
+                pl.from_pandas(pdf)
+                .with_columns([
+                    pl.col("dt_janela").cast(pl.Utf8),
+                    pl.col("hr_janela").cast(pl.Int32),
+                    pl.col("data_hora").cast(pl.Utf8),
+                    pl.col("num_autorizacao").cast(pl.Utf8),
+                    pl.col("id_medico").cast(pl.Utf8),
+                    pl.col("valor_pago").cast(pl.Float64),
+                    pl.lit(CRM_RAIOX_TX_CACHE_VERSION)
+                    .alias("_crm_raiox_tx_cache_version"),
+                ])
+                .sort(["data_hora", "num_autorizacao"])
+            )
+        save_time_ms = write_final(df_final)
+
+        print(
+            f"[ CACHE ] {cnpj} - {CRM_RAIOX_TX_PARQUET} "
+            "gerado por consulta SQL direta."
+        )
         return CacheLoadResult(
             df_final,
             from_cache=False,
-            query_time_ms=round(query_time_ms, 1),
+            query_time_ms=query_time_ms,
             save_time_ms=save_time_ms,
         )
     except Exception as exc:
-        print(f"[ ANALYTICS ] {cnpj} - {CRM_RAIOX_TX_PARQUET} - erro ao sincronizar em partes: {exc}")
+        print(
+            f"[ ANALYTICS ] {cnpj} - {CRM_RAIOX_TX_PARQUET} - "
+            f"erro ao consultar SQL Server: {exc}"
+        )
         return CacheLoadResult(
             pl.DataFrame(schema=schema),
             from_cache=False,
-            error=f"Erro ao sincronizar {CRM_RAIOX_TX_PARQUET} em partes: {exc}",
+            error=f"Erro ao gerar {CRM_RAIOX_TX_PARQUET} pelo SQL Server: {exc}",
         )
 
 

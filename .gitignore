@@ -49,6 +49,7 @@ sentinela_cache/
 *.exe
 *.parquet
 *.smod
+*.smod.part
 *.db
 *.csv
 *.json

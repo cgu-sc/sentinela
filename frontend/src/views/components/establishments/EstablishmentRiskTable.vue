@@ -199,7 +199,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
       @sort="onLazyLoad"
       @row-click="goToDetail"
     >
-      <!-- Razão Social + CNPJ -->
+      <!-- Razão Social + CNPJ + Município -->
       <Column
         field="razao_social"
         header="Razão Social"
@@ -209,17 +209,19 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
       >
         <template #body="{ data }">
           <div class="razao-block">
-            <span
-              class="razao-social-cell"
-              v-tooltip.top="data.razao_social"
-            >{{ data.razao_social ?? '—' }}</span>
-            <span class="cnpj-row">
+            <span class="razao-nome-row">
               <span
                 v-tooltip.top="data.is_matriz ? 'Matriz' : 'Filial'"
                 :class="data.is_matriz ? 'tipo-badge matriz' : 'tipo-badge filial'"
               >
                 <i :class="data.is_matriz ? 'pi pi-home' : 'pi pi-building'" />
               </span>
+              <span
+                class="razao-social-cell"
+                v-tooltip.top="data.razao_social"
+              >{{ data.razao_social ?? '—' }}</span>
+            </span>
+            <span class="cnpj-row">
               <span class="cnpj-text">{{ data.cnpj }}</span>
               <i
                 :class="['pi', copiedKey === data.cnpj + '-cnpj' ? 'pi-check text-success' : 'pi-copy', 'copy-btn']"
@@ -227,29 +229,17 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
                 @click.stop="copyAndSignal(data.cnpj, data.cnpj + '-cnpj')"
               />
             </span>
+            <span class="loc-inline-row">
+              <span
+                class="municipio-inline-text"
+                v-tooltip.top="data.municipio"
+              >{{ data.municipio ?? '—' }}</span>
+              <span class="uf-tag">{{ data.uf }}</span>
+            </span>
           </div>
         </template>
         <template #footer>
           <span class="table-total-label">TOTAL</span>
-        </template>
-      </Column>
-
-      <!-- UF + Município -->
-      <Column
-        field="municipio"
-        header="Município"
-        sortable
-        headerClass="col-location"
-        bodyClass="col-location"
-      >
-        <template #body="{ data }">
-          <div class="loc-block">
-            <span
-              class="municipio-text"
-              v-tooltip.top="data.municipio"
-            >{{ data.municipio ?? '—' }}</span>
-            <span class="uf-tag">{{ data.uf }}</span>
-          </div>
         </template>
       </Column>
 
@@ -538,6 +528,14 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   overflow: hidden;
 }
 
+.razao-nome-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .razao-social-cell {
   cursor: default;
   white-space: nowrap;
@@ -545,13 +543,30 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   text-overflow: ellipsis;
   display: block;
   max-width: 100%;
-  font-size: 0.76rem;
+  font-size: 0.80rem;
 }
 
 .cnpj-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.loc-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.municipio-inline-text {
+  font-size: 0.80rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
 }
 
 .tipo-badge {
@@ -580,7 +595,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
 }
 
 .cnpj-text {
-  font-size: 0.76rem;
+  font-size: 0.80rem;
   color: var(--text-muted);
   letter-spacing: 0.01em;
 }
@@ -636,7 +651,7 @@ const indicatorColumnHeader = computed(() => props.indicadorLabel?.trim() || 'In
   background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
   color: var(--primary-color);
   border-radius: 4px;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
 }
 

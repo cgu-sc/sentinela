@@ -10,6 +10,7 @@ from data_cache import get_df, get_df_perfil_estabelecimento
 from ...schemas.analytics import FatorRiscoBucketSchema, FatorRiscoResponseSchema
 from ...utils.text_search import apply_token_search
 from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
+from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 
@@ -35,6 +36,8 @@ def get_fator_risco_data(
     id_ibge7: Optional[int] = None,
     volume_atipico: bool = False,
     volume_atipico_limite: Optional[float] = None,
+    dispersao_uf_sem_fronteira: bool = False,
+    dispersao_uf_sem_fronteira_limite: Optional[float] = None,
     par_teia: Optional[str] = None,
     socio_beneficio: Optional[str] = None,
     socio_esocial: Optional[str] = None,
@@ -93,6 +96,13 @@ def get_fator_risco_data(
         if volume_atipico:
             id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
             period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
+        if dispersao_uf_sem_fronteira:
+            id_cnpjs_dispersao_df = get_dispersao_uf_sem_fronteira_id_cnpjs_df(
+                inicio,
+                fim,
+                dispersao_uf_sem_fronteira_limite,
+            )
+            period_df = period_df.join(id_cnpjs_dispersao_df.select("id_cnpj"), on="id_cnpj", how="semi")
 
         cnpj_agg = (
             period_df

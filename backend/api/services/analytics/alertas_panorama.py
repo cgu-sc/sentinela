@@ -13,6 +13,7 @@ from data_cache import (
 )
 from ...schemas.analytics import AlertaPanoramaItemSchema, AlertasPanoramaResponse
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS, LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT
+from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 
 
@@ -49,6 +50,24 @@ def _filtrar_id_cnpjs_por_escopo(
         mask = mask & (pl.col("uf") == uf)
 
     return perfil.filter(mask).get_column("id_cnpj")
+
+
+def _intersect_id_cnpjs(
+    left: pl.Series | None,
+    right: pl.Series,
+) -> pl.Series:
+    right_df = pl.DataFrame({"id_cnpj": right.cast(pl.Int64)}).unique()
+    if left is None:
+        return right_df.get_column("id_cnpj")
+
+    left_df = pl.DataFrame({"id_cnpj": left.cast(pl.Int64)}).unique()
+    if left_df.is_empty() or right_df.is_empty():
+        return _empty_id_cnpjs()
+    return (
+        left_df
+        .join(right_df, on="id_cnpj", how="semi")
+        .get_column("id_cnpj")
+    )
 
 
 def _empty_id_cnpjs() -> pl.Series:
@@ -302,6 +321,8 @@ def get_alertas_panorama(
     id_ibge7: int | None = None,
     data_inicio: date | None = None,
     data_fim: date | None = None,
+    dispersao_uf_sem_fronteira: bool = False,
+    dispersao_uf_sem_fronteira_limite: float | None = None,
 ) -> AlertasPanoramaResponse:
     """
     Agrega contagens de alertas de integridade por tipo, filtradas pelo escopo
@@ -312,6 +333,18 @@ def get_alertas_panorama(
     data_ref = data_fim or date.today()
 
     id_cnpjs = _filtrar_id_cnpjs_por_escopo(uf, regiao_id, id_ibge7)
+    if dispersao_uf_sem_fronteira:
+        id_cnpjs_dispersao = (
+            get_dispersao_uf_sem_fronteira_id_cnpjs_df(
+                data_inicio,
+                data_fim,
+                dispersao_uf_sem_fronteira_limite,
+            )
+            .select(pl.col("id_cnpj").cast(pl.Int64))
+            .unique()
+            .get_column("id_cnpj")
+        )
+        id_cnpjs = _intersect_id_cnpjs(id_cnpjs, id_cnpjs_dispersao)
 
     ids_por_alerta = {
         "volume_atipico": _ids_volume_atipico(id_cnpjs, data_inicio, data_fim),

@@ -106,6 +106,16 @@ export const useFilterStore = defineStore('filters', () => {
       ? saved.volumeAtipicoPercentualFilter
       : (typeof saved?.volumeAtipicoPercentual === 'number' ? saved.volumeAtipicoPercentual : FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL)
   );
+  const dispersaoUfSemFronteiraEnabled = ref(
+    typeof saved?.dispersaoUfSemFronteiraEnabled === 'boolean'
+      ? saved.dispersaoUfSemFronteiraEnabled
+      : FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_ENABLED
+  );
+  const dispersaoUfSemFronteiraPercentual = ref(
+    typeof saved?.dispersaoUfSemFronteiraPercentual === 'number'
+      ? saved.dispersaoUfSemFronteiraPercentual
+      : FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL
+  );
   const periodo = ref(saved?.periodo ?? FILTER_DEFAULTS.DATE_RANGE);
   const sliderValue = ref(saved?.sliderValue ?? FILTER_DEFAULTS.SLIDER_INDEX_RANGE);
 
@@ -133,6 +143,17 @@ export const useFilterStore = defineStore('filters', () => {
           Math.min(
             FILTER_DEFAULTS.VOLUME_ATIPICO_MAX,
             Number(volumeAtipicoPercentualFilter.value) || FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL
+          )
+        )
+      : null;
+    const dispersaoUfSemFronteiraActive = Boolean(dispersaoUfSemFronteiraEnabled.value);
+    const dispersaoUfSemFronteiraPercentualParam = dispersaoUfSemFronteiraActive
+      ? Math.max(
+          FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN,
+          Math.min(
+            FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX,
+            Number(dispersaoUfSemFronteiraPercentual.value)
+              || FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL
           )
         )
       : null;
@@ -177,6 +198,8 @@ export const useFilterStore = defineStore('filters', () => {
       unidadePf: selectedUnidadePf.value !== FILTER_ALL_VALUE ? selectedUnidadePf.value : null,
       volumeAtipicoEnabled: volumeAtipicoActive,
       volumeAtipicoPercentual,
+      dispersaoUfSemFronteiraEnabled: dispersaoUfSemFronteiraActive,
+      dispersaoUfSemFronteiraPercentual: dispersaoUfSemFronteiraPercentualParam,
       parTeia: selectedParTeia.value !== FILTER_ALL_VALUE ? selectedParTeia.value : null,
       socioBeneficio: selectedSocioBeneficio.value !== FILTER_ALL_VALUE ? selectedSocioBeneficio.value : null,
       socioEsocial: selectedSocioEsocial.value !== FILTER_ALL_VALUE ? selectedSocioEsocial.value : null,
@@ -200,6 +223,8 @@ export const useFilterStore = defineStore('filters', () => {
       parTeia,
       socioBeneficio,
       socioEsocial,
+      dispersaoUfSemFronteiraEnabled,
+      dispersaoUfSemFronteiraPercentual,
       volumeAtipicoEnabled,
       volumeAtipicoPercentual,
     } = apiParams.value;
@@ -218,6 +243,8 @@ export const useFilterStore = defineStore('filters', () => {
       parTeia,
       socioBeneficio,
       socioEsocial,
+      dispersaoUfSemFronteiraEnabled,
+      dispersaoUfSemFronteiraPercentual,
       volumeAtipicoEnabled,
       volumeAtipicoPercentual,
     });
@@ -242,6 +269,8 @@ export const useFilterStore = defineStore('filters', () => {
       parTeia,
       socioBeneficio,
       socioEsocial,
+      dispersaoUfSemFronteiraEnabled,
+      dispersaoUfSemFronteiraPercentual,
       inicio,
       fim,
       percMin,
@@ -266,6 +295,8 @@ export const useFilterStore = defineStore('filters', () => {
       par_teia: parTeia,
       socio_beneficio: socioBeneficio,
       socio_esocial: socioEsocial,
+      dispersao_uf_sem_fronteira: dispersaoUfSemFronteiraEnabled,
+      dispersao_uf_sem_fronteira_limite: dispersaoUfSemFronteiraPercentual,
       perc_min: percMin,
       perc_max: percMax,
       val_min: valMin,
@@ -328,6 +359,8 @@ export const useFilterStore = defineStore('filters', () => {
     volumeAtipicoEnabled: volumeAtipicoEnabled.value,
     volumeAtipicoPercentual: volumeAtipicoPercentual.value,
     volumeAtipicoPercentualFilter: volumeAtipicoPercentualFilter.value,
+    dispersaoUfSemFronteiraEnabled: dispersaoUfSemFronteiraEnabled.value,
+    dispersaoUfSemFronteiraPercentual: dispersaoUfSemFronteiraPercentual.value,
     periodo: periodo.value.map(d => d?.toISOString() ?? null),
     sliderValue: sliderValue.value,
     clusterSelection: clusterSelection.value,
@@ -373,6 +406,12 @@ export const useFilterStore = defineStore('filters', () => {
       volumeAtipicoPercentualFilter.value = filters.volumeAtipicoPercentualFilter;
     } else if (typeof filters.volumeAtipicoPercentual === 'number') {
       volumeAtipicoPercentualFilter.value = filters.volumeAtipicoPercentual;
+    }
+    if (typeof filters.dispersaoUfSemFronteiraEnabled === 'boolean') {
+      dispersaoUfSemFronteiraEnabled.value = filters.dispersaoUfSemFronteiraEnabled;
+    }
+    if (typeof filters.dispersaoUfSemFronteiraPercentual === 'number') {
+      dispersaoUfSemFronteiraPercentual.value = filters.dispersaoUfSemFronteiraPercentual;
     }
     if (Array.isArray(filters.periodo)) periodo.value = filters.periodo.map(d => d ? new Date(d) : null);
     if (Array.isArray(filters.sliderValue)) sliderValue.value = filters.sliderValue;
@@ -485,7 +524,7 @@ export const useFilterStore = defineStore('filters', () => {
   watch(
     [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedSocioEsocial, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
-     valorMinSemComp, valorMinSemCompFilter, volumeAtipicoEnabled, volumeAtipicoPercentual, volumeAtipicoPercentualFilter, periodo, sliderValue,
+     valorMinSemComp, valorMinSemCompFilter, volumeAtipicoEnabled, volumeAtipicoPercentual, volumeAtipicoPercentualFilter, dispersaoUfSemFronteiraEnabled, dispersaoUfSemFronteiraPercentual, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
     saveToStorage,
     { deep: true }
@@ -511,6 +550,8 @@ export const useFilterStore = defineStore('filters', () => {
     volumeAtipicoEnabled.value = FILTER_DEFAULTS.VOLUME_ATIPICO_ENABLED;
     volumeAtipicoPercentual.value = FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
     volumeAtipicoPercentualFilter.value = FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
+    dispersaoUfSemFronteiraEnabled.value = FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_ENABLED;
+    dispersaoUfSemFronteiraPercentual.value = FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL;
     periodo.value = [...FILTER_DEFAULTS.DATE_RANGE];
     sliderValue.value = [...FILTER_DEFAULTS.SLIDER_INDEX_RANGE];
     clusterSelection.value = FILTER_ALL_VALUE;
@@ -593,6 +634,8 @@ export const useFilterStore = defineStore('filters', () => {
     volumeAtipicoEnabled,
     volumeAtipicoPercentual,
     volumeAtipicoPercentualFilter,
+    dispersaoUfSemFronteiraEnabled,
+    dispersaoUfSemFronteiraPercentual,
     periodo,
     sliderValue,
     isPeriodoValido,

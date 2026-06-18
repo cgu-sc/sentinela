@@ -156,6 +156,8 @@ const socioBeneficioTooltip =
   "Sócio direto: vínculo ativo na farmácia alvo e cadastro no CadÚnico ou Seguro Defeso.\n" +
   "Sócio N3: vínculo ativo em empresa do nível 2 e cadastro no CadÚnico ou Seguro Defeso.\n" +
   "Sócio direto ou N3: considera qualquer um desses dois níveis.";
+const dispersaoUfSemFronteiraTooltip =
+  "Filtra estabelecimentos com percentual mínimo de vendas para UFs que não fazem fronteira com a UF da farmácia, no período selecionado.";
 const socioEsocialTooltip =
   "Sócio direto: vínculo societário ativo na farmácia alvo e vínculo em outro CNPJ em função não gerencial no eSocial.\n" +
   "Sócio N3: vínculo ativo em empresa do nível 2 e vínculo em outro CNPJ em função não gerencial no eSocial.\n" +
@@ -342,6 +344,44 @@ const clearVolumeAtipico = () => {
     FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
 };
 
+const dispersaoUfQuickSelect = [5, 10, 20, 50];
+
+const clampDispersaoUfSemFronteira = (value) => {
+  const numeric = Number(value) || FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL;
+  return Math.max(
+    FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN,
+    Math.min(FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX, numeric),
+  );
+};
+
+const applyDispersaoUfSemFronteira = () => {
+  filterStore.dispersaoUfSemFronteiraEnabled = true;
+  filterStore.dispersaoUfSemFronteiraPercentual = clampDispersaoUfSemFronteira(
+    filterStore.dispersaoUfSemFronteiraPercentual,
+  );
+};
+
+const setDispersaoUfSemFronteira = (value) => {
+  filterStore.dispersaoUfSemFronteiraEnabled = true;
+  filterStore.dispersaoUfSemFronteiraPercentual =
+    clampDispersaoUfSemFronteira(value);
+};
+
+const stepDispersaoUfSemFronteira = (delta) => {
+  filterStore.dispersaoUfSemFronteiraEnabled = true;
+  filterStore.dispersaoUfSemFronteiraPercentual =
+    clampDispersaoUfSemFronteira(
+      filterStore.dispersaoUfSemFronteiraPercentual + delta,
+    );
+};
+
+const clearDispersaoUfSemFronteira = () => {
+  filterStore.dispersaoUfSemFronteiraEnabled =
+    FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_ENABLED;
+  filterStore.dispersaoUfSemFronteiraPercentual =
+    FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL;
+};
+
 // Força foco no campo de busca do Dropdown ao abrir
 const onDropdownShow = () => {
   setTimeout(() => {
@@ -370,6 +410,8 @@ const isFilterActive = (field) => {
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
     volumeAtipicoEnabled: FILTER_DEFAULTS.VOLUME_ATIPICO_ENABLED,
     volumeAtipicoPercentual: FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL,
+    dispersaoUfSemFronteiraEnabled: FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_ENABLED,
+    dispersaoUfSemFronteiraPercentual: FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL,
     clusterSelection: FILTER_DEFAULTS.CLUSTER,
     rfaSelection: FILTER_DEFAULTS.RFA,
     searchTarget: FILTER_DEFAULTS.SEARCH,
@@ -378,6 +420,9 @@ const isFilterActive = (field) => {
   const defaultValue = mapStoreToConstants[field];
   if (field === "volumeAtipicoPercentual") {
     return filterStore.volumeAtipicoEnabled && value !== defaultValue;
+  }
+  if (field === "dispersaoUfSemFronteiraPercentual") {
+    return filterStore.dispersaoUfSemFronteiraEnabled && value !== defaultValue;
   }
   if (Array.isArray(value))
     return JSON.stringify(value) !== JSON.stringify(defaultValue);
@@ -404,6 +449,7 @@ const activeFilterCount = computed(() => {
     "selectedParTeia",
     "selectedSocioBeneficio",
     "selectedSocioEsocial",
+    "dispersaoUfSemFronteiraEnabled",
     "selectedCnpjRaiz",
     "percentualNaoComprovacaoRange",
     "valorMinSemComp",
@@ -443,6 +489,7 @@ const integrityFilterCount = computed(() =>
     "selectedParTeia",
     "selectedSocioBeneficio",
     "selectedSocioEsocial",
+    "dispersaoUfSemFronteiraEnabled",
   ]),
 );
 
@@ -453,10 +500,6 @@ const analyticFilterCount = computed(() =>
     "valorMinSemComp",
     "volumeAtipicoEnabled",
   ]),
-);
-
-const pageFilterCount = computed(() =>
-  countActiveFilters(["searchTarget", "clusterSelection", "rfaSelection"]),
 );
 
 // ── Período de análise (slider) ──────────────────────────────────────────────
@@ -957,6 +1000,82 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Vendas para UFs sem fronteira
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: dispersaoUfSemFronteiraTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('dispersaoUfSemFronteiraEnabled')"
+            class="filter-clear-btn"
+            @click="clearDispersaoUfSemFronteira"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div
+          class="slider-container"
+          :class="{ 'filter-active-box': isFilterActive('dispersaoUfSemFronteiraEnabled') }"
+        >
+          <div class="perc-chips" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 0.5rem">
+            <button
+              v-for="value in dispersaoUfQuickSelect"
+              :key="value"
+              class="perc-chip"
+              :class="{
+                active:
+                  filterStore.dispersaoUfSemFronteiraEnabled &&
+                  filterStore.dispersaoUfSemFronteiraPercentual === value,
+              }"
+              @click="setDispersaoUfSemFronteira(value)"
+            >
+              {{ value }}%
+            </button>
+          </div>
+
+          <div class="period-steppers">
+            <button
+              class="period-step-btn"
+              @click="stepDispersaoUfSemFronteira(-1)"
+              :disabled="
+                filterStore.dispersaoUfSemFronteiraPercentual <=
+                FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN
+              "
+            >
+              <i class="pi pi-minus" />
+            </button>
+            <span class="period-label percent-label">
+              mínimo {{ filterStore.dispersaoUfSemFronteiraPercentual }}%
+            </span>
+            <button
+              class="period-step-btn"
+              @click="stepDispersaoUfSemFronteira(1)"
+              :disabled="
+                filterStore.dispersaoUfSemFronteiraPercentual >=
+                FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX
+              "
+            >
+              <i class="pi pi-plus" />
+            </button>
+          </div>
+
+          <Slider
+            v-model="filterStore.dispersaoUfSemFronteiraPercentual"
+            :min="FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN"
+            :max="FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX"
+            :step="1"
+            class="custom-slider"
+            @slideend="applyDispersaoUfSemFronteira"
+          />
+        </div>
+      </div>
+
       <div class="sidebar-section-heading">
         <span><i class="pi pi-chart-line"></i> Parâmetros</span>
         <small v-if="analyticFilterCount">{{ analyticFilterCount }}</small>
@@ -1304,13 +1423,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="sidebar-section-heading">
-        <span><i class="pi pi-filter"></i> Específicos</span>
-        <small v-if="pageFilterCount">{{ pageFilterCount }}</small>
-      </div>
-
       <!-- FILTROS CONTEXTUAIS -->
       <div
+        v-if="route.path === '/alvos/cluster' || route.path === '/alvos/rede'"
         class="dynamic-filters-box"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -1397,14 +1512,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="activeModule === 'consolidado'" class="contextual-filters">
-          <p
-            class="text-xs px-2 italic"
-            style="color: var(--sidebar-text); opacity: 0.7"
-          >
-            Nenhum filtro extra necessário.
-          </p>
-        </div>
       </div>
 
       <div class="sidebar-spacer"></div>

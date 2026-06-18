@@ -25,6 +25,7 @@ from .matriz_risco_dinamica import (
 )
 from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
 from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
+from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
@@ -247,6 +248,8 @@ _INDICADOR_SCOPE_FILTER_FIELDS = (
     ("par_teia", _normalize_cache_text),
     ("socio_beneficio", _normalize_cache_text),
     ("socio_esocial", _normalize_cache_text),
+    ("dispersao_uf_sem_fronteira", _normalize_cache_bool),
+    ("dispersao_uf_sem_fronteira_limite", _normalize_cache_float),
     ("perc_min", _normalize_cache_float),
     ("perc_max", _normalize_cache_float),
     ("val_min", _normalize_cache_float),
@@ -579,6 +582,8 @@ def _build_indicador_scope_base(
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
     socio_esocial: str | None = None,
+    dispersao_uf_sem_fronteira: bool = False,
+    dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -593,6 +598,13 @@ def _build_indicador_scope_base(
     if volume_atipico:
         id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
         period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
+    if dispersao_uf_sem_fronteira:
+        id_cnpjs_dispersao_df = get_dispersao_uf_sem_fronteira_id_cnpjs_df(
+            inicio,
+            fim,
+            dispersao_uf_sem_fronteira_limite,
+        )
+        period_df = period_df.join(id_cnpjs_dispersao_df.select("id_cnpj"), on="id_cnpj", how="semi")
 
     scope_base = period_df.group_by("id_cnpj").agg([
         pl.col("total_vendas").sum().alias("total_vendas"),
@@ -780,6 +792,8 @@ def _build_indicador_dataset_cached(
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
     socio_esocial: str | None = None,
+    dispersao_uf_sem_fronteira: bool = False,
+    dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, str, str, str | None, str]:
@@ -1241,6 +1255,8 @@ def get_indicadores_analise(
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
     socio_esocial: str | None = None,
+    dispersao_uf_sem_fronteira: bool = False,
+    dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
 ) -> IndicadorAnaliseResponse:
@@ -1300,6 +1316,8 @@ def get_indicadores_analise(
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            dispersao_uf_sem_fronteira=dispersao_uf_sem_fronteira,
+            dispersao_uf_sem_fronteira_limite=dispersao_uf_sem_fronteira_limite,
             volume_atipico=volume_atipico,
             volume_atipico_limite=volume_atipico_limite,
         )
@@ -1433,6 +1451,8 @@ def get_indicadores_analise_cnpjs(
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
     socio_esocial: str | None = None,
+    dispersao_uf_sem_fronteira: bool = False,
+    dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
     page: int = 1,
@@ -1461,6 +1481,8 @@ def get_indicadores_analise_cnpjs(
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            dispersao_uf_sem_fronteira=dispersao_uf_sem_fronteira,
+            dispersao_uf_sem_fronteira_limite=dispersao_uf_sem_fronteira_limite,
             volume_atipico=volume_atipico,
             volume_atipico_limite=volume_atipico_limite,
         )

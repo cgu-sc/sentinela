@@ -46,6 +46,8 @@ export function buildAnalyticsParams(filters = {}) {
     socioEsocial = null,
     volumeAtipicoEnabled = false,
     volumeAtipicoPercentual = null,
+    dispersaoUfSemFronteiraEnabled = false,
+    dispersaoUfSemFronteiraPercentual = null,
   } = filters || {};
 
   const params = {};
@@ -72,6 +74,12 @@ export function buildAnalyticsParams(filters = {}) {
     params.volume_atipico = true;
     if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {
       params.volume_atipico_limite = volumeAtipicoPercentual;
+    }
+  }
+  if (dispersaoUfSemFronteiraEnabled) {
+    params.dispersao_uf_sem_fronteira = true;
+    if (dispersaoUfSemFronteiraPercentual !== null && dispersaoUfSemFronteiraPercentual !== undefined) {
+      params.dispersao_uf_sem_fronteira_limite = dispersaoUfSemFronteiraPercentual;
     }
   }
   return params;
@@ -138,13 +146,27 @@ export const useAnalyticsStore = defineStore('analytics', {
     },
 
     async fetchAlertasPanorama(filters = {}) {
-      const { inicio, fim, uf, regiaoId, idIbge7 } = filters || {};
+      const {
+        inicio,
+        fim,
+        uf,
+        regiaoId,
+        idIbge7,
+        dispersaoUfSemFronteiraEnabled = false,
+        dispersaoUfSemFronteiraPercentual = null,
+      } = filters || {};
       const params = {};
       if (uf && uf !== 'Todos') params.uf = uf;
       if (regiaoId != null) params.regiao_id = regiaoId;
       if (idIbge7 != null) params.id_ibge7 = idIbge7;
       if (inicio) params.data_inicio = inicio;
       if (fim) params.data_fim = fim;
+      if (dispersaoUfSemFronteiraEnabled) {
+        params.dispersao_uf_sem_fronteira = true;
+        if (dispersaoUfSemFronteiraPercentual !== null && dispersaoUfSemFronteiraPercentual !== undefined) {
+          params.dispersao_uf_sem_fronteira_limite = dispersaoUfSemFronteiraPercentual;
+        }
+      }
 
       const requestId = ++alertasPanoramaRequestSeq;
       if (alertasPanoramaAbortController) alertasPanoramaAbortController.abort();

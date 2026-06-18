@@ -10,12 +10,22 @@ import polars as pl
 from sqlalchemy import text
 from sqlalchemy.exc import InterfaceError as SQLAInterfaceError
 
-from cache_files import MEMORIA_CALCULO_PARQUET
+from cache_files import (
+    MEMORIA_CALCULO_CACHE_VERSION,
+    MEMORIA_CALCULO_GLOBAL_PARQUET,
+    MEMORIA_CALCULO_PARQUET,
+)
 from cache_producers.types import CacheLoadResult
 
 
 def _cache_path(cnpj: str) -> str:
     return os.path.join(_get_cnpj_cache_dir(cnpj), MEMORIA_CALCULO_PARQUET)
+
+
+def _global_cache_path() -> str:
+    from data_cache import get_cache_dir
+
+    return os.path.join(get_cache_dir(), MEMORIA_CALCULO_GLOBAL_PARQUET)
 
 
 def _get_cnpj_cache_dir(cnpj: str) -> str:
@@ -65,6 +75,42 @@ def _formatar_notas_estoque_inicial(estoque_inicial: dict) -> str:
         qtd = _as_int(nota.get("quantidade"))
         partes.append(f"NF Estoque Inicial: {numero} - {data} | Qtde: {qtd}")
     return "; ".join(partes)
+
+
+def _build_medicamentos_map_from_rows(rows) -> dict[str | float, str]:
+    medicamentos_map: dict[str | float, str] = {}
+    for row in rows:
+        codigo_raw = row[0] if not isinstance(row, dict) else row.get("codigo_barra")
+        principio_raw = row[1] if not isinstance(row, dict) else row.get("principio_ativo")
+        if not codigo_raw:
+            continue
+        codigo = str(codigo_raw).strip()
+        principio_ativo = str(principio_raw or "DESCONHECIDO")
+        medicamentos_map[codigo] = principio_ativo
+        try:
+            medicamentos_map[float(codigo)] = principio_ativo
+        except (TypeError, ValueError):
+            pass
+    return medicamentos_map
+
+
+def _load_medicamentos_map_from_cache() -> dict[str | float, str]:
+    from data_cache import get_medicamentos_df
+
+    medicamentos = get_medicamentos_df()
+    required = {"codigo_barra", "principio_ativo"}
+    missing = required - set(medicamentos.columns)
+    if missing:
+        raise RuntimeError(
+            "Cache de medicamentos sem colunas obrigatorias para memoria de calculo: "
+            + ", ".join(sorted(missing))
+        )
+    rows = (
+        medicamentos
+        .select(["codigo_barra", "principio_ativo"])
+        .iter_rows()
+    )
+    return _build_medicamentos_map_from_rows(rows)
 
 
 def _formatar_referencia_v2(referencia: dict, estoque_inicial: dict) -> str:
@@ -165,44 +211,18 @@ def _legacy_rows_from_memoria_v2(memoria_v2: dict) -> list[dict]:
     return rows
 
 
-def _load_memoria_sql(cnpj: str, engine) -> tuple[list[dict] | None, dict[str | float, str], float | None]:
-    query_time_ms = None
-    with engine.connect() as conn:
-        _tq0 = _time.perf_counter()
-        result = conn.execute(text("""
-            SELECT TOP 1
-                memoria_calculo_payload,
-                schema_version,
-                id_processamento
-            FROM temp_CGUSC.fp.memoria_calculo_consolidada
-            WHERE cnpj = :cnpj
-            ORDER BY id_processamento DESC
-        """), {"cnpj": cnpj}).fetchone()
-        query_time_ms = round((_time.perf_counter() - _tq0) * 1000, 1)
+def _payload_to_bytes(payload) -> bytes:
+    if isinstance(payload, bytes):
+        return payload
+    if isinstance(payload, bytearray):
+        return bytes(payload)
+    if isinstance(payload, memoryview):
+        return payload.tobytes()
+    return bytes(payload)
 
-        if not result or not result[0]:
-            print(f"Aviso: nenhum dado no banco para CNPJ {cnpj}")
-            return None, {}, query_time_ms
 
-        memoria_calculo_payload = result[0]
-
-        med_rows = conn.execute(text("""
-            SELECT codigo_barra, principio_ativo
-            FROM temp_CGUSC.fp.medicamentos_patologia
-        """)).fetchall()
-        medicamentos_map: dict[str | float, str] = {}
-        for row in med_rows:
-            if not row[0]:
-                continue
-            codigo = str(row[0]).strip()
-            principio_ativo = str(row[1] or "DESCONHECIDO")
-            medicamentos_map[codigo] = principio_ativo
-            try:
-                medicamentos_map[float(codigo)] = principio_ativo
-            except (TypeError, ValueError):
-                pass
-
-    json_str_v2 = zlib.decompress(memoria_calculo_payload).decode("utf-8")
+def _decode_memoria_payload(payload) -> list[dict]:
+    json_str_v2 = zlib.decompress(_payload_to_bytes(payload)).decode("utf-8")
     dados_v2 = json.loads(json_str_v2)
     dados = _legacy_rows_from_memoria_v2(dados_v2)
 
@@ -231,7 +251,37 @@ def _load_memoria_sql(cnpj: str, engine) -> tuple[list[dict] | None, dict[str | 
             if key in item and item[key] is not None:
                 item[key] = Decimal(str(item[key]))
 
-    return dados, medicamentos_map, query_time_ms
+    return dados
+
+
+def _load_memoria_sql(cnpj: str, engine) -> tuple[list[dict] | None, dict[str | float, str], float | None]:
+    query_time_ms = None
+    with engine.connect() as conn:
+        _tq0 = _time.perf_counter()
+        result = conn.execute(text("""
+            SELECT TOP 1
+                memoria_calculo_payload,
+                schema_version,
+                id_processamento
+            FROM temp_CGUSC.fp.memoria_calculo_consolidada
+            WHERE cnpj = :cnpj
+            ORDER BY id_processamento DESC
+        """), {"cnpj": cnpj}).fetchone()
+        query_time_ms = round((_time.perf_counter() - _tq0) * 1000, 1)
+
+        if not result or not result[0]:
+            print(f"Aviso: nenhum dado no banco para CNPJ {cnpj}")
+            return None, {}, query_time_ms
+
+        memoria_calculo_payload = result[0]
+
+        med_rows = conn.execute(text("""
+            SELECT codigo_barra, principio_ativo
+            FROM temp_CGUSC.fp.medicamentos_patologia
+        """)).fetchall()
+        medicamentos_map = _build_medicamentos_map_from_rows(med_rows)
+
+    return _decode_memoria_payload(memoria_calculo_payload), medicamentos_map, query_time_ms
 
 
 def _build_memoria_calculo_df(dados: list[dict], medicamentos_map: dict[str | float, str]) -> pl.DataFrame:
@@ -391,6 +441,42 @@ def _build_memoria_calculo_df(dados: list[dict], medicamentos_map: dict[str | fl
     )
 
 
+def _load_memoria_from_global(cnpj: str) -> tuple[pl.DataFrame | None, float | None]:
+    global_path = _global_cache_path()
+    if not os.path.exists(global_path):
+        return None, None
+
+    from data_cache import scan_memoria_calculo_global
+
+    t0 = _time.perf_counter()
+    row_df = (
+        scan_memoria_calculo_global()
+        .filter(pl.col("cnpj") == cnpj)
+        .select([
+            "cnpj",
+            "memoria_calculo_payload",
+            "_memoria_calculo_cache_version",
+        ])
+        .collect()
+    )
+    read_time_ms = round((_time.perf_counter() - t0) * 1000, 1)
+
+    if row_df.is_empty():
+        return pl.DataFrame([]), read_time_ms
+
+    version = int(row_df.item(0, "_memoria_calculo_cache_version") or 0)
+    if version < MEMORIA_CALCULO_CACHE_VERSION:
+        raise RuntimeError(
+            f"{MEMORIA_CALCULO_GLOBAL_PARQUET} esta na versao {version}; "
+            f"esperado {MEMORIA_CALCULO_CACHE_VERSION}."
+        )
+
+    payload = row_df.item(0, "memoria_calculo_payload")
+    dados = _decode_memoria_payload(payload)
+    medicamentos_map = _load_medicamentos_map_from_cache()
+    return _build_memoria_calculo_df(dados, medicamentos_map), read_time_ms
+
+
 def load_or_sync_memoria_calculo(cnpj: str, engine, check_cache: bool = False) -> CacheLoadResult:
     cache_path = _cache_path(cnpj)
 
@@ -405,6 +491,36 @@ def load_or_sync_memoria_calculo(cnpj: str, engine, check_cache: bool = False) -
 
     if check_cache:
         return CacheLoadResult(pl.DataFrame([]), from_cache=False)
+
+    try:
+        df_global, read_time_ms = _load_memoria_from_global(cnpj)
+        if df_global is not None:
+            if not df_global.is_empty():
+                save_time_ms = None
+                try:
+                    t1 = _time.perf_counter()
+                    df_global.write_parquet(cache_path, compression="zstd")
+                    save_time_ms = round((_time.perf_counter() - t1) * 1000, 1)
+                    print(f"Cache Parquet salvo a partir do global: {cache_path}")
+                except Exception as exc:
+                    print(f"Erro ao salvar Parquet de memoria de calculo para {cnpj}: {exc}")
+                    print(traceback.format_exc())
+                return CacheLoadResult(
+                    df_global,
+                    from_cache=True,
+                    read_time_ms=read_time_ms,
+                    save_time_ms=save_time_ms,
+                )
+            print(f"Aviso: memoria_calculo_global sem registro para CNPJ {cnpj}")
+            return CacheLoadResult(pl.DataFrame([]), from_cache=True, read_time_ms=read_time_ms)
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        return CacheLoadResult(
+            pl.DataFrame([]),
+            from_cache=False,
+            error=f"Modulo global {MEMORIA_CALCULO_GLOBAL_PARQUET} invalido: {exc}",
+        )
 
     try:
         dados, medicamentos_map, query_time_ms = _load_memoria_sql(cnpj, engine)

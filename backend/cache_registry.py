@@ -245,6 +245,16 @@ def _crm_prescritores_schema(
     return schema
 
 
+def _memoria_calculo_global_schema() -> dict:
+    return {
+        "cnpj": pl.Utf8,
+        "id_processamento": pl.Int64,
+        "schema_version": pl.Int32,
+        "memoria_calculo_payload": pl.Binary,
+        "_memoria_calculo_cache_version": pl.Int32,
+    }
+
+
 def _farmacias_cnaes_secundarios_schema() -> dict:
     return {
         "id_cnpj": pl.Int32,
@@ -350,6 +360,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("crm_prescricoes_brasil_semestre", cache_files.CRM_PRESCRICOES_BRASIL_SEMESTRE_PARQUET, "global", _crm_prescricoes_brasil_semestre_schema()),
     CacheDefinition("dados_medico", cache_files.DADOS_MEDICO_PARQUET, "global", _dados_medico_schema()),
     CacheDefinition("crm_prescritores_global", cache_files.CRM_PRESCRITORES_GLOBAL_PARQUET, "global", _crm_prescritores_schema(include_id_cnpj=True, include_no_medico=False)),
+    CacheDefinition("memoria_calculo_global", cache_files.MEMORIA_CALCULO_GLOBAL_PARQUET, "global", _memoria_calculo_global_schema()),
     CacheDefinition("crm_raiox_tx_global", cache_files.CRM_RAIOX_TX_GLOBAL_PARQUET, "global", _crm_raiox_tx_global_schema()),
     CacheDefinition("dados_farmacia", cache_files.FARMACIAS_PARQUET, "global"),
     CacheDefinition(

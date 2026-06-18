@@ -6,7 +6,11 @@ import pandas as pd
 import polars as pl
 from sqlalchemy import text
 import cache_registry
-from cache_files import CRM_PRESCRITORES_CACHE_VERSION, CRM_RAIOX_TX_CACHE_VERSION
+from cache_files import (
+    CRM_PRESCRITORES_CACHE_VERSION,
+    CRM_RAIOX_TX_CACHE_VERSION,
+    MEMORIA_CALCULO_CACHE_VERSION,
+)
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -177,6 +181,13 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "dt_inscricao_crm",
         "nu_estabelecimentos",
         "_crm_prescritores_cache_version",
+    },
+    "memoria_calculo_global": {
+        "cnpj",
+        "id_processamento",
+        "schema_version",
+        "memoria_calculo_payload",
+        "_memoria_calculo_cache_version",
     },
     "esocial_cnpj_movimentacao_ano": {
         "id_cnpj",
@@ -391,6 +402,7 @@ _BENCH_CRM_BR_PATH = _global_cache_path("bench_crm_br")
 _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH = _global_cache_path("crm_prescricoes_brasil_semestre")
 _DADOS_MEDICO_PARQUET_PATH = _global_cache_path("dados_medico")
 _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH = _global_cache_path("crm_prescritores_global")
+_MEMORIA_CALCULO_GLOBAL_PARQUET_PATH = _global_cache_path("memoria_calculo_global")
 _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH = _global_cache_path("crm_raiox_tx_global")
 _DADOS_FARMACIA_PARQUET_PATH = _global_cache_path("dados_farmacia")
 _DADOS_FARMACIA_CNAES_SECUNDARIOS_PARQUET_PATH = _global_cache_path(
@@ -1007,6 +1019,182 @@ def _sync_crm_prescritores_global(engine, progress_callback=None):
     manifest["final_file"] = os.path.basename(final_path)
     write_manifest(manifest)
     _mark_on_demand_global_cache_ready("crm_prescritores_global", final_path)
+    if progress_callback:
+        progress_callback(100)
+
+
+def _sync_memoria_calculo_global(engine, progress_callback=None):
+    """Sincroniza a memoria de calculo global em partes por prefixo de CNPJ."""
+    print("Sincronizando memoria de calculo global...")
+    schema = _GLOBAL_PARQUET_SCHEMAS["memoria_calculo_global"]
+    final_path = _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH
+    parts_dir = Path(_CACHE_DIR) / ".parts" / "memoria_calculo_global"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = parts_dir / "manifest.json"
+
+    def prefix_key(value: str) -> str:
+        return str(value).zfill(2)
+
+    def part_path(key: str) -> Path:
+        return parts_dir / f"{key}.smod.part"
+
+    def read_manifest() -> dict[str, Any]:
+        if not manifest_path.exists():
+            return {}
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def write_manifest(data: dict[str, Any]) -> None:
+        tmp_path = manifest_path.with_suffix(".json.tmp")
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        os.replace(tmp_path, manifest_path)
+
+    def normalize_payload(value: Any) -> bytes | None:
+        if value is None:
+            return None
+        if isinstance(value, bytes):
+            return value
+        if isinstance(value, bytearray):
+            return bytes(value)
+        if isinstance(value, memoryview):
+            return value.tobytes()
+        return bytes(value)
+
+    with engine.connect() as conn:
+        prefixes_rows = conn.execute(text("""
+            SELECT DISTINCT LEFT(CAST(cnpj AS VARCHAR(14)), 2) AS prefixo
+            FROM temp_CGUSC.fp.memoria_calculo_consolidada
+            WHERE cnpj IS NOT NULL
+              AND memoria_calculo_payload IS NOT NULL
+            ORDER BY prefixo
+        """)).fetchall()
+
+        prefixes = [prefix_key(row[0]) for row in prefixes_rows if row[0] is not None]
+        if not prefixes:
+            raise RuntimeError(
+                "A fonte temp_CGUSC.fp.memoria_calculo_consolidada nao possui dados "
+                "para gerar o cache memoria_calculo_global."
+            )
+
+        manifest = read_manifest()
+        manifest_valid = (
+            manifest.get("cache_key") == "memoria_calculo_global"
+            and manifest.get("version") == MEMORIA_CALCULO_CACHE_VERSION
+            and manifest.get("start_prefix") == prefixes[0]
+            and manifest.get("end_prefix") == prefixes[-1]
+            and manifest.get("status") != "done"
+        )
+        if not manifest_valid:
+            manifest = {
+                "cache_key": "memoria_calculo_global",
+                "version": MEMORIA_CALCULO_CACHE_VERSION,
+                "start_prefix": prefixes[0],
+                "end_prefix": prefixes[-1],
+                "parts": {},
+            }
+            write_manifest(manifest)
+
+        parts = manifest["parts"]
+        if not isinstance(parts, dict):
+            raise RuntimeError("manifesto de memoria_calculo_global com campo parts invalido")
+
+        query = text("""
+            WITH ranked AS (
+                SELECT
+                    CAST(cnpj AS VARCHAR(14)) AS cnpj,
+                    CAST(id_processamento AS BIGINT) AS id_processamento,
+                    CAST(schema_version AS INT) AS schema_version,
+                    memoria_calculo_payload,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY CAST(cnpj AS VARCHAR(14))
+                        ORDER BY id_processamento DESC
+                    ) AS rn
+                FROM temp_CGUSC.fp.memoria_calculo_consolidada
+                WHERE cnpj IS NOT NULL
+                  AND memoria_calculo_payload IS NOT NULL
+                  AND LEFT(CAST(cnpj AS VARCHAR(14)), 2) = :prefixo
+            )
+            SELECT
+                cnpj,
+                id_processamento,
+                schema_version,
+                memoria_calculo_payload
+            FROM ranked
+            WHERE rn = 1
+            ORDER BY cnpj
+        """)
+
+        total_parts = len(prefixes)
+        for index, prefix in enumerate(prefixes, 1):
+            output_path = part_path(prefix)
+            info = parts.get(prefix, {})
+            if info.get("status") == "done" and output_path.exists():
+                if progress_callback:
+                    progress_callback(int((index / total_parts) * 90))
+                continue
+
+            print(f"   -> Memoria calculo global parte {index}/{total_parts}: prefixo {prefix}")
+            pdf = pd.read_sql(query, conn, params={"prefixo": prefix})
+            if pdf.empty:
+                df_part = pl.DataFrame(schema=schema)
+            else:
+                pdf["memoria_calculo_payload"] = pdf["memoria_calculo_payload"].map(normalize_payload)
+                df_part = (
+                    pl.from_pandas(pdf)
+                    .with_columns([
+                        pl.col("cnpj").cast(pl.Utf8),
+                        pl.col("id_processamento").cast(pl.Int64),
+                        pl.col("schema_version").cast(pl.Int32),
+                        pl.col("memoria_calculo_payload").cast(pl.Binary),
+                    ])
+                    .with_columns([
+                        pl.lit(MEMORIA_CALCULO_CACHE_VERSION)
+                        .alias("_memoria_calculo_cache_version"),
+                    ])
+                )
+            df_part = df_part.select(list(schema.keys()))
+
+            tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+            df_part.write_parquet(tmp_path, compression="zstd")
+            os.replace(tmp_path, output_path)
+
+            parts[prefix] = {
+                "status": "done",
+                "rows": df_part.height,
+                "file": output_path.name,
+            }
+            write_manifest(manifest)
+
+            if progress_callback:
+                progress_callback(int((index / total_parts) * 90))
+
+    part_paths = [part_path(prefix) for prefix in prefixes]
+    missing_parts = [path.name for path in part_paths if not path.exists()]
+    if missing_parts:
+        raise RuntimeError(
+            "Partes pendentes para consolidar memoria_calculo_global: "
+            + ", ".join(missing_parts)
+        )
+
+    print("   -> Consolidando memoria calculo global...")
+    final_scan = (
+        pl.scan_parquet([str(path) for path in part_paths])
+        .select(list(schema.keys()))
+    )
+    tmp_final = final_path + ".tmp"
+    final_scan.sink_parquet(tmp_final, compression="zstd")
+    os.replace(tmp_final, final_path)
+
+    manifest["status"] = "done"
+    manifest["final_rows"] = sum(
+        int(info.get("rows", 0))
+        for info in parts.values()
+    )
+    manifest["final_file"] = os.path.basename(final_path)
+    write_manifest(manifest)
+
+    _mark_on_demand_global_cache_ready("memoria_calculo_global", final_path)
     if progress_callback:
         progress_callback(100)
 
@@ -3499,6 +3687,13 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "nu_estabelecimentos",
                 "_crm_prescritores_cache_version",
             },
+            "memoria_calculo_global": {
+                "cnpj",
+                "id_processamento",
+                "schema_version",
+                "memoria_calculo_payload",
+                "_memoria_calculo_cache_version",
+            },
             "esocial_cnpj_ano": {
                 "id_cnpj",
                 "ano_base",
@@ -3696,6 +3891,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _try_mark_on_demand("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)
         _try_mark_on_demand("dados_medico", _DADOS_MEDICO_PARQUET_PATH)
         _try_mark_on_demand("crm_prescritores_global", _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("memoria_calculo_global", _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)
         _try_mark_on_demand("crm_raiox_tx_global", _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)
@@ -3972,6 +4168,12 @@ def scan_crm_prescritores_global() -> pl.LazyFrame:
         _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH,
     )
 
+def scan_memoria_calculo_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "memoria_calculo_global",
+        _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH,
+    )
+
 def scan_esocial_cnpj_movimentacao_ano() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet(
         "esocial_cnpj_movimentacao_ano",
@@ -4019,6 +4221,7 @@ def get_cache_status() -> dict:
         "crm_prescricoes_brasil_semestre": {"label": "CRM Brasil Semestral", "path": _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescricoes_brasil_semestre", _CRM_PRESCRICOES_BRASIL_SEMESTRE_PATH)},
         "dados_medico": {"label": "Dados Medico", "path": _DADOS_MEDICO_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("dados_medico", _DADOS_MEDICO_PARQUET_PATH)},
         "crm_prescritores_global": {"label": "CRM Prescritores Global", "path": _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescritores_global", _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH)},
+        "memoria_calculo_global": {"label": "Memoria Calculo Global", "path": _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("memoria_calculo_global", _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH)},
         "crm_raiox_tx_global": {"label": "CRM Raio-X Global", "path": _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_raiox_tx_global", _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH)},
         "geografico_global": {"label": "CRM Geografico Global", "path": _GEOGRAFICO_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)},
         "crm_concentracao_unico_alertas_global": {"label": "CRM Concentracao Unico Global", "path": _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_concentracao_unico_alertas_global", _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH)},

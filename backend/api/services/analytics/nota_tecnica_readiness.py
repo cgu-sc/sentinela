@@ -55,6 +55,40 @@ def _cnpj_files(cnpj: str, filenames: list[str], cnpj_cache_root: str) -> list[t
     ]
 
 
+def _memoria_calculo_module(cnpj: str, global_files: dict[str, str], cache_dir: str, cnpj_cache_root: str) -> dict[str, Any]:
+    local_display, local_path = _cnpj_files(
+        cnpj,
+        [cache_files.MEMORIA_CALCULO_PARQUET],
+        cnpj_cache_root,
+    )[0]
+    if os.path.exists(local_path):
+        return _module(
+            "memoria_calculo",
+            "Memoria de calculo do CNPJ",
+            [(local_display, local_path)],
+            scope="cnpj",
+        )
+
+    global_candidates = _global_files(
+        ["memoria_calculo_global", "medicamentos"],
+        global_files,
+        cache_dir,
+    )
+    missing = [display for display, path in global_candidates if not os.path.exists(path)]
+    return {
+        "key": "memoria_calculo",
+        "label": "Memoria de calculo do CNPJ",
+        "scope": "cnpj",
+        "required": True,
+        "ready": not missing,
+        "missing_files": missing,
+        "detail": (
+            "Arquivo local ausente; sera derivado do modulo global."
+            if not missing else f"{len(missing)} arquivo(s) ausente(s)."
+        ),
+    }
+
+
 def _document_base_modules() -> list[dict[str, Any]]:
     cache_dir = get_cache_dir()
     global_files = cache_registry.get_global_parquet_files_by_key()
@@ -137,12 +171,7 @@ def _nota_tecnica_modules(cnpj: str) -> list[dict[str, Any]]:
 
     return [
         *_document_base_modules(),
-        _module(
-            "memoria_calculo",
-            "Memoria de calculo do CNPJ",
-            _cnpj_files(cnpj, [cache_files.MEMORIA_CALCULO_PARQUET], cnpj_cache_root),
-            scope="cnpj",
-        ),
+        _memoria_calculo_module(cnpj, global_files, cache_dir, cnpj_cache_root),
         _module(
             "gtin_mensal",
             "Movimentacao mensal por GTIN",

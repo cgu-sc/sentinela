@@ -3,6 +3,7 @@
 MODULE_EXT = ".smod"
 CRM_RAIOX_TX_CACHE_VERSION = 3
 CRM_PRESCRITORES_CACHE_VERSION = 3
+MEMORIA_CALCULO_CACHE_VERSION = 1
 
 
 def _module(name: str) -> str:
@@ -19,6 +20,7 @@ BENCH_CRM_BR_PARQUET = _module("bench_crm_br")
 CRM_PRESCRICOES_BRASIL_SEMESTRE_PARQUET = _module("crm_prescricoes_brasil_semestre")
 DADOS_MEDICO_PARQUET = _module("dados_medico")
 CRM_PRESCRITORES_GLOBAL_PARQUET = _module("crm_prescritores_global")
+MEMORIA_CALCULO_GLOBAL_PARQUET = _module("memoria_calculo_global")
 FARMACIAS_PARQUET = _module("farmacias")
 FARMACIAS_CNAES_SECUNDARIOS_PARQUET = _module("farmacias_cnaes_secundarios")
 PERFIL_ESTABELECIMENTO_PARQUET = _module("perfil_estabelecimento")

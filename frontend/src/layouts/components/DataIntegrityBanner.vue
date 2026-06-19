@@ -13,7 +13,7 @@ const isReady = computed(() => status.value?.is_ready === true);
 const hasCacheError = computed(() => status.value?.status === 'error');
 const missingModules = computed(() => {
   if (!status.value?.modules) return [];
-  return Object.values(status.value.modules).filter((m) => !m.loaded);
+  return Object.values(status.value.modules).filter((m) => !m.loaded && !m.optional);
 });
 
 onMounted(async () => {

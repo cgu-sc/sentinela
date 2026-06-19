@@ -3848,7 +3848,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                     raise ValueError(f"schema antigo sem colunas obrigatorias: {missing_cols}")
                 return df
             except Exception as e:
-                print(f"[ CACHE ] GLOBAL ● {name} ● [AVISO] ERRO DE LEITURA ({e})")
+                print(f"[ CACHE ] GLOBAL - {name} - [AVISO] ERRO DE LEITURA ({e})")
                 missing.append(name)
                 return None
 
@@ -3856,7 +3856,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
             try:
                 _mark_on_demand_global_cache_ready(name, path)
             except Exception as e:
-                print(f"[ CACHE ] GLOBAL ● {name} ● [AVISO] ERRO DE LEITURA ({e})")
+                print(f"[ CACHE ] GLOBAL - {name} - [AVISO] ERRO DE LEITURA ({e})")
                 missing.append(name)
 
         _df_movimentacao    = _try_load("movimentacao",    _PARQUET_PATH)
@@ -4089,7 +4089,7 @@ def get_medicamentos_df() -> pl.DataFrame:
                 _df_medicamentos = pl.read_parquet(_MEDICAMENTOS_PARQUET_PATH)
                 return _df_medicamentos
             except Exception as e:
-                print(f"[ CACHE ] GLOBAL ● medicamentos ● [AVISO] ERRO DE LEITURA ({e})")
+                print(f"[ CACHE ] GLOBAL - medicamentos - [AVISO] ERRO DE LEITURA ({e})")
         raise RuntimeError("Cache de Medicamentos não carregado. Execute uma sincronização.")
     return _df_medicamentos
 
@@ -4210,6 +4210,11 @@ def get_df_par_teia_alvos() -> pl.DataFrame:
 
 def get_cache_status() -> dict:
     """Retorna o estado atual da sincronização para o frontend."""
+    optional_modules = {
+        "crm_prescritores_global",
+        "memoria_calculo_global",
+        "crm_raiox_tx_global",
+    }
     modules = {
         "movimentacao":   {"label": "Movimentação Mensal",     "path": _PARQUET_PATH,             "loaded": _df_movimentacao is not None},
         "localidades":    {"label": "Localidades (IBGE)",      "path": _LOCALIDADES_PARQUET_PATH, "loaded": _df_localidades is not None},
@@ -4262,25 +4267,32 @@ def get_cache_status() -> dict:
         label = str(v["label"])
         loaded = bool(v["loaded"])
         exists = os.path.exists(path)
+        optional = key in optional_modules
         modules_status[key] = {
             "label": label,
             "exists": exists,
             "loaded": loaded,
+            "optional": optional,
             "status": _get_cache_module_status(loaded, exists),
         }
 
     total_modules = len(modules_status)
     loaded_modules = sum(1 for v in modules_status.values() if v["loaded"])
-    unavailable_modules = total_modules - loaded_modules
-    is_ready = all(v["loaded"] for v in modules_status.values())
+    required_modules = [v for v in modules_status.values() if not v["optional"]]
+    total_required_modules = len(required_modules)
+    loaded_required_modules = sum(1 for v in required_modules if v["loaded"])
+    unavailable_modules = total_required_modules - loaded_required_modules
+    is_ready = all(v["loaded"] for v in required_modules)
     return {
         "progress": _cache_progress,
         "status": _cache_status,
         "is_ready": is_ready,
         "loaded_modules": loaded_modules,
         "total_modules": total_modules,
+        "loaded_required_modules": loaded_required_modules,
+        "total_required_modules": total_required_modules,
         "unavailable_modules": unavailable_modules,
-        "modules_summary_label": f"{loaded_modules}/{total_modules} módulos carregados",
+        "modules_summary_label": f"{loaded_required_modules}/{total_required_modules} modulos obrigatorios carregados",
         "error_message": _cache_error_message if _cache_status == "error" else "",
         "modules": modules_status,
     }

@@ -8,6 +8,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   cnpj: { type: String, default: '' },
   indicatorKey: { type: String, default: '' },
+  perfSession: { type: Object, default: null },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -30,6 +31,7 @@ const dialogTitle = computed(() => (
     <IndicatorDetailPanel
       :cnpj="cnpj"
       :indicator-key="indicatorKey"
+      :perf-session="perfSession"
     />
   </Dialog>
 </template>

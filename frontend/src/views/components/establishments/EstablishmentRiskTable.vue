@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
@@ -16,6 +16,7 @@ import Tag from 'primevue/tag';
 import IndicatorDetailDialog from '@/views/components/cnpj/IndicatorDetailDialog.vue';
 import GeographicDispersionDialog from '@/views/components/cnpj/GeographicDispersionDialog.vue';
 import ClinicalIncompatibilityDialog from '@/views/components/cnpj/ClinicalIncompatibilityDialog.vue';
+import { createCnpjPerfSession, logCnpjPerf } from '@/utils/cnpjPerfLogger';
 
 const props = defineProps({
   /** Array de IndicadorCnpjRowSchema */
@@ -51,6 +52,7 @@ const showGeographicDetailDialog = ref(false);
 const showClinicalDetailDialog = ref(false);
 const detailCnpj = ref('');
 const loadingDetailCnpj = ref(null);
+const detailPerfSession = ref(null);
 
 const canShowDetailButton = computed(() => {
   const key = props.indicadorKey;
@@ -59,41 +61,139 @@ const canShowDetailButton = computed(() => {
     || GENERIC_INDICATOR_DETAIL_KEYS.includes(key);
 });
 
+function waitForDialogPaint() {
+  return nextTick().then(() => new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  }));
+}
+
 async function openDetailForRow(cnpj) {
   if (!cnpj || loadingDetailCnpj.value) return;
   const key = props.indicadorKey;
   if (!key) return;
 
   const cleanCnpj = String(cnpj).replace(/\D/g, '');
+  const perfSession = createCnpjPerfSession(cleanCnpj);
+  detailPerfSession.value = perfSession;
   loadingDetailCnpj.value = cleanCnpj;
   detailCnpj.value = cleanCnpj;
 
   const [start, end] = filterStore.periodo ?? [];
   const inicio = start ? toLocalISO(start) : null;
   const fim = end ? toLocalISO(end) : null;
+  const baseDetail = {
+    origem: 'establishments_table',
+    indicador: key,
+    periodo_inicio: inicio,
+    periodo_fim: fim,
+  };
+
+  logCnpjPerf(perfSession, 'indicator_detail_button_clicked', baseDetail);
 
   try {
     if (key === 'dispersao_geografica') {
+      logCnpjPerf(perfSession, 'indicator_detail_requests_started', {
+        ...baseDetail,
+        tipo_modal: 'geografico',
+        chamadas: 2,
+        endpoints: ['geografico/origem-uf', 'geografico/benchmark-local'],
+      });
       await Promise.all([
         cnpjDetailStore.fetchGeograficoOrigemUf(cleanCnpj, inicio, fim),
         cnpjDetailStore.fetchGeograficoBenchmarkLocal(cleanCnpj, inicio, fim),
       ]);
+      logCnpjPerf(perfSession, 'indicator_detail_requests_finished', {
+        ...baseDetail,
+        tipo_modal: 'geografico',
+        chamadas: 2,
+      });
       showGeographicDetailDialog.value = true;
+      logCnpjPerf(perfSession, 'indicator_detail_dialog_state_set', {
+        ...baseDetail,
+        tipo_modal: 'geografico',
+      });
+      await waitForDialogPaint();
+      logCnpjPerf(perfSession, 'indicator_detail_dialog_painted', {
+        ...baseDetail,
+        tipo_modal: 'geografico',
+      });
     } else if (key === 'incompatibilidade_patologica') {
+      logCnpjPerf(perfSession, 'indicator_detail_requests_started', {
+        ...baseDetail,
+        tipo_modal: 'clinico',
+        chamadas: 3,
+        endpoints: [
+          'indicadores/benchmark-local',
+          'indicadores/evolucao-benchmark',
+          'clinico/incompatibilidades',
+        ],
+      });
       await Promise.all([
         cnpjDetailStore.fetchIndicadorBenchmarkLocal(cleanCnpj, key, inicio, fim),
         cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(cleanCnpj, key, inicio, fim),
         cnpjDetailStore.fetchIncompatibilidadePatologica(cleanCnpj, inicio, fim),
       ]);
+      logCnpjPerf(perfSession, 'indicator_detail_requests_finished', {
+        ...baseDetail,
+        tipo_modal: 'clinico',
+        chamadas: 3,
+      });
       showClinicalDetailDialog.value = true;
+      logCnpjPerf(perfSession, 'indicator_detail_dialog_state_set', {
+        ...baseDetail,
+        tipo_modal: 'clinico',
+      });
+      await waitForDialogPaint();
+      logCnpjPerf(perfSession, 'indicator_detail_dialog_painted', {
+        ...baseDetail,
+        tipo_modal: 'clinico',
+      });
     } else if (GENERIC_INDICATOR_DETAIL_KEYS.includes(key)) {
+      logCnpjPerf(perfSession, 'indicator_detail_requests_started', {
+        ...baseDetail,
+        tipo_modal: 'generico',
+        chamadas: 2,
+        endpoints: ['indicadores/benchmark-local', 'indicadores/evolucao-benchmark'],
+      });
       const [b, e] = await Promise.all([
         cnpjDetailStore.fetchIndicadorBenchmarkLocal(cleanCnpj, key, inicio, fim),
         cnpjDetailStore.fetchIndicadorEvolucaoBenchmark(cleanCnpj, key, inicio, fim),
       ]);
-      if (!b || !e) return;
+      logCnpjPerf(perfSession, 'indicator_detail_requests_finished', {
+        ...baseDetail,
+        tipo_modal: 'generico',
+        chamadas: 2,
+        benchmark_ok: Boolean(b),
+        evolucao_ok: Boolean(e),
+      });
+      if (!b || !e) {
+        logCnpjPerf(perfSession, 'indicator_detail_data_unavailable', {
+          ...baseDetail,
+          tipo_modal: 'generico',
+          benchmark_ok: Boolean(b),
+          evolucao_ok: Boolean(e),
+        });
+        return;
+      }
       showGenericDetailDialog.value = true;
+      logCnpjPerf(perfSession, 'indicator_detail_dialog_state_set', {
+        ...baseDetail,
+        tipo_modal: 'generico',
+      });
+      await waitForDialogPaint();
+      logCnpjPerf(perfSession, 'indicator_detail_dialog_painted', {
+        ...baseDetail,
+        tipo_modal: 'generico',
+      });
     }
+  } catch (error) {
+    logCnpjPerf(perfSession, 'indicator_detail_failed', {
+      ...baseDetail,
+      erro: error?.message || String(error),
+    });
+    throw error;
   } finally {
     loadingDetailCnpj.value = null;
   }
@@ -538,6 +638,7 @@ const indicatorColumnHeader = computed(() => {
       v-model="showGenericDetailDialog"
       :cnpj="detailCnpj"
       :indicator-key="indicadorKey"
+      :perf-session="detailPerfSession"
     />
     <GeographicDispersionDialog
       v-if="indicadorKey === 'dispersao_geografica'"

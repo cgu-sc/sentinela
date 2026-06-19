@@ -11,6 +11,7 @@ import { useFilterStore } from '@/stores/filters';
 import { useFormatting } from '@/composables/useFormatting';
 import { INDICATOR_DETAIL_CONFIG } from '@/config/indicatorDetailConfig';
 import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
+import { logCnpjPerf } from '@/utils/cnpjPerfLogger';
 import IndicatorEvolutionChart from './IndicatorEvolutionChart.vue';
 
 const props = defineProps({
@@ -18,6 +19,7 @@ const props = defineProps({
   indicatorKey: { type: String, default: '' },
   showActiveCnpjHeader: { type: Boolean, default: true },
   externalCnpjNavigation: { type: Boolean, default: false },
+  perfSession: { type: Object, default: null },
 });
 
 const emit = defineEmits(['cnpj-selected']);
@@ -107,8 +109,34 @@ const municipioRows = computed(() => benchmarkData.value?.municipio?.rows ?? [])
 const regiaoRows = computed(() => benchmarkData.value?.regiao_saude?.rows ?? []);
 const copiedKey = ref(null);
 const activeCnpjPreview = ref('');
+const activeBenchmarkTab = ref(0);
+const benchmarkVirtualScrollerOptions = {
+  itemSize: 56,
+  delay: 80,
+  showLoader: false,
+};
 const municipioLabel = computed(() => benchmarkData.value?.municipio?.label ?? 'Município');
 const regiaoLabel = computed(() => benchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
+
+function logPanelPerf(event, detail = {}) {
+  if (!props.perfSession) return;
+  logCnpjPerf(props.perfSession, event, {
+    origem: 'indicator_detail_panel',
+    indicador: props.indicatorKey,
+    cnpj_ativo: activeCnpj.value,
+    periodo_inicio: periodoInicio.value,
+    periodo_fim: periodoFim.value,
+    ...detail,
+  });
+}
+
+function waitForPanelPaint() {
+  return nextTick().then(() => new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  }));
+}
 
 const formatValueByType = (value, format) => {
   if (value == null) return '—';
@@ -307,6 +335,31 @@ watch(
   },
   { immediate: true },
 );
+
+watch(
+  () => [displayedRequestKey.value, hasRenderableData.value, municipioRows.value.length, regiaoRows.value.length],
+  async ([key, renderable, municipioCount, regiaoCount]) => {
+    if (!key || !renderable) return;
+    logPanelPerf('indicator_detail_panel_render_ready', {
+      request_key: key,
+      municipio_rows: municipioCount,
+      regiao_rows: regiaoCount,
+    });
+    logPanelPerf('indicator_detail_table_rows_ready', {
+      request_key: key,
+      municipio_rows: municipioCount,
+      regiao_rows: regiaoCount,
+      total_rows: Number(municipioCount || 0) + Number(regiaoCount || 0),
+    });
+    await waitForPanelPaint();
+    logPanelPerf('indicator_detail_panel_painted', {
+      request_key: key,
+      municipio_rows: municipioCount,
+      regiao_rows: regiaoCount,
+    });
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -444,15 +497,17 @@ watch(
             </OverlayPanel>
           </div>
         </div>
-        <TabView class="indicator-benchmark-tabs">
+        <TabView v-model:activeIndex="activeBenchmarkTab" class="indicator-benchmark-tabs">
           <TabPanel header="Município">
             <div class="indicator-scope-label">{{ municipioLabel }}</div>
             <DataTable
+              v-if="activeBenchmarkTab === 0"
               :value="municipioRows"
               :rowClass="rowClass"
               dataKey="cnpj"
               scrollable
               scrollHeight="300px"
+              :virtualScrollerOptions="benchmarkVirtualScrollerOptions"
               class="indicator-table"
               size="small"
               @row-click="selectBenchmarkRow($event.data)"
@@ -558,11 +613,13 @@ watch(
           <TabPanel header="Região de Saúde">
             <div class="indicator-scope-label">{{ regiaoLabel }}</div>
             <DataTable
+              v-if="activeBenchmarkTab === 1"
               :value="regiaoRows"
               :rowClass="rowClass"
               dataKey="cnpj"
               scrollable
               scrollHeight="300px"
+              :virtualScrollerOptions="benchmarkVirtualScrollerOptions"
               class="indicator-table"
               size="small"
               @row-click="selectBenchmarkRow($event.data)"

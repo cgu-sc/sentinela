@@ -335,9 +335,10 @@ const pdfTooltip = computed(() => {
                 type="button"
                 class="cnpj-cadastro-btn-new"
                 @click="openCadastroDialog"
+                v-tooltip.bottom="'Dados Cadastrais'"
+                aria-label="Dados Cadastrais"
               >
                 <i class="pi pi-id-card" />
-                <span>Dados Cadastrais</span>
               </button>
             </div>
             <span
@@ -372,17 +373,6 @@ const pdfTooltip = computed(() => {
 
         <!-- Linha 2: Risco | Status Cadastral -->
         <div class="status-chips-row">
-          <!-- Tipo: Matriz / Filial -->
-          <div
-            class="institution-chip status-secondary"
-            v-tooltip.bottom="'Tipo de estabelecimento'"
-          >
-            <span class="institution-label">Estabelecimento</span>
-            <span class="institution-value">{{
-              cnpjData.is_matriz ? "Matriz" : "Filial"
-            }}</span>
-          </div>
-
           <!-- Grande Rede -->
           <div
             class="institution-chip"
@@ -1028,36 +1018,33 @@ const pdfTooltip = computed(() => {
 .cnpj-cadastro-btn-new {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  width: 34px;
   min-height: 34px;
-  padding: 0.5rem 0.9rem;
+  height: 34px;
+  padding: 0;
   border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, var(--establishment-header-border)) !important;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--primary-color) 8%, var(--establishment-header-bg)),
-    color-mix(in srgb, var(--primary-color) 3%, var(--establishment-header-bg))
-  );
-  color: var(--primary-color);
+  border: 1px solid var(--establishment-header-border) !important;
+  background: var(--establishment-header-bg);
+  color: var(--text-secondary);
   font-family: "Inter", sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  white-space: nowrap;
+  transition: all 0.2s ease-in-out;
+  flex-shrink: 0;
 }
 
 .cnpj-cadastro-btn-new i {
   font-size: 0.85rem;
+  color: var(--text-muted);
   transition: transform 0.2s ease;
 }
 
 .cnpj-cadastro-btn-new:hover {
-  background: color-mix(in srgb, var(--primary-color) 14%, var(--establishment-header-bg));
-  border-color: var(--primary-color) !important;
+  background: var(--establishment-header-bg) !important;
+  border-color: var(--text-muted) !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
 .cnpj-cadastro-btn-new:hover i {

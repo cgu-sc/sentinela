@@ -22,7 +22,7 @@ export function useChartTheme() {
   /** Cores de interface do gráfico (texto, grid, tooltip, fundo). */
   const chartTheme = computed(() => {
     const tokens = themeStore.tokens;
-    const currentThemeKey = ['carbon', 'azul_dark'].includes(themeStore.currentPalette) ? themeStore.currentPalette : 'azul';
+    const currentThemeKey = ['carbon', 'azul_dark'].includes(themeStore.currentPalette) ? themeStore.currentPalette : 'carbon';
     
     // Cores de fundo extraídas nativamente do tema
     const darkTooltipBg = SURFACE_COLORS[currentThemeKey].dark['card-bg'];

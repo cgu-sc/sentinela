@@ -2,13 +2,14 @@
 Sentinela Desktop - PyWebView
 Com sistema de logging profissional em arquivo.
 """
-import threading
 import time
 import sys
 import os
 import socket
 import traceback
 import logging
+import subprocess
+import multiprocessing
 from datetime import datetime
 
 # Determinar diretorio base
@@ -128,23 +129,30 @@ def wait_for_server(port, timeout=30):
     return False
 
 def start_server():
-    """Inicia o FastAPI em background."""
+    """Inicia o FastAPI com Granian no processo atual."""
     logger.info("")
     logger.info("="*40)
     logger.info("INICIANDO SERVIDOR FASTAPI")
     logger.info("="*40)
 
     try:
-        logger.info("Importando uvicorn...")
-        import uvicorn
-        logger.info("  uvicorn OK")
+        logger.info("Importando granian...")
+        from granian import Granian
+        logger.info("  granian OK")
 
-        logger.info("Importando backend.main...")
-        from backend.main import app
+        logger.info("Importando backend.main para validar app...")
+        from backend.main import app  # noqa: F401
         logger.info("  backend.main OK")
 
-        logger.info("Iniciando uvicorn.run() na porta 8002...")
-        uvicorn.run(app, host="127.0.0.1", port=8002, log_level="info")
+        logger.info("Iniciando Granian na porta 8002...")
+        Granian(
+            "backend.main:app",
+            address="127.0.0.1",
+            port=8002,
+            interface="asgi",
+            log_access=True,
+        ).serve()
+        return True
 
     except ImportError as e:
         logger.error(f"ERRO DE IMPORT: {e}")
@@ -152,6 +160,7 @@ def start_server():
         logger.error("")
         logger.error("Traceback completo:")
         logger.error(traceback.format_exc())
+        return False
 
     except Exception as e:
         logger.error(f"ERRO FATAL AO INICIAR SERVIDOR: {type(e).__name__}")
@@ -159,6 +168,48 @@ def start_server():
         logger.error("")
         logger.error("Traceback completo:")
         logger.error(traceback.format_exc())
+        return False
+
+def build_server_command():
+    """Monta o comando do processo servidor para dev e executavel."""
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, "--server"]
+    return [sys.executable, os.path.abspath(__file__), "--server"]
+
+def start_server_process():
+    """Inicia o servidor em processo separado para permitir signals do Granian."""
+    command = build_server_command()
+    logger.info("")
+    logger.info("Iniciando processo servidor:")
+    logger.info(f"  Comando: {' '.join(command)}")
+
+    try:
+        return subprocess.Popen(
+            command,
+            cwd=APP_DIR,
+        )
+    except Exception:
+        logger.error("ERRO ao iniciar processo servidor")
+        logger.error(traceback.format_exc())
+        return None
+
+def stop_server_process(process):
+    """Encerra o processo servidor iniciado pelo desktop."""
+    if process is None:
+        return
+    if process.poll() is not None:
+        logger.info(f"Processo servidor ja encerrado com codigo {process.returncode}")
+        return
+
+    logger.info("Encerrando processo servidor...")
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+        logger.info("Processo servidor encerrado")
+    except subprocess.TimeoutExpired:
+        logger.warning("Servidor nao encerrou no prazo; finalizando processo")
+        process.kill()
+        process.wait(timeout=5)
 
 def main():
     logger.info("")
@@ -177,12 +228,12 @@ def main():
         logger.error(traceback.format_exc())
         return
 
-    # Iniciar servidor em thread
-    logger.info("")
-    logger.info("Criando thread do servidor...")
-    server_thread = threading.Thread(target=start_server, daemon=True)
-    server_thread.start()
-    logger.info("Thread iniciada")
+    # Iniciar servidor em processo separado. Granian precisa registrar signals
+    # na thread principal do processo em que executa.
+    server_process = start_server_process()
+    if server_process is None:
+        logger.error("FALHA: Processo servidor nao iniciou")
+        return
 
     # Aguardar servidor
     if not wait_for_server(8002, timeout=30):
@@ -191,6 +242,7 @@ def main():
         logger.error("FALHA: Servidor nao iniciou!")
         logger.error("="*40)
         logger.error(f"Verifique o log em: {LOG_FILE}")
+        stop_server_process(server_process)
         return
 
     # Abrir janela
@@ -201,7 +253,7 @@ def main():
 
     try:
         logger.info("Criando janela webview...")
-        webview.create_window(
+        window = webview.create_window(
             title="Sentinela",
             url="http://127.0.0.1:8002",
             width=1280,
@@ -209,16 +261,29 @@ def main():
             resizable=True
         )
         logger.info("Janela criada, iniciando webview.start()...")
-        webview.start()
+
+        def maximize_window():
+            logger.info("Maximizando janela")
+            window.maximize()
+
+        webview.start(maximize_window)
         logger.info("webview.start() retornou - aplicacao encerrada")
 
     except Exception as e:
         logger.error(f"ERRO ao criar janela: {e}")
         logger.error(traceback.format_exc())
+    finally:
+        stop_server_process(server_process)
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     try:
-        main()
+        if "--server" in sys.argv:
+            ok = start_server()
+            if not ok:
+                sys.exit(1)
+        else:
+            main()
     except Exception as e:
         logger.critical(f"ERRO FATAL NAO TRATADO: {e}")
         logger.critical(traceback.format_exc())

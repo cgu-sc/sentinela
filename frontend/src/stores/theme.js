@@ -4,7 +4,9 @@ import { THEME_PALETTES as palettes, SURFACE_COLORS } from '@/config/themeConfig
 
 export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(true);
-  const currentPalette = ref('azul'); // 'azul' | 'azul_dark' | 'carbon'
+  const DEFAULT_PALETTE = 'carbon';
+  const AVAILABLE_PALETTES = new Set(['azul_dark', 'carbon']);
+  const currentPalette = ref(DEFAULT_PALETTE); // 'azul_dark' | 'carbon'
 
   // Escalas de cor para cada paleta (shades do PrimeVue lara)
 
@@ -33,12 +35,12 @@ export const useThemeStore = defineStore('theme', () => {
     document.body.classList.toggle('dark-mode', isDark.value);
 
     // Paleta
-    html.classList.toggle('palette-azul',      currentPalette.value === 'azul');
     html.classList.toggle('palette-azul-dark', currentPalette.value === 'azul_dark');
     html.classList.toggle('palette-carbon',    currentPalette.value === 'carbon');
 
     // Sobrescreve as variáveis primárias do PrimeVue lara para os componentes
-    const palette = palettes[currentPalette.value] ?? palettes.azul;
+    const paletteKey = AVAILABLE_PALETTES.has(currentPalette.value) ? currentPalette.value : DEFAULT_PALETTE;
+    const palette = palettes[paletteKey];
     const p = palette.primary;
     html.style.setProperty('--primary-50',         p[50]);
     html.style.setProperty('--primary-100',        p[100]);
@@ -54,7 +56,7 @@ export const useThemeStore = defineStore('theme', () => {
     html.style.setProperty('--primary-color-text', p.text);
 
     // 3. Aplicar Cores de Superfície (Backgrounds/Cards/Textos) para consistência absoluta
-    const themeKey = ['carbon', 'azul_dark'].includes(currentPalette.value) ? currentPalette.value : 'azul';
+    const themeKey = paletteKey;
     const surface = SURFACE_COLORS[themeKey][isDark.value ? 'dark' : 'light'];
     
     Object.keys(surface).forEach(key => {
@@ -84,6 +86,12 @@ export const useThemeStore = defineStore('theme', () => {
   };
 
   const setPalette = (palette) => {
+    if (!AVAILABLE_PALETTES.has(palette)) {
+      currentPalette.value = DEFAULT_PALETTE;
+      localStorage.setItem('sentinela_palette', DEFAULT_PALETTE);
+      applyTheme();
+      return;
+    }
     currentPalette.value = palette;
     localStorage.setItem('sentinela_palette', palette);
     applyTheme();
@@ -105,8 +113,11 @@ export const useThemeStore = defineStore('theme', () => {
       isDark.value = true;
     }
 
-    if (savedPalette) {
+    if (savedPalette && AVAILABLE_PALETTES.has(savedPalette)) {
       currentPalette.value = savedPalette;
+    } else if (savedPalette) {
+      currentPalette.value = DEFAULT_PALETTE;
+      localStorage.setItem('sentinela_palette', DEFAULT_PALETTE);
     }
 
     applyTheme();
@@ -117,8 +128,8 @@ export const useThemeStore = defineStore('theme', () => {
    * Permite que você peça a cor de um card ou texto no JS sem hardcodar o HEX.
    */
   const tokens = computed(() => {
-    const themeKey = ['carbon', 'azul_dark'].includes(currentPalette.value) ? currentPalette.value : 'azul';
-    const palette = palettes[themeKey] ?? palettes.azul;
+    const themeKey = AVAILABLE_PALETTES.has(currentPalette.value) ? currentPalette.value : DEFAULT_PALETTE;
+    const palette = palettes[themeKey];
     const isDarkMode = isDark.value;
     const surface = SURFACE_COLORS[themeKey][isDarkMode ? 'dark' : 'light'];
 

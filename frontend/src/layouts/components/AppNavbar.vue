@@ -150,8 +150,8 @@ function onNavSelect(event) {
         text
         rounded
         severity="secondary"
-        v-tooltip.bottom="'Sincronizar com CGUData'"
-        @click="showConfirmSync = true"
+        disabled
+        v-tooltip.bottom="'Sincronização com CGUData temporariamente indisponível'"
       />
     </div>
   </nav>

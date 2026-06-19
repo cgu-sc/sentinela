@@ -5,106 +5,9 @@
  * Fonte de verdade: colors.js (PALETTE) — os hex abaixo devem referenciar aquela paleta.
  */
 export const SURFACE_COLORS = {
-  azul: {
-    light: {
-      "bg-color": "#ffffff",
-      "bg-gradient": "linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%)",
-      "text-color": "#1e293b",
-      "text-muted": "#64748b",
-      "card-bg": "#ffffff",
-      "sidebar-bg": "#212120",
-      "sidebar-text": "#A1A1AA",
-      "sidebar-border": "rgba(255, 255, 255, 0.1)",
-      "sidebar-input-bg": "rgba(255, 255, 255, 0.06)",
-      "navbar-bg": "#f8fafc",
-      "navbar-text": "#1e293b",
-      "navbar-border": "#e2e8f0",
-      "navbar-text-muted": "#64748b",
-      "navbar-active-bg": "rgba(37, 99, 235, 0.22)",
-      "navbar-glass-opacity": "0.6",
-      "establishment-header-bg": "#f8fafc",
-      "establishment-header-text": "#1e293b",
-      "establishment-header-border": "#e2e8f0",
-      "tabs-bg": "#f8fafc",
-      "tabs-border": "#e2e8f0",
-      "card-border": "#e2e8f0",
-      "table-footer-bg": "#f1f5f9",
-      "table-hover":
-        "color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))",
-      "table-stripe": "#f8fafc",
-      "table-expansion-bg": "#f8fafc",
-      // Risco — tons saturados, legíveis sobre fundo claro
-      "risk-low": "#faa716", // original amber style
-      "risk-medium": "#faa716", // amber-500
-      "risk-high": "#f43f5e", // rose-500
-      "risk-critical": "#be123c", // rose-700
-      "status-success": "#10b981", // emerald-500
-      "risk-indicator-normal": "#10b981", // emerald-500 (mesmo tom do gráfico)
-      "risk-indicator-warning": "#d97706", // amber-600
-      "risk-indicator-critical": "#be123c", // rose-700
-      // Escala Térmica de Óbito (Iniciando em Laranja Suave)
-      "risk-death-0-7d": "#fed7aa",
-      "risk-death-8-15d": "#fdba74",
-      "risk-death-16-30d": "#fb923c",
-      "risk-death-31-60d": "#f97316",
-      "risk-death-61-120d": "#ea580c",
-      "risk-death-121-240d": "#dc2626",
-      "risk-death-241-1y": "#b91c1c",
-      "risk-death-1-2y": "#991b1b",
-      "risk-death-2-3y": "#7f1d1d",
-      "risk-death-over-3y": "#7f1d1d",
-    },
-    dark: {
-      "bg-color": "#0d1117",
-      "bg-gradient":
-        "radial-gradient(circle at 20% 0%, #1c2533 0%, #0d1117 100%)",
-      "text-color": "#e0e5ee",
-      "text-muted": "#8b949e",
-      "card-bg": "#161b22",
-      "sidebar-bg": "#0d1117",
-      "sidebar-text": "#9ca3af",
-      "sidebar-border": "rgba(255, 255, 255, 0.1)",
-      "sidebar-input-bg": "rgba(255, 255, 255, 0.05)",
-      "navbar-bg": "#0d1117",
-      "navbar-text": "#e0e5ee",
-      "navbar-border": "#30363d",
-      "navbar-text-muted": "#8b949e",
-      "navbar-active-bg": "rgba(59, 130, 246, 0.15)",
-      "navbar-glass-opacity": "0.7",
-      "establishment-header-bg": "#161b22",
-      "establishment-header-text": "#e0e5ee",
-      "establishment-header-border": "#30363d",
-      "tabs-bg": "#161b22",
-      "tabs-border": "rgba(255, 255, 255, 0.1)",
-      "card-border": "#444c56",
-      "table-footer-bg": "#1c2128",
-      "table-hover":
-        "color-mix(in srgb, var(--primary-color) 8%, var(--card-bg))",
-      "table-stripe": "#131920",
-      "table-expansion-bg": "#12161c",
-      "risk-low": "#fbbf24",
-      "risk-medium": "#fbbf24",
-      "risk-high": "#f87171",
-      "risk-critical": "#fca5a5",
-      "status-success": "#34d399",
-      "risk-indicator-normal": "#22c55e",
-      "risk-indicator-warning": "#fbbf24",
-      "risk-indicator-critical": "#fb7185",
-      "risk-death-0-7d": "#fdba74",
-      "risk-death-8-15d": "#fb923c",
-      "risk-death-16-30d": "#f97316",
-      "risk-death-31-60d": "#f87171",
-      "risk-death-61-120d": "#ef4444",
-      "risk-death-121-240d": "#dc2626",
-      "risk-death-241-1y": "#b91c1c",
-      "risk-death-1-2y": "#991b1b",
-      "risk-death-2-3y": "#7f1d1d",
-      "risk-death-over-3y": "#7f1d1d",
-    },
-  },
   azul_dark: {
     light: {
-      // Modo light do azul_dark = mesmo que azul padrão
+      // Modo light da paleta azul noturna
       "bg-color": "#ffffff",
       "bg-gradient": "linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%)",
       "text-color": "#1e293b",
@@ -305,27 +208,6 @@ export const SURFACE_COLORS = {
  * Centraliza as cores de destaque e suas variações.
  */
 export const THEME_PALETTES = {
-  azul: {
-    id: "azul",
-    name: "Azul Padrão",
-    description: "Identidade visual clássica do Sentinela",
-    gradient: "linear-gradient(135deg, #3b82f6, #2563eb)",
-    accent: "#3b82f6",
-    primary: {
-      50: "#eff6ff",
-      100: "#dbeafe",
-      200: "#bfdbfe",
-      300: "#93c5fd",
-      400: "#60a5fa",
-      500: "#3b82f6",
-      600: "#2563eb",
-      700: "#1d4ed8",
-      800: "#1e40af",
-      900: "#1e3a8a",
-      color: "#3b82f6",
-      text: "#ffffff",
-    },
-  },
   azul_dark: {
     id: "azul_dark",
     name: "Azul Noturno",

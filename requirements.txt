@@ -18,9 +18,12 @@ mkdocs-mermaid2-plugin>=1.2.1 # Suporte a diagramas Mermaid
 # =============================================================================
 fastapi                       # Framework principal da API
 uvicorn                       # Servidor ASGI para rodar o FastAPI
+granian                       # Servidor ASGI usado no empacotamento desktop com PyWebView
 sqlalchemy                    # Gerenciamento profissional de banco de dados
 pydantic                      # Validação de dados (usado pelo FastAPI)
 httpx                         # Cliente HTTP para testes de integração
 polars                        # Engine columnar in-memory para queries analíticas (Modo 3)
 python-docx                   # Geração de documentos Word (.docx)业务
 loguru                        # Logs estruturados de tempo das requisicoes
+pywebview                     # Wrapper desktop para abrir a SPA em janela nativa
+pyinstaller                   # Empacotamento do app desktop em executavel

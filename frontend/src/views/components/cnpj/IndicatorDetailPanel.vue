@@ -131,6 +131,13 @@ const benchmarkVirtualScrollerOptions = {
 const municipioLabel = computed(() => benchmarkData.value?.municipio?.label ?? 'Município');
 const regiaoLabel = computed(() => benchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
 
+const benchmarkCardTitle = computed(() => {
+  if (activeBenchmarkTab.value === 1) {
+    return `Comparação com estabelecimentos da Região de Saúde ${regiaoLabel.value}`;
+  }
+  return `Comparação com estabelecimentos do Município de ${municipioLabel.value}`;
+});
+
 function logPanelPerf(event, detail = {}) {
   if (!props.perfSession) return;
   logCnpjPerf(props.perfSession, event, {
@@ -439,7 +446,7 @@ watch(
 
       <section class="indicator-benchmark-card">
         <div class="indicator-card-header">
-          <div class="indicator-card-title">Comparação com estabelecimentos do território</div>
+          <div class="indicator-card-title">{{ benchmarkCardTitle }}</div>
           <div v-if="config?.formula && targetRow" class="formula-trigger-row">
             <button
               type="button"
@@ -527,7 +534,6 @@ watch(
         </div>
         <TabView v-model:activeIndex="activeBenchmarkTab" class="indicator-benchmark-tabs">
           <TabPanel header="Município">
-            <div class="indicator-scope-label">{{ municipioLabel }}</div>
             <DataTable
               v-if="activeBenchmarkTab === 0"
               :value="municipioRows"
@@ -639,7 +645,6 @@ watch(
           </TabPanel>
 
           <TabPanel header="Região de Saúde">
-            <div class="indicator-scope-label">{{ regiaoLabel }}</div>
             <DataTable
               v-if="activeBenchmarkTab === 1"
               :value="regiaoRows"

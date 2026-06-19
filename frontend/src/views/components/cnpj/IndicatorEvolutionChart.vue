@@ -216,7 +216,7 @@ const chartOptions = computed(() => ({
       const year = params[0]?.axisValue ?? '';
       const point = seriesData.value.find(item => String(item.ano_base) === String(year));
       const lines = params
-        .filter(item => item.seriesName !== 'Periodo selecionado')
+        .filter(item => item.seriesName !== 'Periodo selecionado' && item.seriesName !== 'Periodo selecionado financeiro')
         .map(item => {
           const isFinancial = item.seriesName === 'Valor com comprovação' || item.seriesName === 'Valor sem comprovação';
           return `${item.marker}${item.seriesName}: <strong>${isFinancial ? formatCurrencyFull(item.value) : formatValue(item.value)}</strong>`;
@@ -330,6 +330,20 @@ const chartOptions = computed(() => ({
       z: 2,
     }),
     ...(hasFinancialSeries.value ? [
+      {
+        name: 'Periodo selecionado financeiro',
+        type: 'line',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: seriesData.value.map(() => null),
+        symbol: 'none',
+        lineStyle: { opacity: 0 },
+        itemStyle: { color: palette.value.mark },
+        tooltip: { show: false },
+        silent: true,
+        markArea: markArea.value,
+        z: 0,
+      },
       {
         name: 'Valor com comprovação',
         type: 'bar',

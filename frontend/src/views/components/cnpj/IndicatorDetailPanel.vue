@@ -779,7 +779,7 @@ watch(
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.45rem;
   min-height: 560px;
 }
 

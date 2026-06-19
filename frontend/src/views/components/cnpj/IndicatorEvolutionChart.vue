@@ -172,14 +172,14 @@ const chartOptions = computed(() => ({
       left: 46,
       right: 24,
       top: 42,
-      height: 190,
+      height: 230,
       containLabel: true,
     },
     {
       left: 46,
       right: 24,
-      top: 250,
-      height: 145,
+      top: 298,
+      height: 195,
       containLabel: true,
     },
   ] : {
@@ -424,7 +424,7 @@ const chartOptions = computed(() => ({
 
 .indicator-evolution-chart {
   width: 100%;
-  height: 420px;
+  height: 500px;
   margin-top: 0.45rem;
 }
 </style>

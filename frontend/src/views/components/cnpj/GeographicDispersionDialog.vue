@@ -155,6 +155,13 @@ const benchmarkRegiaoRows = computed(() => geograficoBenchmarkData.value?.regiao
 const benchmarkMunicipioLabel = computed(() => geograficoBenchmarkData.value?.municipio?.label ?? 'Município');
 const benchmarkRegiaoLabel = computed(() => geograficoBenchmarkData.value?.regiao_saude?.label ?? 'Região de Saúde');
 
+const benchmarkCardTitle = computed(() => {
+  if (activeBenchmarkTab.value === 1) {
+    return `Comparação com estabelecimentos da Região de Saúde ${benchmarkRegiaoLabel.value}`;
+  }
+  return `Comparação com estabelecimentos do Município de ${benchmarkMunicipioLabel.value}`;
+});
+
 const benchmarkErrorMessage = computed(() => geograficoBenchmarkError.value);
 const hasGeoData = computed(() => Boolean(geograficoOrigemUfData.value));
 const hasBenchmarkData = computed(() => Boolean(geograficoBenchmarkData.value));
@@ -464,7 +471,7 @@ const close = () => emit('update:modelValue', false);
         </div>
 
         <section class="geo-benchmark-card">
-          <div class="panel-title">Comparação com estabelecimentos do território</div>
+          <div class="panel-title">{{ benchmarkCardTitle }}</div>
           <div v-if="benchmarkInitialLoading" class="geo-benchmark-state">
             Carregando comparação territorial...
           </div>
@@ -480,7 +487,6 @@ const close = () => emit('update:modelValue', false);
               <template #header>
                 <span>Município</span>
               </template>
-              <div class="geo-scope-label">{{ benchmarkMunicipioLabel }}</div>
               <DataTable
                 v-if="activeBenchmarkTab === 0"
                 :value="benchmarkMunicipioRows"
@@ -542,7 +548,6 @@ const close = () => emit('update:modelValue', false);
               <template #header>
                 <span>Região de Saúde</span>
               </template>
-              <div class="geo-scope-label">{{ benchmarkRegiaoLabel }}</div>
               <DataTable
                 v-if="activeBenchmarkTab === 1"
                 :value="benchmarkRegiaoRows"
@@ -626,7 +631,7 @@ const close = () => emit('update:modelValue', false);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.45rem;
   min-height: 760px;
 }
 

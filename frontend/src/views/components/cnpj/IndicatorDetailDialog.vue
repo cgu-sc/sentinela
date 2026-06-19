@@ -149,4 +149,8 @@ watch(
   background: rgba(245, 158, 11, 0.16);
   outline: none;
 }
+
+:deep(.indicator-detail-dialog .p-dialog-content) {
+  padding-top: 0.55rem;
+}
 </style>

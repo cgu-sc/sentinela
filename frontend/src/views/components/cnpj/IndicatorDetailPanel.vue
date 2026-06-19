@@ -23,7 +23,7 @@ const props = defineProps({
   perfSession: { type: Object, default: null },
 });
 
-const emit = defineEmits(['cnpj-selected']);
+const emit = defineEmits(['cnpj-selected', 'active-cnpj-change']);
 
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
@@ -239,6 +239,17 @@ const activeCnpjTitle = computed(() => {
   return row.razao_social ? `${row.razao_social} (${row.cnpj})` : row.cnpj;
 });
 
+watch(
+  () => [activeCnpjTitle.value, isViewingTargetCnpj.value],
+  ([title, isTarget]) => {
+    emit('active-cnpj-change', {
+      title,
+      isTarget,
+    });
+  },
+  { immediate: true },
+);
+
 const selectedPeriodMemoryRows = computed(() => {
   const series = evolutionData.value?.series ?? [];
   const markedYears = evolutionData.value?.periodo_marcado?.anos ?? [];
@@ -279,6 +290,10 @@ function resetSelectedCnpj() {
   selectedCnpj.value = baseCnpj.value;
   formulaPanel.value?.hide?.();
 }
+
+defineExpose({
+  resetSelectedCnpj,
+});
 
 watch(
   () => [baseCnpj.value, props.indicatorKey],

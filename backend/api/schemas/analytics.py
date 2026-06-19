@@ -372,6 +372,9 @@ class IndicadorEvolucaoBenchmarkPointSchema(BaseModel):
     uf: Optional[float] = None
     valor_numerador: Optional[float] = None
     valor_denominador: Optional[float] = None
+    valor_movimentado: Optional[float] = None
+    valor_sem_comprovacao: Optional[float] = None
+    percentual_nao_comprovacao: Optional[float] = None
 
 
 class IndicadorEvolucaoBenchmarkPeriodoSchema(BaseModel):

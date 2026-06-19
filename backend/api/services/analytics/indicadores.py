@@ -1143,7 +1143,15 @@ def get_indicador_evolucao_benchmark(
         raise RuntimeError("Perfil do CNPJ alvo sem id_cnpj obrigatorio.")
 
     matriz = build_annual_indicator_benchmark_matriz()
-    matriz_required = ["id_cnpj", "ano_base", value_col, med_reg_col, med_uf_col]
+    matriz_required = [
+        "id_cnpj",
+        "ano_base",
+        value_col,
+        med_reg_col,
+        med_uf_col,
+        "valor_total_vendas",
+        "valor_sem_comprovacao",
+    ]
     if display_value_col not in matriz_required:
         matriz_required.append(display_value_col)
     if display_value_col != value_col:
@@ -1214,6 +1222,15 @@ def get_indicador_evolucao_benchmark(
             uf=_optional_float(row.get(display_med_uf_col)),
             valor_numerador=_optional_float(row.get(num_col)) if num_col and num_col in row else None,
             valor_denominador=_optional_float(row.get(den_col)) if den_col and den_col in row else None,
+            valor_movimentado=_optional_float(row.get("valor_total_vendas")),
+            valor_sem_comprovacao=_optional_float(row.get("valor_sem_comprovacao")),
+            percentual_nao_comprovacao=(
+                round((float(row["valor_sem_comprovacao"]) / float(row["valor_total_vendas"])) * 100, 2)
+                if row.get("valor_total_vendas") is not None
+                and row.get("valor_sem_comprovacao") is not None
+                and float(row["valor_total_vendas"]) > 0
+                else None
+            ),
         )
         for row in serie_df.to_dicts()
     ]

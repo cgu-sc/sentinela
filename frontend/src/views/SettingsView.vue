@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, nextTick, onMounted } from 'vue';
 import Dropdown from 'primevue/dropdown';
 import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
@@ -43,6 +43,7 @@ async function saveNotaTecnicaFull() {
 
 async function saveVolumeAtipicoAumentoMinimo() {
   try {
+    await nextTick();
     await metodologiaConfig.saveVolumeAtipicoAumentoMinimo(metodologiaConfig.volumeAtipicoAumentoMinimo);
     toast.add({ severity: 'success', summary: 'Salvo', detail: 'Aumento mínimo atualizado.', life: 3000 });
   } catch (error) {
@@ -52,6 +53,7 @@ async function saveVolumeAtipicoAumentoMinimo() {
 
 async function saveAuditHighValue() {
   try {
+    await nextTick();
     await metodologiaConfig.saveAuditHighValue(metodologiaConfig.auditHighValue);
     toast.add({ severity: 'success', summary: 'Salvo', detail: 'Destaque financeiro atualizado.', life: 3000 });
   } catch (error) {

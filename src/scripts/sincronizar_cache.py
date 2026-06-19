@@ -96,9 +96,39 @@ def _sync_crm_cnpj_unit(cache_key: str, cnpj: str, engine) -> None:
     cache_manager.sync_cnpj_cache(cache_key, cnpj, engine)
 
 
+def _ensure_crm_runtime_caches_loaded() -> None:
+    """Carrega em memoria os caches globais minimos exigidos pelos producers CRM por CNPJ."""
+    import polars as pl
+    import data_cache
+
+    try:
+        data_cache.get_df_perfil_estabelecimento()
+        return
+    except RuntimeError:
+        pass
+
+    perfil_path = data_cache._PERFIL_ESTABELECIMENTO_PARQUET_PATH
+    if not os.path.exists(perfil_path):
+        raise RuntimeError(
+            f"Modulo perfil_estabelecimento ausente em {perfil_path}. "
+            "Sincronize a opcao 18 antes de materializar CRM por CNPJ."
+        )
+
+    df_perfil = pl.read_parquet(perfil_path)
+    required_columns = {"id_cnpj", "cnpj"}
+    missing_columns = sorted(required_columns - set(df_perfil.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "Modulo perfil_estabelecimento sem colunas obrigatorias para CRM por CNPJ: "
+            + ", ".join(missing_columns)
+        )
+
+    data_cache._df_perfil_estabelecimento = df_perfil
+
 
 def _sync_crm_cnpj_completo(engine, progress_callback=None) -> None:
     """Sincroniza somente os modulos CRM ativos por CNPJ."""
+    _ensure_crm_runtime_caches_loaded()
     cnpjs_sync = _buscar_cnpjs_crm(engine)
 
     total = len(cnpjs_sync)
@@ -275,6 +305,8 @@ def _sync_crm_ufs(engine, progress_callback=None) -> None:
             progress_callback(100)
         return
 
+    _ensure_crm_runtime_caches_loaded()
+
     print(f"Encontrados {total} estabelecimentos nas UFs: {', '.join(ufs)}.")
     print(
         "Sincronizando pacote CRM por UF: "
@@ -341,7 +373,6 @@ DEPENDENCIAS_MODULOS = {
     9: {7, 8, 16, 34, 35, 36, 37, 38, 39},
     21: {20},
     23: {22},
-    41: {7, 8, 16, 34, 35, 36, 37, 38, 39},
 }
 
 

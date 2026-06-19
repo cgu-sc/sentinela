@@ -195,10 +195,6 @@ function getModuleTone(module) {
   return 'missing';
 }
 
-function goToMunicipios() {
-  router.push('/municipios');
-}
-
 function getAlertaTooltip(alerta) {
   const qtd = integerFormatter.format(Number(alerta?.qtd_cnpjs ?? 0));
   const template = alertTooltipTemplates[alerta?.tipo];
@@ -394,10 +390,6 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
       <TopUfRiskChart />
       <RiskChart />
     </div>
-    <button type="button" class="floating-start-button" @click="goToMunicipios">
-      <span>Iniciar análise</span>
-      <i class="pi pi-arrow-right" aria-hidden="true" />
-    </button>
   </div>
 </template>
 
@@ -433,55 +425,6 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
   grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.9fr) minmax(0, 0.9fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
-}
-
-.floating-start-button {
-  position: fixed;
-  right: 1.35rem;
-  top: calc(56px + 2.35rem);
-  z-index: 20;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.62rem;
-  min-height: 2.7rem;
-  padding: 0.78rem 1.08rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 44%, transparent);
-  border-radius: 999px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--primary-color) 22%, var(--surface-card)),
-      color-mix(in srgb, var(--primary-color) 10%, var(--surface-card))
-    );
-  box-shadow: 0 14px 34px color-mix(in srgb, var(--primary-color) 18%, transparent);
-  color: var(--text-color-85);
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  transition:
-    transform 0.16s ease,
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    background 0.16s ease;
-}
-
-.floating-start-button:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--primary-color) 68%, transparent);
-  box-shadow: 0 18px 42px color-mix(in srgb, var(--primary-color) 24%, transparent);
-}
-
-.floating-start-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary-color) 46%, transparent);
-  outline-offset: 2px;
-}
-
-.floating-start-button i {
-  font-size: 0.85rem;
-  color: var(--primary-color);
 }
 
 .priority-card {

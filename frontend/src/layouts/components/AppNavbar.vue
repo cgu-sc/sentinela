@@ -22,7 +22,7 @@ const tabs = [
   { label: 'Home', path: '/' },
   { label: 'Municípios', path: '/municipios' },
   { label: 'Estabelecimentos', path: '/estabelecimentos' },
-  { label: 'Alvos', path: '/alvos' },
+  // { label: 'Alvos', path: '/alvos' },
 ];
 
 // Busca rápida por CNPJ ou Razão Social

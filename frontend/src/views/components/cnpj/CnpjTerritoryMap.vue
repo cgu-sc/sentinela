@@ -15,6 +15,11 @@ use([CanvasRenderer, MapChart, TooltipComponent]);
 
 const props = defineProps({
   geoData: { type: Object, required: true },
+  riskClass: {
+    type: String,
+    default: '',
+    validator: (value) => ['', 'risk-low', 'risk-medium', 'risk-high', 'risk-critical'].includes(value),
+  },
 });
 
 const geoStore = useGeoStore();
@@ -63,6 +68,13 @@ const mapName = computed(() =>
   `cnpj-territory-${uf.value}-${String(regiaoId.value).replace(/[^a-zA-Z0-9_-]/g, '-')}`,
 );
 
+const riskCssVariable = computed(() => ({
+  'risk-low': '--risk-low',
+  'risk-medium': '--risk-medium',
+  'risk-high': '--risk-high',
+  'risk-critical': '--risk-critical',
+}[props.riskClass] ?? '--text-muted'));
+
 watch(
   territoryState,
   (state) => {
@@ -77,8 +89,10 @@ const chartOption = computed(() => {
   if (territoryState.value.status !== 'ready') return {};
 
   const isDark = themeStore.isDark;
-  const primary = themeStore.tokens.primary;
   const theme = chartTheme.value;
+  const riskColor = getComputedStyle(document.documentElement)
+    .getPropertyValue(riskCssVariable.value)
+    .trim();
   const neutralArea = isDark ? 'rgba(230, 237, 243, 0.08)' : 'rgba(30, 41, 59, 0.08)';
   const neutralBorder = isDark ? 'rgba(230, 237, 243, 0.28)' : 'rgba(30, 41, 59, 0.24)';
 
@@ -89,8 +103,8 @@ const chartOption = computed(() => {
       name: feature.properties?.name,
       selected,
       itemStyle: {
-        areaColor: selected ? primary : neutralArea,
-        borderColor: selected ? primary : neutralBorder,
+        areaColor: selected ? riskColor : neutralArea,
+        borderColor: selected ? riskColor : neutralBorder,
         borderWidth: selected ? 2.2 : 0.7,
         opacity: selected ? 0.92 : 1,
       },
@@ -154,13 +168,12 @@ const chartOption = computed(() => {
 .territory-card {
   display: flex;
   flex-direction: column;
-  width: 220px;
-  min-width: 220px;
+  width: 180px;
+  min-width: 180px;
   min-height: 146px;
   overflow: hidden;
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  background: var(--establishment-header-bg);
+  border-right: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--text-muted) 3%, var(--establishment-header-bg));
 }
 
 .territory-map {

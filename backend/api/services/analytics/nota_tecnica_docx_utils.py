@@ -1,4 +1,7 @@
 from itertools import count
+import os
+from pathlib import Path
+import sys
 
 from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
 from docx.opc.packuri import PackURI
@@ -10,6 +13,29 @@ from docx.shared import Pt, RGBColor
 
 
 _BOOKMARK_ID_COUNTER = count(1)
+
+
+def _resolve_nota_tecnica_asset(relative_public_path: str) -> str:
+    """Resolve um asset obrigatorio da Nota Tecnica no dev e no executavel."""
+    if not relative_public_path or Path(relative_public_path).is_absolute():
+        raise RuntimeError("Caminho relativo de asset obrigatorio para Nota Tecnica.")
+
+    if getattr(sys, "frozen", False):
+        base_dir = Path(getattr(sys, "_MEIPASS", "")).resolve()
+        asset_path = base_dir / "frontend" / "dist" / relative_public_path
+    else:
+        root_dir = Path(__file__).resolve().parents[4]
+        asset_path = root_dir / "frontend" / "public" / relative_public_path
+
+    if not asset_path.exists():
+        raise FileNotFoundError(f"Asset obrigatorio da Nota Tecnica nao encontrado em {asset_path}")
+
+    return os.fspath(asset_path)
+
+
+def _resolve_brasao_republica_path() -> str:
+    """Resolve o brasao oficial usado na capa e no sumario da Nota Tecnica."""
+    return _resolve_nota_tecnica_asset("img/brasao_republica_mini.jpg")
 
 
 def _add_bookmark(paragraph, name: str):

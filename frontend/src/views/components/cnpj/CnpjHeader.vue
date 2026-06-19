@@ -434,58 +434,61 @@ const pdfTooltip = computed(() => {
       </div>
 
       <div class="header-right-col">
-        <CnpjTerritoryMap
-          v-if="geoData"
-          :geo-data="geoData"
-        />
         <div
           class="risk-context-panel"
           :class="riskPanelClass"
         >
-          <div
-            class="rcp-period"
-            :class="{ 'rcp-period--loading': periodLoading && !filterStore.isAnimating }"
-          >
-            <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
-            <span class="rcp-period-label">Período analisado</span>
-            <span class="rcp-period-value">{{ analysisPeriodLabel }}</span>
-          </div>
-          <div class="rcp-metrics">
-            <div class="rcp-score-row">
-              <div class="rcp-item">
-                <span class="rcp-label">Score de Risco</span>
-                <span class="rcp-value" :class="{ 'rcp-value--neutral': !hasRiskScore }">
-                  {{ riskScoreDisplay }}
-                  <span class="rcp-badge">{{ riskScoreBadge }}</span>
-                </span>
-              </div>
-            </div>
+          <CnpjTerritoryMap
+            v-if="geoData"
+            :geo-data="geoData"
+            :risk-class="riskPanelClass"
+          />
+          <div class="risk-context-content">
             <div
-              class="rcp-progress-wrap"
-              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+              class="rcp-period"
+              :class="{ 'rcp-period--loading': periodLoading && !filterStore.isAnimating }"
             >
-              <div class="rcp-progress-header">
-                <span class="rcp-pct-inline">{{ displayPercValSemComp.toFixed(2) }}% <span class="rcp-pct-label">sem comprovação</span></span>
-              </div>
-              <div class="rcp-progress-track">
-                <div
-                  class="rcp-progress-fill"
-                  :style="{ width: `${Math.min(displayPercValSemComp, 100)}%` }"
-                />
-              </div>
+              <i :class="periodLoading && !filterStore.isAnimating ? 'pi pi-spin pi-spinner' : 'pi pi-calendar'" />
+              <span class="rcp-period-label">Período analisado</span>
+              <span class="rcp-period-value">{{ analysisPeriodLabel }}</span>
             </div>
-            <div
-              class="rcp-financials"
-              :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
-            >
-              <div class="rcp-item">
-                <span class="rcp-label">Sem Comprovação</span>
-                <span class="rcp-value">{{ formatCurrencyFull(displayValSemComp) }}</span>
+            <div class="rcp-metrics">
+              <div class="rcp-score-row">
+                <div class="rcp-item">
+                  <span class="rcp-label">Score de Risco</span>
+                  <span class="rcp-value" :class="{ 'rcp-value--neutral': !hasRiskScore }">
+                    {{ riskScoreDisplay }}
+                    <span class="rcp-badge">{{ riskScoreBadge }}</span>
+                  </span>
+                </div>
               </div>
-              <div class="rcp-divider" />
-              <div class="rcp-item">
-                <span class="rcp-label">Total Movimentado</span>
-                <span class="rcp-value">{{ formatCurrencyFull(displayTotalMov) }}</span>
+              <div
+                class="rcp-progress-wrap"
+                :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+              >
+                <div class="rcp-progress-header">
+                  <span class="rcp-pct-inline">{{ displayPercValSemComp.toFixed(2) }}% <span class="rcp-pct-label">sem comprovação</span></span>
+                </div>
+                <div class="rcp-progress-track">
+                  <div
+                    class="rcp-progress-fill"
+                    :style="{ width: `${Math.min(displayPercValSemComp, 100)}%` }"
+                  />
+                </div>
+              </div>
+              <div
+                class="rcp-financials"
+                :class="{ 'kpi-refreshing': periodLoading && !filterStore.isAnimating }"
+              >
+                <div class="rcp-item">
+                  <span class="rcp-label">Sem Comprovação</span>
+                  <span class="rcp-value">{{ formatCurrencyFull(displayValSemComp) }}</span>
+                </div>
+                <div class="rcp-divider" />
+                <div class="rcp-item">
+                  <span class="rcp-label">Total Movimentado</span>
+                  <span class="rcp-value">{{ formatCurrencyFull(displayTotalMov) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -820,7 +823,7 @@ const pdfTooltip = computed(() => {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 0.75rem;
+  gap: 0;
   flex-shrink: 0;
 }
 
@@ -1649,16 +1652,23 @@ const pdfTooltip = computed(() => {
 /* ── RISK CONTEXT PANEL ─────────────────────────────────── */
 .risk-context-panel {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   flex: 1;
   align-self: stretch;
-  min-width: 390px;
+  min-width: 550px;
   border: 1px solid var(--card-border);
   border-left-width: 3px;
   border-left-color: var(--primary-color);
   border-radius: 10px;
   overflow: hidden;
   transition: border-color 0.3s ease;
+}
+
+.risk-context-content {
+  display: flex;
+  min-width: 390px;
+  flex: 1;
+  flex-direction: column;
 }
 
 .risk-context-panel.risk-high    { border-left-color: var(--risk-high); }

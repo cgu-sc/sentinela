@@ -239,7 +239,17 @@ async function gerarNotaTecnica(item, { skipRegionalCheck = false, dadosNota = {
       );
     }
 
-    await downloadBlobFromResponse(response, `Nota_Tecnica_${item.cnpj}.docx`);
+    const downloadResult = await downloadBlobFromResponse(response, `Nota_Tecnica_${item.cnpj}.docx`);
+    if (downloadResult?.desktop) {
+      toast.add({
+        group: "download",
+        severity: "success",
+        summary: "Nota Técnica salva",
+        detail: `Arquivo salvo em notas_tecnicas\\${downloadResult.filename}.`,
+        life: 12000,
+        data: { path: downloadResult.path },
+      });
+    }
   } catch (error) {
     console.error("Erro ao gerar Nota Técnica:", error);
     toast.add({

@@ -4404,6 +4404,7 @@ def get_cache_status() -> dict:
         "crm_raiox_tx_global",
         "crm_timeline_dia_global",
         "crm_timeline_hora_global",
+        "crm_timeline_eventos_global",
         "crm_concentracao_multiplo_alertas_global",
         "crm_concentracao_unico_alertas_global",
         "movimentacao_mensal_gtin_global",

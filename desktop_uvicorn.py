@@ -5,6 +5,7 @@ Com sistema de logging profissional em arquivo.
 import time
 import sys
 import os
+import base64
 import socket
 import traceback
 import logging
@@ -46,6 +47,61 @@ logger.info(f"Frozen: {getattr(sys, 'frozen', False)}")
 logger.info(f"APP_DIR (onde esta o .exe): {APP_DIR}")
 logger.info(f"BASE_DIR (arquivos internos): {BASE_DIR}")
 logger.info(f"CWD: {os.getcwd()}")
+
+
+NOTAS_TECNICAS_DIR = os.path.join(APP_DIR, "notas_tecnicas")
+
+
+def sanitize_filename(filename):
+    """Remove caracteres invalidos para nomes de arquivo no Windows."""
+    cleaned = "".join("_" if ch in '\\/:*?"<>|' else ch for ch in str(filename or "").strip())
+    return cleaned or "arquivo"
+
+
+def unique_file_path(directory, filename):
+    """Evita sobrescrever arquivos ja existentes."""
+    base, ext = os.path.splitext(filename)
+    path = os.path.join(directory, filename)
+    counter = 2
+    while os.path.exists(path):
+        path = os.path.join(directory, f"{base}_{counter}{ext}")
+        counter += 1
+    return path
+
+
+class DesktopApi:
+    """Ponte nativa para recursos que o WebView nao executa como navegador."""
+
+    def save_file(self, filename, base64_content):
+        safe_filename = sanitize_filename(filename)
+        os.makedirs(NOTAS_TECNICAS_DIR, exist_ok=True)
+        path = unique_file_path(NOTAS_TECNICAS_DIR, safe_filename)
+        try:
+            content = base64.b64decode(str(base64_content or ""), validate=True)
+            with open(path, "wb") as file:
+                file.write(content)
+            logger.info(f"Arquivo salvo via DesktopApi: {path}")
+            return {"ok": True, "filename": os.path.basename(path), "path": path}
+        except Exception as exc:
+            logger.error(f"Erro ao salvar arquivo via DesktopApi: {exc}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(exc)}
+
+    def open_file(self, path):
+        try:
+            target = os.path.abspath(str(path or ""))
+            allowed_root = os.path.abspath(NOTAS_TECNICAS_DIR)
+            if not target.startswith(allowed_root + os.sep):
+                raise RuntimeError("Caminho fora da pasta notas_tecnicas.")
+            if not os.path.exists(target):
+                raise FileNotFoundError(target)
+            os.startfile(target)
+            logger.info(f"Arquivo aberto via DesktopApi: {target}")
+            return {"ok": True}
+        except Exception as exc:
+            logger.error(f"Erro ao abrir arquivo via DesktopApi: {exc}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(exc)}
 
 # Listar arquivos em BASE_DIR
 logger.info("")
@@ -257,7 +313,8 @@ def main():
             url="http://127.0.0.1:8002",
             width=1280,
             height=720,
-            resizable=True
+            resizable=True,
+            js_api=DesktopApi(),
         )
         logger.info("Janela criada, iniciando webview.start()...")
 

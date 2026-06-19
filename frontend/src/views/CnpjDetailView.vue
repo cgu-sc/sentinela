@@ -260,7 +260,17 @@ const downloadNotaTecnica = async (dadosNota = {}) => {
       );
     }
 
-    await downloadBlobFromResponse(response, `Nota_Tecnica_${cnpj.value}.docx`);
+    const downloadResult = await downloadBlobFromResponse(response, `Nota_Tecnica_${cnpj.value}.docx`);
+    if (downloadResult?.desktop) {
+      toast.add({
+        group: "download",
+        severity: "success",
+        summary: "Nota Técnica salva",
+        detail: `Arquivo salvo em notas_tecnicas\\${downloadResult.filename}.`,
+        life: 12000,
+        data: { path: downloadResult.path },
+      });
+    }
   } finally {
     isGeneratingNote.value = false;
   }

@@ -99,6 +99,7 @@ from .nota_tecnica_docx_utils import (
     _cell_bg_run,
     _cell_borders,
     _footnote_ref,
+    _resolve_brasao_republica_path,
     _run,
     _set_table_fixed_widths,
     _tbl_no_borders,
@@ -762,15 +763,9 @@ def generate_nota_tecnica(
     p_brasao = doc.add_paragraph()
     p_brasao.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    # Busca a raiz do projeto (d:\sentinela) a partir deste arquivo (backend/api/services/analytics/nota_tecnica.py)
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-    brasao_path = os.path.join(root_dir, 'frontend', 'public', 'img', 'brasao_republica_mini.jpg')
-    
-    if os.path.exists(brasao_path):
-        p_brasao.add_run().add_picture(brasao_path, width=Inches(1.5))
-    else:
-        # Fallback para debug se não encontrar
-        print(f"⚠️ Alerta: Brasão não encontrado em {brasao_path}")
+    # Resolve o asset no caminho correto para desenvolvimento e executavel.
+    brasao_path = _resolve_brasao_republica_path()
+    p_brasao.add_run().add_picture(brasao_path, width=Inches(1.5))
     
     def add_cover_header_line(text: str, *, size: float, bold: bool, space_after: float = 1):
         p_header = doc.add_paragraph()

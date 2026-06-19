@@ -8,6 +8,7 @@ import { API_ENDPOINTS } from '@/config/api';
 import { TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import Toast from 'primevue/toast';
+import { openDownloadedFile } from '@/utils/download';
 
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
@@ -133,10 +134,42 @@ onBeforeUnmount(() => {
   clearTimeout(_bootTimer);
   clearInterval(_pollTimer);
 });
+
+const openToastFile = async (message) => {
+  const path = message?.data?.path;
+  if (!path) return;
+  try {
+    await openDownloadedFile(path);
+  } catch (error) {
+    console.error('Erro ao abrir arquivo salvo:', error);
+  }
+};
 </script>
 
 <template>
   <Toast />
+  <Toast group="download" position="bottom-right">
+    <template #message="slotProps">
+      <div class="download-toast">
+        <div class="download-toast-icon">
+          <i class="pi pi-file-word" />
+        </div>
+        <div class="download-toast-body">
+          <div class="download-toast-title">{{ slotProps.message.summary }}</div>
+          <div class="download-toast-detail">{{ slotProps.message.detail }}</div>
+          <button
+            v-if="slotProps.message.data?.path"
+            type="button"
+            class="download-toast-action"
+            @click="openToastFile(slotProps.message)"
+          >
+            <i class="pi pi-external-link" />
+            Abrir arquivo
+          </button>
+        </div>
+      </div>
+    </template>
+  </Toast>
 
   <!-- OVERLAY DE CARREGAMENTO GLOBAL -->
   <div v-if="isAppLoading" class="app-boot-overlay">
@@ -479,6 +512,68 @@ onBeforeUnmount(() => {
 .retry-icon {
   width: 16px;
   height: 16px;
+}
+
+.download-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  min-width: 320px;
+  max-width: 440px;
+}
+
+.download-toast-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 28%, transparent);
+  flex: 0 0 auto;
+}
+
+.download-toast-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.download-toast-title {
+  color: var(--text-color-85);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.download-toast-detail {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.download-toast-action {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  color: var(--primary-color);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.download-toast-action:hover {
+  background: color-mix(in srgb, var(--primary-color) 16%, transparent);
 }
 
 @keyframes fadeIn {

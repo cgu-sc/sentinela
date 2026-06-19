@@ -16,7 +16,7 @@ from .nota_tecnica_docx_utils import (
     _set_table_fixed_widths,
     _set_table_open_borders,
 )
-from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
+from .indicator_rules import get_volume_atipico_aumento_minimo
 from .nota_tecnica_formatters import (
     _format_cpf_cnpj,
     _format_decimal_pt,
@@ -336,10 +336,11 @@ def _add_quadro_evolucao_financeira(
         _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
+    limite_aumento_volume_atipico = get_volume_atipico_aumento_minimo()
     for row_idx, item in enumerate(rows_data, start=1):
         cells = table.rows[row_idx].cells
         has_aumento_atipico = item.get("volume_atipico") and item.get("taxa_crescimento_pct") is not None
-        has_sem_comprovacao_relevante = item["irregular"] >= VOLUME_ATIPICO_AUMENTO_MINIMO
+        has_sem_comprovacao_relevante = item["irregular"] >= limite_aumento_volume_atipico
         cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         _run(cells[0].paragraphs[0], item.get("semestre_fmt") or item["semestre"], color='0F172A', size=9)
         for col_idx, key in enumerate(("total", "regular", "irregular"), start=1):

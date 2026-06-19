@@ -27,9 +27,14 @@ class NotaTecnicaPayload(BaseModel):
     nota_tecnica: Dict[str, Any] = Field(default_factory=dict)
 
 
+class MetodologiaPayload(BaseModel):
+    metodologia: Dict[str, Any] = Field(default_factory=dict)
+
+
 class PreferencesSchema(BaseModel):
     schema_version: int = 1
     filters: Dict[str, Any] = Field(default_factory=dict)
     watchlist: List[WatchlistItemSchema] = Field(default_factory=list)
     ui: Dict[str, Any] = Field(default_factory=dict)
     nota_tecnica: Dict[str, Any] = Field(default_factory=dict)
+    metodologia: Dict[str, Any] = Field(default_factory=dict)

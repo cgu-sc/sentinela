@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
+import axios from 'axios';
+import { API_ENDPOINTS } from '@/config/api';
 import { THEME_PALETTES as palettes, SURFACE_COLORS } from '@/config/themeConfig';
 
 export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(true);
   const DEFAULT_PALETTE = 'carbon';
+  const DEFAULT_MODE = 'dark';
   const AVAILABLE_PALETTES = new Set(['azul_dark', 'carbon']);
   const currentPalette = ref(DEFAULT_PALETTE); // 'azul_dark' | 'carbon'
 
@@ -79,22 +82,29 @@ export const useThemeStore = defineStore('theme', () => {
     }, 10);
   };
 
+  const saveThemePreferences = async () => {
+    try {
+      await axios.put(API_ENDPOINTS.preferencesUi, {
+        ui: {
+          themeMode: isDark.value ? 'dark' : 'light',
+          themePalette: currentPalette.value,
+        },
+      });
+    } catch (error) {
+      console.warn('[theme] Falha ao sincronizar tema nas preferencias:', error);
+    }
+  };
+
   const setMode = (mode) => {
     isDark.value = mode === 'dark';
-    localStorage.setItem('sentinela_mode', mode);
     applyTheme();
+    saveThemePreferences();
   };
 
   const setPalette = (palette) => {
-    if (!AVAILABLE_PALETTES.has(palette)) {
-      currentPalette.value = DEFAULT_PALETTE;
-      localStorage.setItem('sentinela_palette', DEFAULT_PALETTE);
-      applyTheme();
-      return;
-    }
-    currentPalette.value = palette;
-    localStorage.setItem('sentinela_palette', palette);
+    currentPalette.value = AVAILABLE_PALETTES.has(palette) ? palette : DEFAULT_PALETTE;
     applyTheme();
+    saveThemePreferences();
   };
 
   // Mantido para compatibilidade com usos anteriores
@@ -102,25 +112,35 @@ export const useThemeStore = defineStore('theme', () => {
     setMode(isDark.value ? 'light' : 'dark');
   };
 
-  const initTheme = () => {
-    const savedMode = localStorage.getItem('sentinela_mode');
-    const savedPalette = localStorage.getItem('sentinela_palette');
-
-    if (savedMode) {
-      isDark.value = savedMode === 'dark';
-    } else {
-      // Se for a primeira vez, o padrão agora é sempre Dark
-      isDark.value = true;
-    }
-
-    if (savedPalette && AVAILABLE_PALETTES.has(savedPalette)) {
-      currentPalette.value = savedPalette;
-    } else if (savedPalette) {
-      currentPalette.value = DEFAULT_PALETTE;
-      localStorage.setItem('sentinela_palette', DEFAULT_PALETTE);
-    }
-
+  const initTheme = async () => {
+    isDark.value = DEFAULT_MODE === 'dark';
+    currentPalette.value = DEFAULT_PALETTE;
     applyTheme();
+
+    try {
+      const { data } = await axios.get(API_ENDPOINTS.preferences);
+      const ui = data?.ui;
+      if (!ui || typeof ui !== 'object') {
+        await saveThemePreferences();
+        return;
+      }
+
+      if (ui.themeMode === 'dark' || ui.themeMode === 'light') {
+        isDark.value = ui.themeMode === 'dark';
+      }
+      if (AVAILABLE_PALETTES.has(ui.themePalette)) {
+        currentPalette.value = ui.themePalette;
+      }
+
+      applyTheme();
+
+      const normalizedMode = isDark.value ? 'dark' : 'light';
+      if (ui.themeMode !== normalizedMode || ui.themePalette !== currentPalette.value) {
+        await saveThemePreferences();
+      }
+    } catch (error) {
+      console.warn('[theme] Usando tema padrao local:', error);
+    }
   };
 
   /**

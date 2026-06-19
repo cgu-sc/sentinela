@@ -145,6 +145,110 @@ def _sync_clinica_anual_completa(engine, progress_callback=None):
         progress_callback(100)
 
 
+def _buscar_cnpjs_por_uf(engine, ufs: list[str]) -> list[str]:
+    """Retorna os CNPJs elegiveis para uma lista de UFs."""
+    with engine.connect() as conn:
+        in_clause = ", ".join(f":uf_{i}" for i in range(len(ufs)))
+        params = {f"uf_{i}": uf for i, uf in enumerate(ufs)}
+        query = text(f"""
+            SELECT DISTINCT F.cnpj
+            FROM temp_CGUSC.fp.matriz_risco_consolidada M
+            INNER JOIN temp_CGUSC.fp.dados_farmacia F
+                ON F.id = M.id_cnpj
+            WHERE F.uf IN ({in_clause})
+            ORDER BY F.cnpj
+        """)
+        res = conn.execute(query, params)
+        return [str(r[0]).strip() for r in res if str(r[0]).strip()]
+
+
+def _sync_memoria_calculo_ufs(engine, progress_callback=None) -> None:
+    """Sincroniza o modulo memoria_calculo para CNPJs de UFs especificas."""
+    print()
+    entrada = input("Digite as UFs desejadas separadas por virgula (ex: SC, RJ) ou ENTER para pular: ").strip().upper()
+    if not entrada:
+        print("Operacao cancelada (nenhuma UF informada).")
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    ufs = [uf.strip() for uf in entrada.split(",") if uf.strip()]
+    cnpjs_sync = _buscar_cnpjs_por_uf(engine, ufs)
+
+    total = len(cnpjs_sync)
+    if total == 0:
+        print(f"Nenhum CNPJ elegivel encontrado para as UFs: {', '.join(ufs)}.")
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    print(f"Encontrados {total} estabelecimentos nas UFs: {', '.join(ufs)}.")
+    
+    import os
+    import polars as pl
+    from data_cache import scan_memoria_calculo_global
+    from cache_producers.farmacia import (
+        _decode_memoria_payload,
+        _load_medicamentos_map_from_cache,
+        _build_memoria_calculo_df,
+        _global_cache_path,
+        _cache_path
+    )
+    from cache_files import MEMORIA_CALCULO_CACHE_VERSION
+    
+    global_path = _global_cache_path()
+    if not os.path.exists(global_path):
+        print(f"Erro: O cache global {global_path} não existe. Execute a opção 21 primeiro.")
+        if progress_callback: progress_callback(100)
+        return
+
+    print("Lendo cache global...")
+    df_global = (
+        scan_memoria_calculo_global()
+        .filter(pl.col("cnpj").is_in(cnpjs_sync))
+        .select(["cnpj", "memoria_calculo_payload", "_memoria_calculo_cache_version"])
+        .collect()
+    )
+    
+    if df_global.is_empty():
+        print("Nenhum payload encontrado no cache global para esses CNPJs.")
+        if progress_callback: progress_callback(100)
+        return
+
+    print("Carregando mapa de medicamentos...")
+    medicamentos_map = _load_medicamentos_map_from_cache()
+
+    print("Processando e salvando parquet por CNPJ...")
+    step = 0
+    total_found = df_global.height
+    
+    for row in df_global.iter_rows(named=True):
+        cnpj = row["cnpj"]
+        version = int(row["_memoria_calculo_cache_version"] or 0)
+        
+        if version < MEMORIA_CALCULO_CACHE_VERSION:
+            print(f"\n[AVISO] {cnpj} ignorado. Versao do cache global ({version}) inferior a {MEMORIA_CALCULO_CACHE_VERSION}.")
+            continue
+            
+        payload = row["memoria_calculo_payload"]
+        try:
+            dados = _decode_memoria_payload(payload)
+            df_result = _build_memoria_calculo_df(dados, medicamentos_map)
+            
+            if not df_result.is_empty():
+                cache_path = _cache_path(cnpj)
+                df_result.write_parquet(cache_path, compression="zstd")
+        except Exception as e:
+            print(f"\n[AVISO] Erro ao processar memoria de calculo para {cnpj}: {e}")
+            
+        step += 1
+        if progress_callback:
+            progress_callback(int((step / total_found) * 100))
+
+    if progress_callback:
+        progress_callback(100)
+
+
 MODULOS = sorted([
     {"id": 1, "name": "Localidades", "func": _sync_localidades, "peso": "rapido", "ordem": 1},
     {"id": 2, "name": "Rede", "func": _sync_rede, "peso": "rapido", "ordem": 2},
@@ -179,6 +283,7 @@ MODULOS = sorted([
     {"id": 37, "name": "CRM Dia Global", "func": _sync_crm_timeline_dia_global, "peso": "pesado", "ordem": 37},
     {"id": 38, "name": "CRM Hora Global", "func": _sync_crm_timeline_hora_global, "peso": "pesado", "ordem": 38},
     {"id": 39, "name": "CRM Eventos Global", "func": _sync_crm_timeline_eventos_global, "peso": "pesado", "ordem": 39},
+    {"id": 40, "name": "Mem. Calc. por UF", "func": _sync_memoria_calculo_ufs, "peso": "pesado", "ordem": 40},
 ], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {

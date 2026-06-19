@@ -188,6 +188,17 @@ function onNavSelect(event) {
   flex-shrink: 0;
 }
 
+.nav-actions :deep(.p-button:focus),
+.nav-actions :deep(.p-button:active) {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.nav-actions :deep(.p-button:focus-visible) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color-85) 16%, transparent) !important;
+  outline: none !important;
+}
+
 .nav-left {
   display: flex;
   align-items: center;
@@ -451,6 +462,17 @@ function onNavSelect(event) {
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.15s ease;
+}
+
+.lists-nav-btn:focus,
+.lists-nav-btn:active {
+  outline: none;
+  box-shadow: none;
+}
+
+.lists-nav-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color-85) 16%, transparent);
 }
 
 .lists-nav-btn:hover {

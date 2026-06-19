@@ -3,12 +3,25 @@ from typing import Any
 
 from ..schemas.preferences import (
     FiltersPayload,
+    MetodologiaPayload,
     NotaTecnicaPayload,
     PreferencesSchema,
     UiPayload,
     WatchlistPayload,
 )
 from ..services.preferences import PreferencesService
+from ..services.analytics.indicator_rules import (
+    DEFAULT_AUDIT_HIGH_VALUE,
+    DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
+    MAX_AUDIT_HIGH_VALUE,
+    MAX_VOLUME_ATIPICO_AUMENTO_MINIMO,
+    MIN_AUDIT_HIGH_VALUE,
+    MIN_VOLUME_ATIPICO_AUMENTO_MINIMO,
+    get_audit_high_value,
+    get_volume_atipico_aumento_minimo,
+    normalize_audit_high_value,
+    normalize_volume_atipico_aumento_minimo,
+)
 from ..services.analytics.nota_tecnica_regionais import resolve_nota_tecnica_regional
 
 router = APIRouter()
@@ -75,6 +88,59 @@ def save_nota_tecnica(payload: NotaTecnicaPayload):
         payload.nota_tecnica.get("assinantes_tecnicos")
     )
     return PreferencesService.update_nota_tecnica(payload.nota_tecnica)
+
+
+def _metodologia_response() -> dict[str, Any]:
+    return {
+        "audit_high_value": get_audit_high_value(),
+        "volume_atipico_aumento_minimo": get_volume_atipico_aumento_minimo(),
+        "defaults": {
+            "audit_high_value": DEFAULT_AUDIT_HIGH_VALUE,
+            "volume_atipico_aumento_minimo": DEFAULT_VOLUME_ATIPICO_AUMENTO_MINIMO,
+        },
+        "limits": {
+            "audit_high_value": {
+                "min": MIN_AUDIT_HIGH_VALUE,
+                "max": MAX_AUDIT_HIGH_VALUE,
+            },
+            "volume_atipico_aumento_minimo": {
+                "min": MIN_VOLUME_ATIPICO_AUMENTO_MINIMO,
+                "max": MAX_VOLUME_ATIPICO_AUMENTO_MINIMO,
+            },
+        },
+    }
+
+
+@router.get("/metodologia")
+def get_metodologia():
+    return _metodologia_response()
+
+
+@router.put("/metodologia")
+def save_metodologia(payload: MetodologiaPayload):
+    required_fields = {"audit_high_value", "volume_atipico_aumento_minimo"}
+    missing_fields = required_fields - set(payload.metodologia.keys())
+    if missing_fields:
+        raise HTTPException(
+            status_code=422,
+            detail="Configuracao metodologica incompleta: " + ", ".join(sorted(missing_fields)),
+        )
+
+    try:
+        volume_atipico_aumento_minimo = normalize_volume_atipico_aumento_minimo(
+            payload.metodologia.get("volume_atipico_aumento_minimo")
+        )
+        audit_high_value = normalize_audit_high_value(
+            payload.metodologia.get("audit_high_value")
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    PreferencesService.update_metodologia({
+        "audit_high_value": audit_high_value,
+        "volume_atipico_aumento_minimo": volume_atipico_aumento_minimo,
+    })
+    return _metodologia_response()
 
 
 

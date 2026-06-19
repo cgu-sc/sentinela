@@ -22,6 +22,7 @@ const {
 } = storeToRefs(riskIndicatorsStore);
 const { fetchRiskIndicator, fetchRiskIndicatorEstablishmentsPage } = useRiskIndicatorAnalysis();
 useFetchAnalytics({ includeFatorRisco: false, includeNationalContext: false });
+riskIndicatorsStore.loadPreferences();
 
 // Metadados do indicador ativo (label, formato, metodologia)
 const activeRiskIndicatorMeta = computed(() => {

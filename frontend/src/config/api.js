@@ -79,5 +79,6 @@ export const API_ENDPOINTS = {
   preferencesWatchlist: `${BASE_URL}/api/v1/preferences/watchlist`,
   preferencesUi: `${BASE_URL}/api/v1/preferences/ui`,
   preferencesNotaTecnica: `${BASE_URL}/api/v1/preferences/nota-tecnica`,
+  preferencesMetodologia: `${BASE_URL}/api/v1/preferences/metodologia`,
 };
 

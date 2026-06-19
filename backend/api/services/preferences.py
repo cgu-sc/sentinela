@@ -87,6 +87,7 @@ class PreferencesService:
             "watchlist": [],
             "ui": {},
             "nota_tecnica": {},
+            "metodologia": {},
         }
 
     @classmethod
@@ -117,6 +118,7 @@ class PreferencesService:
         normalized["watchlist"] = data.get("watchlist") if isinstance(data.get("watchlist"), list) else []
         normalized["ui"] = data.get("ui") if isinstance(data.get("ui"), dict) else {}
         normalized["nota_tecnica"] = data.get("nota_tecnica") if isinstance(data.get("nota_tecnica"), dict) else {}
+        normalized["metodologia"] = data.get("metodologia") if isinstance(data.get("metodologia"), dict) else {}
         return normalized
 
     @classmethod
@@ -210,11 +212,19 @@ class PreferencesService:
     @classmethod
     def update_ui(cls, ui: Dict[str, Any]) -> Dict[str, Any]:
         data = cls.read()
-        data["ui"] = ui
+        current_ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+        data["ui"] = {**current_ui, **ui}
         return cls.write(data)
 
     @classmethod
     def update_nota_tecnica(cls, nota_tecnica: Dict[str, Any]) -> Dict[str, Any]:
         data = cls.read()
         data["nota_tecnica"] = nota_tecnica
+        return cls.write(data)
+
+    @classmethod
+    def update_metodologia(cls, metodologia: Dict[str, Any]) -> Dict[str, Any]:
+        data = cls.read()
+        current_metodologia = data.get("metodologia") if isinstance(data.get("metodologia"), dict) else {}
+        data["metodologia"] = {**current_metodologia, **metodologia}
         return cls.write(data)

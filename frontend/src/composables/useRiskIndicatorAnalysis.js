@@ -31,8 +31,10 @@ export function useRiskIndicatorAnalysis() {
   }
 
   watch(
-    () => filterStore.indicadoresTabelaApiParamsKey,
+    () => [filterStore.indicadoresTabelaApiParamsKey, riskIndicatorsStore.preferencesLoaded],
     () => {
+      if (!riskIndicatorsStore.preferencesLoaded) return;
+
       const run = () => {
         if (riskIndicatorsStore.selectedRiskIndicator) {
           fetchRiskIndicator(riskIndicatorsStore.selectedRiskIndicator);

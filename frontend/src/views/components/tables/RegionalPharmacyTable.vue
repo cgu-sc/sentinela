@@ -6,8 +6,9 @@
  * espelhando a lógica da coluna "Classificação" do relatório Excel (aba_regiao.py).
  * A coluna "Conexão" usa o campo `conexao_ms` já presente no backend.
  */
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useMetodologiaConfigStore } from '@/stores/metodologiaConfig';
 import { useFormatting } from '@/composables/useFormatting';
 import { RISK_THRESHOLDS, RISK_CSS_CLASSES, AUDIT_THRESHOLDS } from '@/config/riskConfig';
 import DataTable from 'primevue/datatable';
@@ -26,7 +27,19 @@ const props = defineProps({
 });
 
 const router = useRouter();
+const metodologiaConfig = useMetodologiaConfigStore();
 const { formatBRL, formatPercent, formatTitleCase } = useFormatting();
+const auditHighValue = computed(() =>
+  metodologiaConfig.loaded
+    ? metodologiaConfig.auditHighValue
+    : AUDIT_THRESHOLDS.HIGH_VALUE,
+);
+
+onMounted(() => {
+  metodologiaConfig.ensureLoaded().catch((error) => {
+    console.warn('[RegionalPharmacyTable] Não foi possível carregar a configuração metodológica.', error);
+  });
+});
 
 const goToDetail = (event) => {
   // Gera o link para o CNPJ clicado e abre em uma nova aba (mais prático para comparação)
@@ -161,7 +174,7 @@ const totals = computed(() => {
       </Column>
       <Column field="valSemComp" header="Valor s/ Comp." sortable style="width: 10%" bodyStyle="text-align:right" footerStyle="text-align: right">
         <template #body="{ data }">
-          <span :class="{ 'high-value-audit': data.valSemComp >= AUDIT_THRESHOLDS.HIGH_VALUE }">
+          <span :class="{ 'high-value-audit': data.valSemComp >= auditHighValue }">
             {{ formatBRL(data.valSemComp) }}
           </span>
         </template>

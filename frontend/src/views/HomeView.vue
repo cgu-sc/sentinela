@@ -6,6 +6,7 @@ import { useFetchAnalytics } from '@/composables/useFetchAnalytics';
 import { useAnalyticsStore } from '@/stores/analytics';
 import { useFilterStore } from '@/stores/filters';
 import { useGeoStore } from '@/stores/geo';
+import { useMetodologiaConfigStore } from '@/stores/metodologiaConfig';
 import RiskChart from './components/charts/RiskChart.vue';
 import BrazilMap from './components/maps/BrazilMap.vue';
 import TopUfRiskChart from './components/charts/TopUfRiskChart.vue';
@@ -14,6 +15,7 @@ import SemesterProductionChart from './components/charts/SemesterProductionChart
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
 const geoStore = useGeoStore();
+const metodologiaConfig = useMetodologiaConfigStore();
 const router = useRouter();
 const {
   enrichedKpis,
@@ -30,6 +32,9 @@ useFetchAnalytics({ includeFatorRisco: true, includeProducaoSemestral: true, inc
 
 onMounted(() => {
   analyticsStore.fetchCacheStatus();
+  metodologiaConfig.ensureLoaded().catch((error) => {
+    console.warn('[HomeView] Não foi possível carregar a configuração metodológica.', error);
+  });
 });
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -49,9 +54,15 @@ const integerFormatter = new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 0,
 });
 
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+});
+
 const alertTooltipTemplates = {
   volume_atipico:
-    '{qtd} estabelecimentos apresentaram crescimento semestral superior a 50%, com aumento absoluto mínimo de R$ 10 mil, em pelo menos um semestre comparável no período selecionado.',
+    '{qtd} estabelecimentos apresentaram crescimento semestral superior a 50%, com aumento absoluto mínimo de {aumento_minimo}, em pelo menos um semestre comparável no período selecionado.',
   cnpj_dispersao_uf_nao_vizinha:
     '{qtd} estabelecimentos tiveram mais de 5% do valor autorizado associado a beneficiários residentes em UFs que não fazem fronteira com a UF da farmácia, no período selecionado.',
   cnpj_cnae_farmacia_ausente:
@@ -197,11 +208,16 @@ function getModuleTone(module) {
 
 function getAlertaTooltip(alerta) {
   const qtd = integerFormatter.format(Number(alerta?.qtd_cnpjs ?? 0));
+  const aumentoMinimo = metodologiaConfig.loaded
+    ? currencyFormatter.format(Number(metodologiaConfig.volumeAtipicoAumentoMinimo))
+    : 'valor configurado';
   const template = alertTooltipTemplates[alerta?.tipo];
   if (!template) {
     throw new Error(`Tooltip do alerta de integridade não configurado: ${alerta?.tipo}`);
   }
-  return template.replace('{qtd}', qtd);
+  return template
+    .replace('{qtd}', qtd)
+    .replace('{aumento_minimo}', aumentoMinimo);
 }
 
 const displayAlertasPanorama = computed(() => {

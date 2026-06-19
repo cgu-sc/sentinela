@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useMetodologiaConfigStore } from '@/stores/metodologiaConfig';
 import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
@@ -24,9 +25,15 @@ const props = defineProps({
 
 const emit = defineEmits(['lazy-load', 'open-incompatibility']);
 const router = useRouter();
+const metodologiaConfig = useMetodologiaConfigStore();
 const { formatCurrencyFull, formatTitleCase } = useFormatting();
 const { conexaoMsClass } = useStatusClass();
 const copiedKey = ref(null);
+const auditHighValue = computed(() =>
+  metodologiaConfig.loaded
+    ? metodologiaConfig.auditHighValue
+    : AUDIT_THRESHOLDS.HIGH_VALUE,
+);
 const loadingRef = computed(() => props.loading);
 const tableSnapshot = useFrozenData(
   () => ({
@@ -39,6 +46,12 @@ const tableSnapshot = useFrozenData(
   }),
   loadingRef,
 );
+
+onMounted(() => {
+  metodologiaConfig.ensureLoaded().catch((error) => {
+    console.warn('[ClinicalTargetTable] Não foi possível carregar a configuração metodológica.', error);
+  });
+});
 
 function formatInteger(value) {
   if (value == null) return '—';
@@ -178,7 +191,7 @@ function openIncompatibilityDialog(event, cnpj) {
           <div class="metric-stack align-right">
             <span
               class="metric-main"
-              :class="{ 'high-value-audit': data.valor_incompativel >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+              :class="{ 'high-value-audit': data.valor_incompativel >= auditHighValue }"
             >{{ formatCurrencyFull(data.valor_incompativel) }}</span>
             <span class="metric-sub">Part. Município {{ formatPercent(data.participacao_municipio) }}</span>
           </div>

@@ -1,8 +1,9 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFilterStore } from '@/stores/filters';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
+import { useMetodologiaConfigStore } from '@/stores/metodologiaConfig';
 import { useFrozenData } from '@/composables/useFrozenData';
 import { useFormatting } from '@/composables/useFormatting';
 import { useStatusClass } from '@/composables/useStatusClass';
@@ -38,6 +39,18 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['lazy-load', 'clear-regiao-filter', 'clear-municipio-filter']);
+const metodologiaConfig = useMetodologiaConfigStore();
+const auditHighValue = computed(() =>
+  metodologiaConfig.loaded
+    ? metodologiaConfig.auditHighValue
+    : AUDIT_THRESHOLDS.HIGH_VALUE,
+);
+
+onMounted(() => {
+  metodologiaConfig.ensureLoaded().catch((error) => {
+    console.warn('[EstablishmentRiskTable] Não foi possível carregar a configuração metodológica.', error);
+  });
+});
 
 const router = useRouter();
 const filterStore = useFilterStore();
@@ -528,7 +541,7 @@ const indicatorColumnHeader = computed(() => {
           <div class="noncomp-cell" :class="{ muted: data.val_sem_comp == null }">
             <span
               class="noncomp-value"
-              :class="{ 'high-value-audit': data.val_sem_comp >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+              :class="{ 'high-value-audit': data.val_sem_comp >= auditHighValue }"
               v-tooltip.top="data.val_sem_comp != null ? formatCurrencyFull(data.val_sem_comp) : null"
             >
               {{ formatCurrencyCompact(data.val_sem_comp) }}

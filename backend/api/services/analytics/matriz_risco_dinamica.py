@@ -23,7 +23,7 @@ from .indicator_rules import (
     FALECIDOS_VALOR_LIMITE_ATENCAO,
     NAO_COMPROVACAO_PCT_ATENCAO,
     NAO_COMPROVACAO_PCT_CRITICO,
-    VOLUME_ATIPICO_AUMENTO_MINIMO,
+    get_volume_atipico_aumento_minimo,
 )
 
 
@@ -233,6 +233,7 @@ def _compute_dynamic_matriz_risco(
         matriz = matriz.filter(pl.col("ano_base") <= ano_fim)
     if matriz.is_empty():
         return pl.DataFrame()
+    volume_atipico_aumento_minimo = get_volume_atipico_aumento_minimo()
 
     missing_cols = _MATRIX_COMPONENT_COLUMNS - set(matriz.columns)
     if missing_cols:
@@ -433,12 +434,12 @@ def _compute_dynamic_matriz_risco(
                 zero_baseline_condition
                 & pl.col("volume_atipico_valor_aumento_atipico").is_not_null()
                 & (pl.col("volume_atipico_valor_aumento_atipico") > 0)
-                & (pl.col("volume_atipico_valor_aumento_atipico") < VOLUME_ATIPICO_AUMENTO_MINIMO)
+                & (pl.col("volume_atipico_valor_aumento_atipico") < volume_atipico_aumento_minimo)
             )
             zero_baseline_critical_condition = (
                 zero_baseline_condition
                 & pl.col("volume_atipico_valor_aumento_atipico").is_not_null()
-                & (pl.col("volume_atipico_valor_aumento_atipico") >= VOLUME_ATIPICO_AUMENTO_MINIMO)
+                & (pl.col("volume_atipico_valor_aumento_atipico") >= volume_atipico_aumento_minimo)
             )
         else:
             zero_baseline_attention_condition = pl.lit(False)
@@ -653,10 +654,12 @@ def build_dynamic_matriz_risco(
         return _compute_dynamic_matriz_risco(data_inicio=data_inicio, data_fim=data_fim, perfil_df=perfil_df)
 
     ano_inicio, ano_fim = _period_year_bounds(data_inicio, data_fim)
+    volume_atipico_aumento_minimo = get_volume_atipico_aumento_minimo()
     cache_key = (
         get_cache_generation(),
         ano_inicio,
         ano_fim,
+        volume_atipico_aumento_minimo,
     )
     now = time.monotonic()
     with _DYNAMIC_CACHE_LOCK:

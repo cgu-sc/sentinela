@@ -162,6 +162,40 @@
 .p-dialog-header-icon {
   color: var(--text-color-85) !important;
 }
+
+.p-dialog .p-dialog-header-close {
+  width: 2rem !important;
+  height: 2rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease !important;
+}
+
+.p-dialog .p-dialog-header-close:hover {
+  border-color: color-mix(in srgb, var(--text-color-85) 18%, transparent) !important;
+  background: color-mix(in srgb, var(--text-color-85) 7%, var(--card-bg)) !important;
+  color: var(--text-color-85) !important;
+  transform: translateY(-1px);
+}
+
+.p-dialog .p-dialog-header-close:focus,
+.p-dialog .p-dialog-header-close:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.p-dialog .p-dialog-header-close:focus-visible {
+  border-color: color-mix(in srgb, var(--text-color-85) 28%, transparent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color-85) 14%, transparent) !important;
+}
+
 .p-dialog .p-button-label {
   font-weight: 700;
 }

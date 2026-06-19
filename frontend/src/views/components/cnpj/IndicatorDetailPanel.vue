@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -8,6 +8,7 @@ import TabPanel from 'primevue/tabpanel';
 import OverlayPanel from 'primevue/overlaypanel';
 import { useCnpjDetailStore } from '@/stores/cnpjDetail';
 import { useFilterStore } from '@/stores/filters';
+import { useMetodologiaConfigStore } from '@/stores/metodologiaConfig';
 import { useFormatting } from '@/composables/useFormatting';
 import { INDICATOR_DETAIL_CONFIG } from '@/config/indicatorDetailConfig';
 import { AUDIT_THRESHOLDS } from '@/config/riskConfig';
@@ -26,6 +27,7 @@ const emit = defineEmits(['cnpj-selected']);
 
 const cnpjDetailStore = useCnpjDetailStore();
 const filterStore = useFilterStore();
+const metodologiaConfig = useMetodologiaConfigStore();
 const {
   indicadorBenchmarkDataByKey,
   indicadorBenchmarkLoadingByKey,
@@ -41,6 +43,17 @@ const {
   formatPercent,
   toLocalISO,
 } = useFormatting();
+const auditHighValue = computed(() =>
+  metodologiaConfig.loaded
+    ? metodologiaConfig.auditHighValue
+    : AUDIT_THRESHOLDS.HIGH_VALUE,
+);
+
+onMounted(() => {
+  metodologiaConfig.ensureLoaded().catch((error) => {
+    console.warn('[IndicatorDetailPanel] Não foi possível carregar a configuração metodológica.', error);
+  });
+});
 
 const config = computed(() => INDICATOR_DETAIL_CONFIG[props.indicatorKey] ?? null);
 
@@ -589,7 +602,7 @@ watch(
                   <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
                     <span
                       class="noncomp-value"
-                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= auditHighValue }"
                       v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
                     >
                       {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
@@ -701,7 +714,7 @@ watch(
                   <div class="noncomp-cell" :class="{ muted: data.valor_sem_comprovacao == null }">
                     <span
                       class="noncomp-value"
-                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= AUDIT_THRESHOLDS.HIGH_VALUE }"
+                      :class="{ 'high-value-audit': data.valor_sem_comprovacao >= auditHighValue }"
                       v-tooltip.top="data.valor_sem_comprovacao != null ? formatFinancialValue(data.valor_sem_comprovacao) : null"
                     >
                       {{ formatCompactFinancialValue(data.valor_sem_comprovacao) }}
@@ -797,9 +810,9 @@ watch(
   justify-content: space-between;
   gap: 0.85rem;
   padding: 0.58rem 0.72rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 22%, var(--card-border));
+  border: 1px solid var(--card-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
 }
 
 .indicator-active-cnpj-text {
@@ -832,10 +845,10 @@ watch(
   flex-shrink: 0;
   gap: 0.42rem;
   padding: 0.38rem 0.62rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 34%, var(--card-border));
+  border: 1px solid var(--card-border);
   border-radius: 999px;
-  background: var(--card-bg);
-  color: var(--primary-color);
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
+  color: var(--text-color-85);
   cursor: pointer;
   font-size: 0.72rem;
   font-weight: 700;
@@ -844,8 +857,8 @@ watch(
 
 .return-target-button:hover,
 .return-target-button:focus-visible {
-  border-color: var(--primary-color);
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--text-color-85) 28%, var(--card-border));
+  background: color-mix(in srgb, var(--text-color-85) 7%, var(--card-bg));
   outline: none;
   transform: translateY(-1px);
 }

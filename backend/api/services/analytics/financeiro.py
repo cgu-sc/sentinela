@@ -52,7 +52,7 @@ from ...schemas.analytics import (
 )
 
 from ._cache import _get_cnpj_cache_dir
-from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
+from .indicator_rules import get_volume_atipico_aumento_minimo
 from .volume_atipico import (
     is_volume_atipico_relevante,
     normalize_volume_atipico_limite,
@@ -73,6 +73,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
     """
     try:
         limite_volume_atipico = normalize_volume_atipico_limite(volume_atipico_limite)
+        limite_aumento_volume_atipico = get_volume_atipico_aumento_minimo()
         perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
         if perfil.is_empty():
             return EvolucaoFinanceiraResponse(cnpj=cnpj, semestres=[])
@@ -199,6 +200,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                     taxa_crescimento,
                     aumento_valor,
                     limite_volume_atipico,
+                    limite_aumento_volume_atipico,
                 ),
                 taxa_crescimento_pct=round(taxa_crescimento, 2) if taxa_crescimento is not None else None,
                 chave_semestre_anterior=int(volume_info["chave_semestre_anterior"]) if volume_info.get("chave_semestre_anterior") is not None else None,
@@ -206,7 +208,7 @@ def get_evolucao_financeira(cnpj: str, data_inicio=None, data_fim=None, volume_a
                 status_semestre=int(volume_info["status_semestre"]) if volume_info.get("status_semestre") is not None else None,
                 qtd_meses_presentes=int(volume_info["qtd_meses_presentes"]) if volume_info.get("qtd_meses_presentes") is not None else None,
                 limite_volume_atipico_pct=limite_volume_atipico,
-                limite_aumento_volume_atipico=VOLUME_ATIPICO_AUMENTO_MINIMO,
+                limite_aumento_volume_atipico=limite_aumento_volume_atipico,
                 meses=[
                     {
                         "mes": m["mes"],

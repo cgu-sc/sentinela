@@ -48,8 +48,10 @@ const mapError = ref(null);
 const selectedCnpj = ref('');
 const activeCnpjPreview = ref('');
 const isPanelUpdating = ref(false);
+const activeBenchmarkTab = ref(0);
 let panelUpdateToken = 0;
 const PANEL_UPDATE_MIN_MS = 220;
+const benchmarkVirtualScrollerOptions = { itemSize: 56 };
 
 const normalizeCnpj = (value) => {
   const digits = String(value ?? '').replace(/\D/g, '');
@@ -469,15 +471,21 @@ const close = () => emit('update:modelValue', false);
           <div v-else-if="benchmarkErrorMessage" class="geo-error geo-benchmark-state">
             {{ benchmarkErrorMessage }}
           </div>
-          <TabView v-else-if="geograficoBenchmarkData" class="geo-benchmark-tabs">
+          <TabView
+            v-else-if="geograficoBenchmarkData"
+            v-model:activeIndex="activeBenchmarkTab"
+            class="geo-benchmark-tabs"
+          >
             <TabPanel>
               <template #header>
                 <span>Município</span>
               </template>
               <div class="geo-scope-label">{{ benchmarkMunicipioLabel }}</div>
               <DataTable
+                v-if="activeBenchmarkTab === 0"
                 :value="benchmarkMunicipioRows"
                 :rowClass="benchmarkRowClass"
+                :virtualScrollerOptions="benchmarkVirtualScrollerOptions"
                 stripedRows
                 size="small"
                 scrollable
@@ -536,8 +544,10 @@ const close = () => emit('update:modelValue', false);
               </template>
               <div class="geo-scope-label">{{ benchmarkRegiaoLabel }}</div>
               <DataTable
+                v-if="activeBenchmarkTab === 1"
                 :value="benchmarkRegiaoRows"
                 :rowClass="benchmarkRowClass"
+                :virtualScrollerOptions="benchmarkVirtualScrollerOptions"
                 stripedRows
                 size="small"
                 scrollable
@@ -626,9 +636,9 @@ const close = () => emit('update:modelValue', false);
   justify-content: space-between;
   gap: 0.85rem;
   padding: 0.58rem 0.72rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 22%, var(--card-border));
+  border: 1px solid var(--card-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-bg));
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
 }
 
 .geo-active-cnpj-text {
@@ -661,10 +671,10 @@ const close = () => emit('update:modelValue', false);
   flex-shrink: 0;
   gap: 0.42rem;
   padding: 0.38rem 0.62rem;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 34%, var(--card-border));
+  border: 1px solid var(--card-border);
   border-radius: 999px;
-  background: var(--card-bg);
-  color: var(--primary-color);
+  background: color-mix(in srgb, var(--text-color-85) 3%, var(--card-bg));
+  color: var(--text-color-85);
   cursor: pointer;
   font-size: 0.72rem;
   font-weight: 700;
@@ -673,8 +683,8 @@ const close = () => emit('update:modelValue', false);
 
 .geo-return-target-button:hover,
 .geo-return-target-button:focus-visible {
-  border-color: var(--primary-color);
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--text-color-85) 28%, var(--card-border));
+  background: color-mix(in srgb, var(--text-color-85) 7%, var(--card-bg));
   outline: none;
   transform: translateY(-1px);
 }

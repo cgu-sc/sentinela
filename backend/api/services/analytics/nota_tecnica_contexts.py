@@ -18,7 +18,7 @@ from data_cache import (
 )
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
-from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
+from .indicator_rules import get_volume_atipico_aumento_minimo
 from .nota_tecnica_formatters import (
     _format_date_pt,
     _format_date_month_year_long_pt,
@@ -1097,10 +1097,11 @@ def _build_evolucao_financeira_context(
         if row["limite_volume_atipico_pct"] is not None
     ]
     limite_volume_atipico = limites_volume_atipico[0] if limites_volume_atipico else growth_threshold_pct
+    limite_aumento_volume_atipico = get_volume_atipico_aumento_minimo()
 
     semestres_irregulares = [
         row for row in rows
-        if row["irregular"] >= VOLUME_ATIPICO_AUMENTO_MINIMO
+        if row["irregular"] >= limite_aumento_volume_atipico
     ]
     top_irregulares = sorted(semestres_irregulares, key=lambda row: row["irregular"], reverse=True)
     primeiro_mes = rows[0].get("mes_inicio")

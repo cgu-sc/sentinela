@@ -23,7 +23,7 @@ from .matriz_risco_dinamica import (
     build_annual_indicator_benchmark_matriz,
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
-from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO
+from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO, get_volume_atipico_aumento_minimo
 from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
 from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS
@@ -264,6 +264,7 @@ def _make_indicador_scope_base_cache_key(
 ) -> tuple[object, ...]:
     return (
         get_cache_generation(),
+        get_volume_atipico_aumento_minimo(),
         *(
             normalizer(filters.get(field_name))
             for field_name, normalizer in _INDICADOR_SCOPE_FILTER_FIELDS
@@ -278,6 +279,7 @@ def _make_indicador_dataset_cache_key(
 ) -> tuple[object, ...]:
     return (
         get_cache_generation(),
+        get_volume_atipico_aumento_minimo(),
         indicador,
         *(
             normalizer(filters.get(field_name))

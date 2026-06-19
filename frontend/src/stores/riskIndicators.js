@@ -2,14 +2,14 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
-const STORAGE_KEY = 'sentinela_indicadores_selected';
 let summaryAbortController = null;
 let cnpjsAbortController = null;
 
 export const useRiskIndicatorsStore = defineStore('riskIndicators', {
   state: () => ({
-    /** Chave do indicador de risco selecionado. Restaurado do storage para manter o foco do auditor. */
-    selectedRiskIndicator: localStorage.getItem(STORAGE_KEY) || null,
+    /** Chave do indicador de risco selecionado. Restaurado das preferencias para manter o foco do auditor. */
+    selectedRiskIndicator: null,
+    preferencesLoaded: false,
     /** KPIs de resumo: total_critico, total_atencao, total_normal, total_sem_dados, mediana_reg, pct_acima_limiar */
     kpis: null,
     /** KPIs do escopo da tabela, util para filtro municipal sem perder o mapa da UF/regiao. */
@@ -29,10 +29,36 @@ export const useRiskIndicatorsStore = defineStore('riskIndicators', {
   }),
 
   actions: {
+    async loadPreferences() {
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.preferences);
+        const ui = data?.ui;
+        if (ui && typeof ui === 'object' && typeof ui.selectedRiskIndicator === 'string') {
+          this.selectedRiskIndicator = ui.selectedRiskIndicator.trim() || null;
+        }
+      } catch (error) {
+        console.warn('[riskIndicators] Nao foi possivel carregar preferencias do indicador:', error);
+      } finally {
+        this.preferencesLoaded = true;
+      }
+    },
+
+    async saveSelectedRiskIndicator() {
+      try {
+        await axios.put(API_ENDPOINTS.preferencesUi, {
+          ui: {
+            selectedRiskIndicator: this.selectedRiskIndicator,
+          },
+        });
+      } catch (error) {
+        console.warn('[riskIndicators] Nao foi possivel salvar indicador selecionado:', error);
+      }
+    },
+
     setSelectedRiskIndicator(indicador) {
       if (!indicador) return;
       this.selectedRiskIndicator = indicador;
-      localStorage.setItem(STORAGE_KEY, indicador);
+      this.saveSelectedRiskIndicator();
     },
 
     async fetchRiskIndicatorSummary(indicador, params = {}) {
@@ -115,7 +141,7 @@ export const useRiskIndicatorsStore = defineStore('riskIndicators', {
 
     reset() {
       this.selectedRiskIndicator = null;
-      localStorage.removeItem(STORAGE_KEY);
+      this.saveSelectedRiskIndicator();
       this.kpis = null;
       this.cnpjKpis = null;
       this.municipios = [];

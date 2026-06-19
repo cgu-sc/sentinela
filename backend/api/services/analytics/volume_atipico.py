@@ -5,7 +5,7 @@ import polars as pl
 
 from data_cache import get_df_dados_farmacia, get_df_volume_atipico_semestral
 
-from .indicator_rules import VOLUME_ATIPICO_AUMENTO_MINIMO
+from .indicator_rules import get_volume_atipico_aumento_minimo
 
 DEFAULT_VOLUME_ATIPICO_LIMITE = 50.0
 MIN_VOLUME_ATIPICO_LIMITE = 40.0
@@ -95,11 +95,12 @@ def _volume_df_for_period(
     return df.filter(mask)
 
 
-def volume_atipico_flag_expr(limite_percentual: float) -> pl.Expr:
+def volume_atipico_flag_expr(limite_percentual: float, aumento_minimo: float | None = None) -> pl.Expr:
     """Regra unica: crescimento percentual acima do limite e aumento material."""
+    aumento_minimo = get_volume_atipico_aumento_minimo() if aumento_minimo is None else aumento_minimo
     return (
         (pl.col("taxa_crescimento_pct") > limite_percentual)
-        & (pl.col("aumento_valor_semestre") >= VOLUME_ATIPICO_AUMENTO_MINIMO)
+        & (pl.col("aumento_valor_semestre") >= aumento_minimo)
     ).fill_null(False)
 
 
@@ -107,13 +108,15 @@ def is_volume_atipico_relevante(
     taxa_crescimento_pct: Optional[float],
     aumento_valor_semestre: Optional[float],
     limite_percentual: float,
+    aumento_minimo: Optional[float] = None,
 ) -> bool:
     """Aplica a mesma regra para linhas ja materializadas em dict."""
     if taxa_crescimento_pct is None or aumento_valor_semestre is None:
         return False
+    aumento_minimo = get_volume_atipico_aumento_minimo() if aumento_minimo is None else aumento_minimo
     return (
         taxa_crescimento_pct > limite_percentual
-        and aumento_valor_semestre >= VOLUME_ATIPICO_AUMENTO_MINIMO
+        and aumento_valor_semestre >= aumento_minimo
     )
 
 
@@ -129,12 +132,13 @@ def get_volume_atipico_period_metrics(
     traz a chave do ultimo semestre valido anterior para exibicao da transicao.
     """
     limite = normalize_volume_atipico_limite(limite_percentual)
+    aumento_minimo = get_volume_atipico_aumento_minimo()
     df_periodo = _volume_df_for_period(data_inicio, data_fim)
 
     if df_periodo.is_empty():
         return pl.DataFrame()
 
-    flag_expr = volume_atipico_flag_expr(limite)
+    flag_expr = volume_atipico_flag_expr(limite, aumento_minimo)
     excesso_expr = (
         pl.when(flag_expr)
         .then(pl.col("taxa_crescimento_pct") - limite)
@@ -187,6 +191,7 @@ def get_volume_atipico_id_cnpjs_df(
 ) -> pl.DataFrame:
     """Retorna id_cnpj de estabelecimentos com ao menos um semestre acima do limite."""
     limite = normalize_volume_atipico_limite(limite_percentual)
+    aumento_minimo = get_volume_atipico_aumento_minimo()
     df = get_df_volume_atipico_semestral()
     empty = pl.DataFrame({"id_cnpj": []}, schema={"id_cnpj": pl.Int32})
 
@@ -196,7 +201,7 @@ def get_volume_atipico_id_cnpjs_df(
         inicio_key,
         fim_key,
         limite,
-        VOLUME_ATIPICO_AUMENTO_MINIMO,
+        aumento_minimo,
     )
     cached = _VOLUME_ATIPICO_ID_CNPJS_CACHE.get(cache_key)
     if cached is not None:
@@ -208,7 +213,7 @@ def get_volume_atipico_id_cnpjs_df(
 
     result = (
         df_periodo
-        .filter(volume_atipico_flag_expr(limite))
+        .filter(volume_atipico_flag_expr(limite, aumento_minimo))
         .select(pl.col("id_cnpj").cast(pl.Int32))
         .unique()
     )

@@ -15,6 +15,7 @@ import { MONTH_LABELS } from "@/config/constants";
 import ObservationDialog from "./ObservationDialog.vue";
 import IntegrityAlertsDialog from "./IntegrityAlertsDialog.vue";
 import CnpjCadastroDialog from "./CnpjCadastroDialog.vue";
+import CnpjTerritoryMap from "./CnpjTerritoryMap.vue";
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -433,6 +434,10 @@ const pdfTooltip = computed(() => {
       </div>
 
       <div class="header-right-col">
+        <CnpjTerritoryMap
+          v-if="geoData"
+          :geo-data="geoData"
+        />
         <div
           class="risk-context-panel"
           :class="riskPanelClass"

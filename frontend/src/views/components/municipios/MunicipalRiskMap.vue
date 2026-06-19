@@ -10,6 +10,7 @@ import { useThemeStore } from '@/stores/theme';
 import { useChartTheme } from '@/config/chartTheme';
 import { MAP_VISUAL_SCALE } from '@/config/colors';
 import { useFormatting } from '@/composables/useFormatting';
+import { buildHealthRegionGeoJson } from '@/utils/geo/municipalTerritory';
 
 use([CanvasRenderer, MapChart, TooltipComponent, VisualMapComponent]);
 
@@ -146,26 +147,12 @@ const effectiveMunicipiosGeo = computed(() => {
   const geo = geoStore.getMunicipiosGeoByUF(props.activeUf);
   if (!geo) return null;
   if (!effectiveRegiaoId.value) return geo;
-
-  const ibge7sRegiao = new Set(
-    geoStore.localidades
-      .filter((localidade) =>
-        String(localidade.id_regiao_saude) === effectiveRegiaoId.value &&
-        localidade.sg_uf === props.activeUf
-      )
-      .map((localidade) => Number(localidade.id_ibge7))
-  );
-  if (!ibge7sRegiao.size) {
-    throw new Error('Regiao de saude selecionada sem municipios no contrato de localidades.');
-  }
-
-  const features = geo.features.filter((feature) =>
-    ibge7sRegiao.has(Number(feature.properties.id))
-  );
-  if (!features.length) {
-    throw new Error('GeoJSON municipal sem features para a regiao de saude selecionada.');
-  }
-  return { type: 'FeatureCollection', features };
+  return buildHealthRegionGeoJson({
+    ufGeoJson: geo,
+    localidades: geoStore.localidades,
+    uf: props.activeUf,
+    regiaoId: effectiveRegiaoId.value,
+  });
 });
 
 const mapName = computed(() => {

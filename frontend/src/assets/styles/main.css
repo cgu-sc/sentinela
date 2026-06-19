@@ -6,4 +6,5 @@
 @import './variables.css';
 @import './global.css';
 @import './components.css';
+@import './tooltip.css';
 @import './animations.css';

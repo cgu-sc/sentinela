@@ -18,9 +18,16 @@ const app = createApp(App);
 
 app.use(createPinia()); // Gerenciamento de Estado
 app.use(router);      // Roteamento entre abas
-app.use(PrimeVue, { 
-    ripple: true,   
-    inputStyle: 'filled'  
+app.use(PrimeVue, {
+    ripple: true,
+    inputStyle: 'filled',
+    pt: {
+        directives: {
+            tooltip: {
+                root: { class: 'sentinela-tooltip' }
+            }
+        }
+    }
 });
 app.use(ToastService);
 app.use(ConfirmationService);

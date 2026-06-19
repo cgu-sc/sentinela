@@ -97,9 +97,11 @@ const {
   notaTecnicaReadinessData,
   notaTecnicaReadinessLoading,
   notaTecnicaReadinessError,
+  notaTecnicaPreparing,
   relatorioPdfReadinessData,
   relatorioPdfReadinessLoading,
   relatorioPdfReadinessError,
+  relatorioPdfPreparing,
 } =
   storeToRefs(cnpjDetailStore);
 
@@ -155,8 +157,30 @@ const formatMissingModules = (readiness) =>
 
 const ensureRelatorioPdfReady = async () => {
   const { inicio, fim } = getApiParams();
-  const readiness = await cnpjDetailStore.fetchRelatorioPdfReadiness(cnpj.value, inicio, fim);
+  let readiness = await cnpjDetailStore.fetchRelatorioPdfReadiness(cnpj.value, inicio, fim);
   if (readiness?.ready === true) return true;
+
+  if (readiness?.preparable === true) {
+    toast.add({
+      severity: "info",
+      summary: "Preparando Relatório PDF",
+      detail: "Preparando dados do estabelecimento para geração do Relatório PDF.",
+      life: 3500,
+    });
+    try {
+      await cnpjDetailStore.prepareRelatorioPdf(cnpj.value, inicio, fim);
+    } catch (error) {
+      toast.add({
+        severity: "warn",
+        summary: "Preparação do Relatório PDF indisponível",
+        detail: error?.message || cnpjDetailStore.relatorioPdfPrepareError || "Não foi possível preparar os dados do Relatório PDF.",
+        life: 12000,
+      });
+      return false;
+    }
+    readiness = await cnpjDetailStore.fetchRelatorioPdfReadiness(cnpj.value, inicio, fim, { force: true });
+    if (readiness?.ready === true) return true;
+  }
 
   const missingLabels = formatMissingModules(readiness);
   toast.add({
@@ -244,8 +268,30 @@ const downloadNotaTecnica = async (dadosNota = {}) => {
 
 const ensureNotaTecnicaReady = async () => {
   const { inicio, fim } = getApiParams();
-  const readiness = await cnpjDetailStore.fetchNotaTecnicaReadiness(cnpj.value, inicio, fim);
+  let readiness = await cnpjDetailStore.fetchNotaTecnicaReadiness(cnpj.value, inicio, fim);
   if (readiness?.ready === true) return true;
+
+  if (readiness?.preparable === true) {
+    toast.add({
+      severity: "info",
+      summary: "Preparando Nota Técnica",
+      detail: "Preparando dados do estabelecimento para geração da Nota Técnica.",
+      life: 3500,
+    });
+    try {
+      await cnpjDetailStore.prepareNotaTecnica(cnpj.value, inicio, fim);
+    } catch (error) {
+      toast.add({
+        severity: "warn",
+        summary: "Preparação da Nota Técnica indisponível",
+        detail: error?.message || cnpjDetailStore.notaTecnicaPrepareError || "Não foi possível preparar os dados da Nota Técnica.",
+        life: 12000,
+      });
+      return false;
+    }
+    readiness = await cnpjDetailStore.fetchNotaTecnicaReadiness(cnpj.value, inicio, fim, { force: true });
+    if (readiness?.ready === true) return true;
+  }
 
   const missingLabels = formatMissingModules(readiness);
   toast.add({
@@ -655,7 +701,9 @@ watch(
       :qtd-municipios-regiao="qtdMunicipiosRegiao"
       :cadastro="dadosCadastro"
       :is-exporting="isExporting"
+      :is-preparing-pdf="relatorioPdfPreparing"
       :is-generating-note="isGeneratingNote"
+      :is-preparing-note="notaTecnicaPreparing"
       :period-summary="periodSummary"
       :period-loading="isPeriodSummaryLoading"
       :integrity-alerts="integrityAlertsData"

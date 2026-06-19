@@ -22,6 +22,7 @@ from ..schemas.analytics import (
     ClinicoIncompatibilidadeResponse,
     AlertasPanoramaResponse,
     NotaTecnicaReadinessResponse,
+    NotaTecnicaPrepareResponse,
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
@@ -698,6 +699,21 @@ def get_nota_tecnica_readiness(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/cnpj/{cnpj}/nota-tecnica/prepare", response_model=NotaTecnicaPrepareResponse)
+def prepare_nota_tecnica(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Materializa sob demanda os modulos por CNPJ exigidos pela Nota Tecnica."""
+    try:
+        return AnalyticsService.prepare_nota_tecnica_cnpj(cnpj, engine, data_inicio, data_fim)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/cnpj/{cnpj}/relatorio-pdf/readiness", response_model=NotaTecnicaReadinessResponse)
 def get_relatorio_pdf_readiness(
     cnpj: str,
@@ -708,6 +724,21 @@ def get_relatorio_pdf_readiness(
     try:
         return AnalyticsService.get_relatorio_pdf_readiness(cnpj, data_inicio, data_fim)
     except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/cnpj/{cnpj}/relatorio-pdf/prepare", response_model=NotaTecnicaPrepareResponse)
+def prepare_relatorio_pdf(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Materializa sob demanda os modulos por CNPJ exigidos pelo relatorio PDF."""
+    try:
+        return AnalyticsService.prepare_relatorio_pdf_cnpj(cnpj, engine, data_inicio, data_fim)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

@@ -21,6 +21,40 @@ def _cache_path(cnpj: str) -> str:
     return os.path.join(_get_cnpj_cache_dir(cnpj), MOVIMENTACAO_MENSAL_GTIN_PARQUET)
 
 
+def _load_from_global(cnpj: str) -> tuple[pl.DataFrame, float] | None:
+    from data_cache import get_df_perfil_estabelecimento, scan_movimentacao_mensal_gtin_global
+
+    perfil = get_df_perfil_estabelecimento()
+    row = (
+        perfil
+        .lazy()
+        .filter(pl.col("cnpj").cast(pl.Utf8) == cnpj)
+        .select("id_cnpj")
+        .collect()
+    )
+    if row.height != 1:
+        raise RuntimeError(f"Perfil estabelecimento sem id_cnpj unico para CNPJ {cnpj}.")
+
+    id_cnpj = int(row.item(0, "id_cnpj"))
+    t0 = time.perf_counter()
+    df = (
+        scan_movimentacao_mensal_gtin_global()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .select([
+            "codigo_barra",
+            "periodo",
+            "qnt_caixas_vendidas",
+            "qnt_caixas_sem_comprovacao",
+            "num_autorizacoes",
+            "valor_vendas",
+            "valor_sem_comprovacao",
+        ])
+        .collect()
+    )
+    read_time_ms = round((time.perf_counter() - t0) * 1000, 1)
+    return df, read_time_ms
+
+
 def load_or_sync_movimentacao_mensal_gtin(cnpj: str, engine=None) -> CacheLoadResult:
     parquet_path = _cache_path(cnpj)
     df: pl.DataFrame | None = None
@@ -43,6 +77,25 @@ def load_or_sync_movimentacao_mensal_gtin(cnpj: str, engine=None) -> CacheLoadRe
     save_time_ms: float | None = None
 
     try:
+        try:
+            global_result = _load_from_global(cnpj)
+        except FileNotFoundError as exc:
+            global_error = str(exc)
+            global_result = None
+
+        if global_result is not None:
+            df, read_time_ms = global_result
+            t1 = time.perf_counter()
+            df.write_parquet(parquet_path, compression="zstd")
+            save_time_ms = round((time.perf_counter() - t1) * 1000, 1)
+            print(f"GTIN {cnpj}: global {read_time_ms}ms | parquet {save_time_ms}ms")
+            return CacheLoadResult(
+                df=df,
+                from_cache=False,
+                read_time_ms=read_time_ms,
+                save_time_ms=save_time_ms,
+            )
+
         if engine is None:
             from database import engine as engine
 
@@ -87,11 +140,18 @@ def load_or_sync_movimentacao_mensal_gtin(cnpj: str, engine=None) -> CacheLoadRe
             save_time_ms=save_time_ms,
         )
     except Exception:
-        print(f"[ ANALYTICS ] {cnpj} - GTIN - indisponivel (sem cache e banco offline)")
+        print(f"[ ANALYTICS ] {cnpj} - GTIN - indisponivel (sem cache local, global indisponivel e banco offline)")
+        detail = (
+            "Movimentacao mensal por GTIN indisponivel para este CNPJ. "
+            "O arquivo local ainda nao existe, o modulo global nao pode ser usado "
+            "e o SQL Server nao respondeu para materializar o cache por CNPJ."
+        )
+        if "global_error" in locals() and global_error:
+            detail += f" Detalhe do modulo global: {global_error}"
         return CacheLoadResult(
             df=pl.DataFrame(),
             from_cache=False,
             query_time_ms=query_time_ms,
             save_time_ms=save_time_ms,
-            error="Arquivo Parquet local nao encontrado e Banco Offline.",
+            error=detail,
         )

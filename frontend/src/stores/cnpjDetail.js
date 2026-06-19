@@ -28,6 +28,18 @@ function normalizeCnpj(value) {
 
 const ERROR_MSG = 'Não foi possível carregar os dados. Verifique a conexão com o servidor.';
 
+function extractAxiosErrorMessage(error, fallback = ERROR_MSG) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map((item) => item?.msg || String(item)).join('; ');
+  }
+  if (typeof error?.response?.data?.message === 'string' && error.response.data.message.trim()) {
+    return error.response.data.message;
+  }
+  return error?.message || fallback;
+}
+
 function assertCrmTimelineDataset(data) {
   if (!data || !Array.isArray(data.days)) {
     throw new Error('Contrato invalido em crm/timeline-dataset: campo days obrigatorio.');
@@ -79,6 +91,7 @@ function assertNotaTecnicaReadiness(data) {
   if (
     !data
     || typeof data.ready !== 'boolean'
+    || typeof data.preparable !== 'boolean'
     || !Array.isArray(data.modules)
     || !Array.isArray(data.missing_modules)
   ) {
@@ -91,10 +104,20 @@ function assertNotaTecnicaReadiness(data) {
         throw new Error(`Contrato invalido em nota-tecnica/readiness: modules[${index}].${field} obrigatorio.`);
       }
     });
+    if (typeof module.preparable !== 'boolean') {
+      throw new Error(`Contrato invalido em nota-tecnica/readiness: modules[${index}].preparable obrigatorio.`);
+    }
     if (!Array.isArray(module.missing_files)) {
       throw new Error(`Contrato invalido em nota-tecnica/readiness: modules[${index}].missing_files deve ser lista.`);
     }
   });
+}
+
+function assertNotaTecnicaPrepare(data) {
+  if (!data || !Array.isArray(data.prepared_modules) || !data.readiness) {
+    throw new Error('Contrato invalido em nota-tecnica/prepare.');
+  }
+  assertNotaTecnicaReadiness(data.readiness);
 }
 
 function assertIndicadorBenchmarkLocal(data) {
@@ -344,6 +367,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     notaTecnicaReadinessLoadedKey: null,
     notaTecnicaReadinessRequestKey: null,
     notaTecnicaReadinessError: null,
+    notaTecnicaPreparing: false,
+    notaTecnicaPrepareError: null,
 
     // ── Prontidão do Relatório PDF ───────────────────────────────────────────
     relatorioPdfReadinessData: null,
@@ -351,6 +376,8 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     relatorioPdfReadinessLoadedKey: null,
     relatorioPdfReadinessRequestKey: null,
     relatorioPdfReadinessError: null,
+    relatorioPdfPreparing: false,
+    relatorioPdfPrepareError: null,
 
     // ── Teia Societária (Grafo de Relacionamentos) ────────────────────────────
     networkData:    null,
@@ -1091,12 +1118,13 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchNotaTecnicaReadiness(cnpj, inicio = null, fim = null) {
+    async fetchNotaTecnicaReadiness(cnpj, inicio = null, fim = null, options = {}) {
       const clean = normalizeCnpj(cnpj);
       const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+      const force = options?.force === true;
       if (
         !clean
-        || this.notaTecnicaReadinessLoadedKey === key
+        || (!force && this.notaTecnicaReadinessLoadedKey === key)
         || this.notaTecnicaReadinessRequestKey === key
       ) return this.notaTecnicaReadinessData;
 
@@ -1129,12 +1157,40 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       }
     },
 
-    async fetchRelatorioPdfReadiness(cnpj, inicio = null, fim = null) {
+    async prepareNotaTecnica(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return null;
+
+      this.notaTecnicaPreparing = true;
+      this.notaTecnicaPrepareError = null;
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+
+        const { data } = await axios.post(API_ENDPOINTS.analyticsNotaTecnicaPrepare(clean), null, { params });
+        assertNotaTecnicaPrepare(data);
+        this.notaTecnicaReadinessData = data.readiness;
+        this.notaTecnicaReadinessLoadedKey = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+        this.notaTecnicaReadinessError = null;
+        return data;
+      } catch (e) {
+        console.error('Erro ao preparar dados da Nota Tecnica:', e);
+        this.notaTecnicaPrepareError = extractAxiosErrorMessage(e);
+        throw new Error(this.notaTecnicaPrepareError);
+      } finally {
+        this.notaTecnicaPreparing = false;
+      }
+    },
+
+    async fetchRelatorioPdfReadiness(cnpj, inicio = null, fim = null, options = {}) {
       const clean = normalizeCnpj(cnpj);
       const key = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+      const force = options?.force === true;
       if (
         !clean
-        || this.relatorioPdfReadinessLoadedKey === key
+        || (!force && this.relatorioPdfReadinessLoadedKey === key)
         || this.relatorioPdfReadinessRequestKey === key
       ) return this.relatorioPdfReadinessData;
 
@@ -1164,6 +1220,33 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
           this.relatorioPdfReadinessLoading = false;
           this.relatorioPdfReadinessRequestKey = null;
         }
+      }
+    },
+
+    async prepareRelatorioPdf(cnpj, inicio = null, fim = null) {
+      const clean = normalizeCnpj(cnpj);
+      if (!clean) return null;
+
+      this.relatorioPdfPreparing = true;
+      this.relatorioPdfPrepareError = null;
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim) params.data_fim = fim;
+
+        const { data } = await axios.post(API_ENDPOINTS.analyticsRelatorioPdfPrepare(clean), null, { params });
+        assertNotaTecnicaPrepare(data);
+        this.relatorioPdfReadinessData = data.readiness;
+        this.relatorioPdfReadinessLoadedKey = `${clean}|${inicio ?? ''}|${fim ?? ''}`;
+        this.relatorioPdfReadinessError = null;
+        return data;
+      } catch (e) {
+        console.error('Erro ao preparar dados do Relatorio PDF:', e);
+        this.relatorioPdfPrepareError = extractAxiosErrorMessage(e);
+        throw new Error(this.relatorioPdfPrepareError);
+      } finally {
+        this.relatorioPdfPreparing = false;
       }
     },
 
@@ -1602,12 +1685,16 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.notaTecnicaReadinessLoadedKey = null;
       this.notaTecnicaReadinessRequestKey = null;
       this.notaTecnicaReadinessError = null;
+      this.notaTecnicaPreparing = false;
+      this.notaTecnicaPrepareError = null;
 
       this.relatorioPdfReadinessData = null;
       this.relatorioPdfReadinessLoading = false;
       this.relatorioPdfReadinessLoadedKey = null;
       this.relatorioPdfReadinessRequestKey = null;
       this.relatorioPdfReadinessError = null;
+      this.relatorioPdfPreparing = false;
+      this.relatorioPdfPrepareError = null;
 
       this.networkData    = null;
       this.networkLoading = false;

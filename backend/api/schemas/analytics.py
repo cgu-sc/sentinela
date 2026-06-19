@@ -1022,6 +1022,7 @@ class NotaTecnicaReadinessModuleSchema(BaseModel):
     scope: Literal["global", "cnpj"]
     required: bool
     ready: bool
+    preparable: bool = False
     missing_files: List[str] = Field(default_factory=list)
     detail: Optional[str] = None
 
@@ -1029,8 +1030,22 @@ class NotaTecnicaReadinessModuleSchema(BaseModel):
 class NotaTecnicaReadinessResponse(BaseModel):
     cnpj: str
     ready: bool
+    preparable: bool = False
     data_inicio: Optional[date] = None
     data_fim: Optional[date] = None
     modules: List[NotaTecnicaReadinessModuleSchema]
     missing_modules: List[NotaTecnicaReadinessModuleSchema] = Field(default_factory=list)
+
+
+class NotaTecnicaPrepareModuleSchema(BaseModel):
+    key: str
+    label: str
+    status: Literal["already_ready", "prepared"]
+    file: str
+
+
+class NotaTecnicaPrepareResponse(BaseModel):
+    cnpj: str
+    prepared_modules: List[NotaTecnicaPrepareModuleSchema] = Field(default_factory=list)
+    readiness: NotaTecnicaReadinessResponse
 

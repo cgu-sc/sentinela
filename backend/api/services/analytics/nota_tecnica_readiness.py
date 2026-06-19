@@ -25,6 +25,7 @@ def _module(
     *,
     scope: str,
     required: bool = True,
+    preparable: bool = False,
 ) -> dict[str, Any]:
     missing = [display for display, path in files if not os.path.exists(path)]
     return {
@@ -33,6 +34,7 @@ def _module(
         "scope": scope,
         "required": required,
         "ready": not missing,
+        "preparable": bool(preparable and missing),
         "missing_files": missing,
         "detail": None if not missing else f"{len(missing)} arquivo(s) ausente(s).",
     }
@@ -81,10 +83,108 @@ def _memoria_calculo_module(cnpj: str, global_files: dict[str, str], cache_dir: 
         "scope": "cnpj",
         "required": True,
         "ready": not missing,
+        "preparable": not missing,
         "missing_files": missing,
         "detail": (
             "Arquivo local ausente; sera derivado do modulo global."
             if not missing else f"{len(missing)} arquivo(s) ausente(s)."
+        ),
+    }
+
+
+def _gtin_mensal_module(cnpj: str, global_files: dict[str, str], cache_dir: str, cnpj_cache_root: str) -> dict[str, Any]:
+    local_display, local_path = _cnpj_files(
+        cnpj,
+        [cache_files.MOVIMENTACAO_MENSAL_GTIN_PARQUET],
+        cnpj_cache_root,
+    )[0]
+    if os.path.exists(local_path):
+        return _module(
+            "gtin_mensal",
+            "Movimentacao mensal por GTIN",
+            [(local_display, local_path)] + _global_files(["medicamentos"], global_files, cache_dir),
+            scope="cnpj",
+        )
+
+    global_candidates = _global_files(
+        ["movimentacao_mensal_gtin_global", "medicamentos"],
+        global_files,
+        cache_dir,
+    )
+    missing = [display for display, path in global_candidates if not os.path.exists(path)]
+    return {
+        "key": "gtin_mensal",
+        "label": "Movimentacao mensal por GTIN",
+        "scope": "cnpj",
+        "required": True,
+        "ready": False,
+        "preparable": not missing,
+        "missing_files": [local_display] + missing,
+        "detail": (
+            "Arquivo local ausente; pode ser derivado do modulo global."
+            if not missing else f"{len(missing)} arquivo(s) global(is) ausente(s)."
+        ),
+    }
+
+
+def _crm_module(cnpj: str, global_files: dict[str, str], cache_dir: str, cnpj_cache_root: str) -> dict[str, Any]:
+    required_global_keys = [
+        "bench_crm_uf",
+        "bench_crm_regiao",
+        "bench_crm_br",
+        "crm_prescricoes_brasil_semestre",
+        "dados_medico",
+        "perfil_estabelecimento",
+    ]
+    derivable_global_keys = [
+        "crm_prescritores_global",
+        "geografico_global",
+        "crm_raiox_tx_global",
+        "crm_concentracao_unico_alertas_global",
+        "crm_concentracao_multiplo_alertas_global",
+        "crm_timeline_dia_global",
+        "crm_timeline_hora_global",
+        "crm_timeline_eventos_global",
+    ]
+    local_filenames = [
+        cache_files.CRM_PRESCRITORES_PARQUET,
+        cache_files.GEOGRAFICO_PARQUET,
+        cache_files.CRM_RAIOX_TX_PARQUET,
+        cache_files.CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
+        cache_files.CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
+        cache_files.CRM_TIMELINE_DIA_PARQUET,
+        cache_files.CRM_TIMELINE_HORA_PARQUET,
+        cache_files.CRM_TIMELINE_EVENTOS_PARQUET,
+    ]
+    global_files_required = _global_files(required_global_keys, global_files, cache_dir)
+    local_files = _cnpj_files(cnpj, local_filenames, cnpj_cache_root)
+    missing_global = [display for display, path in global_files_required if not os.path.exists(path)]
+    missing_local = [display for display, path in local_files if not os.path.exists(path)]
+    if not missing_global and not missing_local:
+        return _module(
+            "crm",
+            "Evidencias e indicadores de CRM",
+            global_files_required + local_files,
+            scope="cnpj",
+        )
+
+    missing_derivable_global = [
+        display
+        for display, path in _global_files(derivable_global_keys, global_files, cache_dir)
+        if not os.path.exists(path)
+    ]
+    return {
+        "key": "crm",
+        "label": "Evidencias e indicadores de CRM",
+        "scope": "cnpj",
+        "required": True,
+        "ready": False,
+        "preparable": bool(missing_local) and not missing_global and not missing_derivable_global,
+        "missing_files": missing_global + missing_local + missing_derivable_global,
+        "detail": (
+            "Arquivos locais de CRM ausentes; podem ser preparados sob demanda para este CNPJ."
+            if missing_local and not missing_global and not missing_derivable_global
+            else f"{len(missing_global) + len(missing_local) + len(missing_derivable_global)} arquivo(s) ausente(s)."
         ),
     }
 
@@ -127,34 +227,56 @@ def _pdf_modules(cnpj: str) -> list[dict[str, Any]]:
     cnpj_cache_root = get_cnpj_cache_root()
     global_files = cache_registry.get_global_parquet_files_by_key()
 
+    required_global_keys = [
+        "bench_crm_uf",
+        "bench_crm_regiao",
+        "bench_crm_br",
+        "crm_prescricoes_brasil_semestre",
+        "dados_medico",
+        "perfil_estabelecimento",
+    ]
+    derivable_global_keys = [
+        "crm_prescritores_global",
+        "geografico_global",
+        "crm_concentracao_unico_alertas_global",
+        "crm_concentracao_multiplo_alertas_global",
+    ]
+    local_crm_files = [
+        cache_files.CRM_PRESCRITORES_PARQUET,
+        cache_files.GEOGRAFICO_PARQUET,
+        cache_files.CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
+        cache_files.CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
+    ]
+    global_files_required = _global_files(required_global_keys, global_files, cache_dir)
+    local_files = _cnpj_files(cnpj, local_crm_files, cnpj_cache_root)
+    missing_global = [display for display, path in global_files_required if not os.path.exists(path)]
+    missing_local = [display for display, path in local_files if not os.path.exists(path)]
+    missing_derivable_global = [
+        display
+        for display, path in _global_files(derivable_global_keys, global_files, cache_dir)
+        if not os.path.exists(path)
+    ]
+    crm_module = {
+        "key": "crm",
+        "label": "Dados de CRM",
+        "scope": "cnpj",
+        "required": True,
+        "ready": not missing_global and not missing_local,
+        "preparable": bool(missing_local) and not missing_global and not missing_derivable_global,
+        "missing_files": missing_global + missing_local + missing_derivable_global,
+        "detail": (
+            None if not missing_global and not missing_local
+            else (
+                "Arquivos locais de CRM ausentes; podem ser preparados sob demanda para este CNPJ."
+                if missing_local and not missing_global and not missing_derivable_global
+                else f"{len(missing_global) + len(missing_local) + len(missing_derivable_global)} arquivo(s) ausente(s)."
+            )
+        ),
+    }
+
     return [
         *_document_base_modules(),
-        _module(
-            "crm",
-            "Dados de CRM",
-            _global_files(
-                [
-                    "bench_crm_uf",
-                    "bench_crm_regiao",
-                    "bench_crm_br",
-                    "crm_prescricoes_brasil_semestre",
-                    "dados_medico",
-                ],
-                global_files,
-                cache_dir,
-            )
-            + _cnpj_files(
-                cnpj,
-                [
-                    cache_files.CRM_PRESCRITORES_PARQUET,
-                    cache_files.GEOGRAFICO_PARQUET,
-                    cache_files.CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
-                    cache_files.CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
-                ],
-                cnpj_cache_root,
-            ),
-            scope="cnpj",
-        ),
+        crm_module,
         _module(
             "falecidos",
             "Vendas para pessoas falecidas",
@@ -172,13 +294,7 @@ def _nota_tecnica_modules(cnpj: str) -> list[dict[str, Any]]:
     return [
         *_document_base_modules(),
         _memoria_calculo_module(cnpj, global_files, cache_dir, cnpj_cache_root),
-        _module(
-            "gtin_mensal",
-            "Movimentacao mensal por GTIN",
-            _cnpj_files(cnpj, [cache_files.MOVIMENTACAO_MENSAL_GTIN_PARQUET], cnpj_cache_root)
-            + _global_files(["medicamentos"], global_files, cache_dir),
-            scope="cnpj",
-        ),
+        _gtin_mensal_module(cnpj, global_files, cache_dir, cnpj_cache_root),
         _module(
             "falecidos",
             "Vendas para pessoas falecidas",
@@ -216,36 +332,7 @@ def _nota_tecnica_modules(cnpj: str) -> list[dict[str, Any]]:
             ),
             scope="global",
         ),
-        _module(
-            "crm",
-            "Evidencias e indicadores de CRM",
-            _global_files(
-                [
-                    "bench_crm_uf",
-                    "bench_crm_regiao",
-                    "bench_crm_br",
-                    "crm_prescricoes_brasil_semestre",
-                    "dados_medico",
-                ],
-                global_files,
-                cache_dir,
-            )
-            + _cnpj_files(
-                cnpj,
-                [
-                    cache_files.CRM_PRESCRITORES_PARQUET,
-                    cache_files.GEOGRAFICO_PARQUET,
-                    cache_files.CRM_RAIOX_TX_PARQUET,
-                    cache_files.CRM_CONCENTRACAO_UNICO_ALERTAS_PARQUET,
-                    cache_files.CRM_CONCENTRACAO_MULTIPLO_ALERTAS_PARQUET,
-                    cache_files.CRM_TIMELINE_DIA_PARQUET,
-                    cache_files.CRM_TIMELINE_HORA_PARQUET,
-                    cache_files.CRM_TIMELINE_EVENTOS_PARQUET,
-                ],
-                cnpj_cache_root,
-            ),
-            scope="cnpj",
-        ),
+        _crm_module(cnpj, global_files, cache_dir, cnpj_cache_root),
     ]
 
 
@@ -257,9 +344,11 @@ def _build_readiness(
 ) -> dict[str, Any]:
     clean = _clean_cnpj(cnpj)
     missing_modules = [module for module in modules if module["required"] and not module["ready"]]
+    preparable = bool(missing_modules) and all(module.get("preparable") for module in missing_modules)
     return {
         "cnpj": clean,
         "ready": not missing_modules,
+        "preparable": preparable,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
         "modules": modules,

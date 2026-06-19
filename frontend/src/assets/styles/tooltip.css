@@ -1,0 +1,41 @@
+/**
+ * Tooltips globais do Sentinela.
+ * A classe e aplicada pela configuracao PassThrough do PrimeVue em main.js.
+ */
+
+.p-tooltip.sentinela-tooltip {
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.3rem;
+}
+
+.p-tooltip.sentinela-tooltip .p-tooltip-text {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--tooltip-border);
+  border-radius: 6px;
+  background: var(--tooltip-bg);
+  box-shadow: var(--tooltip-shadow);
+  color: var(--tooltip-text);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.p-tooltip.sentinela-tooltip.p-tooltip-right .p-tooltip-arrow {
+  border-right-color: var(--tooltip-bg);
+}
+
+.p-tooltip.sentinela-tooltip.p-tooltip-left .p-tooltip-arrow {
+  border-left-color: var(--tooltip-bg);
+}
+
+.p-tooltip.sentinela-tooltip.p-tooltip-top .p-tooltip-arrow {
+  border-top-color: var(--tooltip-bg);
+}
+
+.p-tooltip.sentinela-tooltip.p-tooltip-bottom .p-tooltip-arrow {
+  border-bottom-color: var(--tooltip-bg);
+}

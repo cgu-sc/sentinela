@@ -60,6 +60,7 @@ from .regional import (
 )
 from .nota_tecnica import generate_nota_tecnica
 from .nota_tecnica_readiness import get_nota_tecnica_readiness, get_relatorio_pdf_readiness
+from .nota_tecnica_prepare import prepare_nota_tecnica_cnpj, prepare_relatorio_pdf_cnpj
 from .nota_tecnica_regionais import list_nota_tecnica_regionais
 from .volume_atipico import (
     get_volume_atipico_id_cnpjs_df,
@@ -114,6 +115,8 @@ class AnalyticsService:
     get_cnpj_lookup = staticmethod(get_cnpj_lookup)
     generate_nota_tecnica = staticmethod(generate_nota_tecnica)
     get_nota_tecnica_readiness = staticmethod(get_nota_tecnica_readiness)
+    prepare_nota_tecnica_cnpj = staticmethod(prepare_nota_tecnica_cnpj)
+    prepare_relatorio_pdf_cnpj = staticmethod(prepare_relatorio_pdf_cnpj)
     get_relatorio_pdf_readiness = staticmethod(get_relatorio_pdf_readiness)
     list_nota_tecnica_regionais = staticmethod(list_nota_tecnica_regionais)
     get_volume_atipico_id_cnpjs_df = staticmethod(get_volume_atipico_id_cnpjs_df)

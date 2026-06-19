@@ -43,7 +43,9 @@ const props = defineProps({
   qtdMunicipiosRegiao: { type: Number,  default: null },
   cadastro:      { type: Object,  default: null },
   isExporting:   { type: Boolean, default: false },
+  isPreparingPdf: { type: Boolean, default: false },
   isGeneratingNote: { type: Boolean, default: false },
+  isPreparingNote: { type: Boolean, default: false },
   // Totais recalculados para o período de análise selecionado.
   // Quando presentes, sobrepõem os valores globais do cnpjData.
   periodSummary: { type: Object,  default: null },  // { totalMov, valSemComp, percValSemComp }
@@ -254,19 +256,23 @@ const noteMissingModules = computed(() =>
 );
 
 const isNoteReady = computed(() => props.noteReadiness?.ready === true);
+const isNotePreparable = computed(() => props.noteReadiness?.preparable === true);
 
 const isNoteButtonDisabled = computed(() =>
   props.isGeneratingNote
+  || props.isPreparingNote
   || props.noteReadinessLoading
-  || !isNoteReady.value,
+  || (!isNoteReady.value && !isNotePreparable.value),
 );
 
 const noteTooltip = computed(() => {
+  if (props.isPreparingNote) return "Preparando dados da Nota Técnica";
   if (props.isGeneratingNote) return "Gerando Nota Técnica";
   if (props.noteReadinessLoading || !props.noteReadiness) {
     return "Verificando módulos da Nota Técnica";
   }
   if (isNoteReady.value) return "Gerar Nota Técnica";
+  if (isNotePreparable.value) return "Preparar dados e gerar Nota Técnica";
   if (noteMissingModules.value.length) {
     return `Nota Técnica indisponível. Módulos pendentes: ${noteMissingModules.value.join(", ")}.`;
   }
@@ -279,19 +285,23 @@ const pdfMissingModules = computed(() =>
 );
 
 const isPdfReady = computed(() => props.pdfReadiness?.ready === true);
+const isPdfPreparable = computed(() => props.pdfReadiness?.preparable === true);
 
 const isPdfButtonDisabled = computed(() =>
   props.isExporting
+  || props.isPreparingPdf
   || props.pdfReadinessLoading
-  || !isPdfReady.value,
+  || (!isPdfReady.value && !isPdfPreparable.value),
 );
 
 const pdfTooltip = computed(() => {
+  if (props.isPreparingPdf) return "Preparando dados do Relatório PDF";
   if (props.isExporting) return "Gerando Relatório PDF";
   if (props.pdfReadinessLoading || !props.pdfReadiness) {
     return "Verificando módulos do Relatório PDF";
   }
   if (isPdfReady.value) return "Gerar Relatório PDF";
+  if (isPdfPreparable.value) return "Preparar dados e gerar Relatório PDF";
   if (pdfMissingModules.value.length) {
     return `Relatório PDF indisponível. Módulos pendentes: ${pdfMissingModules.value.join(", ")}.`;
   }
@@ -631,7 +641,7 @@ const pdfTooltip = computed(() => {
             :disabled="isPdfButtonDisabled"
             v-tooltip.bottom="pdfTooltip"
           >
-            <i :class="(isExporting || pdfReadinessLoading) ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+            <i :class="(isExporting || isPreparingPdf || pdfReadinessLoading) ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
           </button>
           <button
             class="list-btn list-btn--icon-only list-btn--note"
@@ -639,7 +649,7 @@ const pdfTooltip = computed(() => {
             :disabled="isNoteButtonDisabled"
             v-tooltip.bottom="noteTooltip"
           >
-            <i :class="(isGeneratingNote || noteReadinessLoading) ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
+            <i :class="(isGeneratingNote || isPreparingNote || noteReadinessLoading) ? 'pi pi-spin pi-spinner' : 'pi pi-book'" />
           </button>
           <button
             class="list-btn list-btn--icon-only"

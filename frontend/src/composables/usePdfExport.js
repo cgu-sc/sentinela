@@ -3,6 +3,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { INDICATOR_GROUPS, RISK_COLORS_RGB } from '@/config/riskConfig';
 import { MAP_VISUAL_SCALE } from '@/config/colors.js';
+import { saveBlobOrDownload } from '@/utils/download';
 
 
 // ── PrimeIcons codepoints ──────────────────────────────────
@@ -1203,7 +1204,8 @@ export function usePdfExport() {
 
       // ── Salvar ────────────────────────────────────────────
       const safeName = (cnpjData.razao_social ?? cnpj).replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
-      pdf.save(`Sentinela_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      const filename = `Sentinela_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      return await saveBlobOrDownload(pdf.output('blob'), filename);
 
     } catch (err) {
       console.error('[usePdfExport] Critical failure during PDF generation:', err);

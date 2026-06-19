@@ -184,13 +184,23 @@ async function gerarRelatorio(item) {
       formatarData,
     });
 
-    await exportCnpjPdf({
+    const downloadResult = await exportCnpjPdf({
       ...payload,
       geoStore,
       formatCurrencyFull,
       formatNumberFull,
       formatarData,
     });
+    if (downloadResult?.desktop) {
+      toast.add({
+        group: "download",
+        severity: "success",
+        summary: "Relatório PDF salvo",
+        detail: `Arquivo salvo em notas_tecnicas\\${downloadResult.filename}.`,
+        life: 12000,
+        data: { path: downloadResult.path },
+      });
+    }
   } catch (error) {
     console.error("Erro ao gerar Relatório PDF:", error);
     toast.add({

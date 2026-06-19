@@ -64,11 +64,7 @@ export async function openDownloadedFile(path) {
   return result;
 }
 
-export async function downloadBlobFromResponse(response, fallbackFilename) {
-  const blob = await response.blob();
-  const filename =
-    getFilenameFromContentDisposition(response.headers.get("Content-Disposition")) ||
-    fallbackFilename;
+export async function saveBlobOrDownload(blob, filename) {
   const safeFilename = sanitizeFilename(filename) || "download";
 
   const desktopApi = getDesktopApi();
@@ -90,4 +86,13 @@ export async function downloadBlobFromResponse(response, fallbackFilename) {
   document.body.removeChild(link);
   window.URL.revokeObjectURL(blobUrl);
   return { ok: true, filename: safeFilename, desktop: false };
+}
+
+export async function downloadBlobFromResponse(response, fallbackFilename) {
+  const blob = await response.blob();
+  const filename =
+    getFilenameFromContentDisposition(response.headers.get("Content-Disposition")) ||
+    fallbackFilename;
+
+  return saveBlobOrDownload(blob, filename);
 }

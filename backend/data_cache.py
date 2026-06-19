@@ -4214,6 +4214,10 @@ def get_cache_status() -> dict:
         "crm_prescritores_global",
         "memoria_calculo_global",
         "crm_raiox_tx_global",
+        "crm_timeline_dia_global",
+        "crm_timeline_hora_global",
+        "crm_concentracao_multiplo_alertas_global",
+        "crm_concentracao_unico_alertas_global",
     }
     modules = {
         "movimentacao":   {"label": "Movimentação Mensal",     "path": _PARQUET_PATH,             "loaded": _df_movimentacao is not None},

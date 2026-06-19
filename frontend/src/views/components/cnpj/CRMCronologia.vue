@@ -168,8 +168,8 @@ function formatDailyRankMetric(day, mode = dailyRankMode.value) {
   if (!day || !mode) return '';
   if (mode === 'unico') {
     const qtd = day.score_crm_unico_qtd;
-    const min = day.score_crm_unico_minutos;
     const score = Number(day.score_crm_unico_hora ?? 0);
+    const min = qtd && score ? Math.round((Number(qtd) * 60) / score) : 0;
     return score ? `${score.toFixed(1)}/h${qtd && min ? ` (${qtd} em ${min}min)` : ''}` : '';
   }
   if (mode === 'multiplo') {

@@ -1298,12 +1298,12 @@ watch(
 
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target > td),
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target:nth-child(even) > td) {
-  background: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
   color: var(--text-color-85);
 }
 
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-target > td:first-child) {
-  box-shadow: inset 3px 0 0 var(--primary-color);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary-color) 60%, var(--card-bg));
 }
 
 :deep(.indicator-table .p-datatable-tbody > tr.indicator-benchmark-origin > td:first-child) {

@@ -1298,15 +1298,20 @@ def get_crm_raio_x(cnpj: str, date_str: str, hour: Optional[int] = None) -> "Crm
                 )
             for r in day_unico.iter_rows(named=True):
                 ritmo_qtd = _to_int(r.get("nu_prescricoes_dia"))
-                ritmo_minutos = _to_int(r.get("nu_minutos_dia"))
-                ritmo_hora = round((ritmo_qtd * 60.0 / ritmo_minutos), 2) if ritmo_minutos > 0 else 0.0
+                ritmo_minutos = _to_int(r.get("nu_minutos_intervalo"))
+                taxa_hora = _to_float(r.get("taxa_hora"))
+                if taxa_hora <= 0:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Campo obrigatorio taxa_hora ausente ou invalido em alerta de concentracao CRM unico.",
+                    )
                 alertas_unico.append(CrmUnicoAlertaSchema(
                     id_medico=str(r["id_medico"]),
                     hr_janela=_to_int(r.get("hr_janela")),
                     nu_prescricoes_dia=_to_int(r.get("nu_prescricoes_dia")),
                     nu_minutos_dia=_to_int(r.get("nu_minutos_dia")),
-                    taxa_hora=_to_float(r.get("taxa_hora")),
-                    ritmo_hora=ritmo_hora,
+                    taxa_hora=taxa_hora,
+                    ritmo_hora=taxa_hora,
                     ritmo_qtd=ritmo_qtd,
                     ritmo_minutos=ritmo_minutos,
                     severidade=r.get("severidade"),

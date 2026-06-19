@@ -68,7 +68,7 @@ const palette = computed(() => ({
   regiao: PALETTE.indigo[500],
   uf: PALETTE.fuchsia[500],
   mark: PALETTE.amber[500],
-  markFill: hexToRgba(PALETTE.amber[500], 0.10),
+  markFill: 'rgba(150, 150, 150, 0.12)',
   text: chartTheme.value.text,
   muted: chartTheme.value.muted,
   border: chartTheme.value.border,

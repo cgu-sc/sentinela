@@ -1460,30 +1460,186 @@ def _sync_crm_timeline_eventos_global(engine, progress_callback=None):
 
 
 def _sync_movimentacao_mensal_gtin_global(engine, progress_callback=None):
-    """Sincroniza a movimentacao mensal por GTIN de todos os CNPJs em um parquet global."""
+    """Sincroniza a movimentacao mensal por GTIN em partes mensais retomaveis."""
     print("Sincronizando Movimentacao Mensal GTIN Global...")
-    query = text("""
-        SELECT F.id AS id_cnpj,
-               gtin.codigo_barra,
-               m.periodo,
-               m.qnt_caixas_vendidas,
-               m.qnt_caixas_sem_comprovacao,
-               m.num_autorizacoes,
-               CAST(m.valor_vendas AS FLOAT) AS valor_vendas,
-               CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
-        FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
-        INNER JOIN [temp_CGUSC].[fp].[processamento] p ON p.id = m.id_processamento
-        INNER JOIN [temp_CGUSC].[fp].[medicamentos_patologia_chave] gtin ON gtin.id = m.id_gtin
-        INNER JOIN [temp_CGUSC].[fp].[dados_farmacia] F ON F.cnpj = p.cnpj
-        WHERE p.situacao = 1
-    """)
-    _load_or_sync_global_cache_simple(
-        "movimentacao_mensal_gtin_global",
-        _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH,
-        query,
-        engine,
-        progress_callback,
+    schema = _GLOBAL_PARQUET_SCHEMAS["movimentacao_mensal_gtin_global"]
+    final_path = _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH
+    parts_dir = Path(_CACHE_DIR) / ".parts" / "movimentacao_mensal_gtin_global"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = parts_dir / "manifest.json"
+
+    def month_floor(value) -> date:
+        value_date = value.date() if hasattr(value, "date") else value
+        return date(value_date.year, value_date.month, 1)
+
+    def next_month(value: date) -> date:
+        if value.month == 12:
+            return date(value.year + 1, 1, 1)
+        return date(value.year, value.month + 1, 1)
+
+    def month_key(value: date) -> str:
+        return f"{value.year:04d}-{value.month:02d}"
+
+    def part_path(key: str) -> Path:
+        return parts_dir / f"{key}.smod.part"
+
+    def read_manifest() -> dict[str, Any]:
+        if not manifest_path.exists():
+            return {}
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def write_manifest(data: dict[str, Any]) -> None:
+        tmp_path = manifest_path.with_suffix(".json.tmp")
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        os.replace(tmp_path, manifest_path)
+
+    def part_is_valid(path: Path) -> bool:
+        if not path.exists():
+            return False
+        try:
+            part_columns = set(pl.scan_parquet(str(path)).collect_schema().names())
+        except Exception:
+            return False
+        return set(schema).issubset(part_columns)
+
+    with engine.connect() as conn:
+        bounds = conn.execute(text("""
+            SELECT MIN(m.periodo) AS dt_min, MAX(m.periodo) AS dt_max
+            FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
+            INNER JOIN [temp_CGUSC].[fp].[processamento] p
+                ON p.id = m.id_processamento
+            WHERE p.situacao = 1
+        """)).mappings().first()
+
+        if not bounds or bounds["dt_min"] is None or bounds["dt_max"] is None:
+            raise RuntimeError(
+                "A fonte temp_CGUSC.fp.movimentacao_mensal_gtin nao possui periodos "
+                "para gerar o cache movimentacao_mensal_gtin_global."
+            )
+
+        start_month = month_floor(bounds["dt_min"])
+        end_month = month_floor(bounds["dt_max"])
+        end_exclusive = next_month(end_month)
+        month_starts: list[date] = []
+        cursor = start_month
+        while cursor < end_exclusive:
+            month_starts.append(cursor)
+            cursor = next_month(cursor)
+
+        manifest = read_manifest()
+        manifest_valid = (
+            manifest.get("cache_key") == "movimentacao_mensal_gtin_global"
+            and manifest.get("start_month") == month_key(start_month)
+            and manifest.get("end_month") == month_key(end_month)
+            and manifest.get("status") != "done"
+        )
+        if not manifest_valid:
+            manifest = {
+                "cache_key": "movimentacao_mensal_gtin_global",
+                "start_month": month_key(start_month),
+                "end_month": month_key(end_month),
+                "parts": {},
+            }
+            write_manifest(manifest)
+
+        parts = manifest["parts"]
+        if not isinstance(parts, dict):
+            raise RuntimeError("manifesto de movimentacao_mensal_gtin_global com campo parts invalido")
+
+        query = text("""
+            SELECT
+                F.id AS id_cnpj,
+                gtin.codigo_barra,
+                CAST(m.periodo AS DATE) AS periodo,
+                m.qnt_caixas_vendidas,
+                m.qnt_caixas_sem_comprovacao,
+                m.num_autorizacoes,
+                CAST(m.valor_vendas AS FLOAT) AS valor_vendas,
+                CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
+            FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
+            INNER JOIN [temp_CGUSC].[fp].[processamento] p
+                ON p.id = m.id_processamento
+            INNER JOIN [temp_CGUSC].[fp].[medicamentos_patologia_chave] gtin
+                ON gtin.id = m.id_gtin
+            INNER JOIN [temp_CGUSC].[fp].[dados_farmacia] F
+                ON F.cnpj = p.cnpj
+            WHERE p.situacao = 1
+              AND m.periodo >= :dt_inicio
+              AND m.periodo < :dt_fim
+            ORDER BY F.id, gtin.codigo_barra, m.periodo
+        """)
+
+        total_parts = len(month_starts)
+        for index, dt_inicio in enumerate(month_starts, 1):
+            dt_fim = next_month(dt_inicio)
+            key = month_key(dt_inicio)
+            output_path = part_path(key)
+            info = parts.get(key, {})
+            if info.get("status") == "done" and part_is_valid(output_path):
+                if progress_callback:
+                    progress_callback(int((index / total_parts) * 90))
+                continue
+
+            print(f"   -> GTIN Mensal global parte {index}/{total_parts}: {key}")
+            pdf = pd.read_sql(query, conn, params={"dt_inicio": dt_inicio, "dt_fim": dt_fim})
+            if pdf.empty:
+                df_part = pl.DataFrame(schema=schema)
+            else:
+                df_part = pl.from_pandas(pdf).with_columns([
+                    pl.col("id_cnpj").cast(pl.Int32),
+                    pl.col("codigo_barra").cast(pl.Utf8),
+                    pl.col("periodo").cast(pl.Date),
+                    pl.col("qnt_caixas_vendidas").cast(pl.Int64),
+                    pl.col("qnt_caixas_sem_comprovacao").cast(pl.Int64),
+                    pl.col("num_autorizacoes").cast(pl.Int64),
+                    pl.col("valor_vendas").cast(pl.Float64),
+                    pl.col("valor_sem_comprovacao").cast(pl.Float64),
+                ])
+            df_part = df_part.select(list(schema.keys()))
+
+            tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+            df_part.write_parquet(tmp_path, compression="zstd")
+            os.replace(tmp_path, output_path)
+
+            parts[key] = {
+                "status": "done",
+                "rows": df_part.height,
+                "file": output_path.name,
+            }
+            write_manifest(manifest)
+
+            if progress_callback:
+                progress_callback(int((index / total_parts) * 90))
+
+    part_paths = [part_path(month_key(dt_inicio)) for dt_inicio in month_starts]
+    invalid_parts = [path.name for path in part_paths if not part_is_valid(path)]
+    if invalid_parts:
+        raise RuntimeError(
+            "Partes pendentes ou invalidas para consolidar movimentacao_mensal_gtin_global: "
+            + ", ".join(invalid_parts)
+        )
+
+    print("   -> Consolidando GTIN Mensal global...")
+    final_scan = (
+        pl.scan_parquet([str(path) for path in part_paths])
+        .select(list(schema.keys()))
     )
+    tmp_final = final_path + ".tmp"
+    final_scan.sink_parquet(tmp_final, compression="zstd")
+    os.replace(tmp_final, final_path)
+
+    manifest["status"] = "done"
+    manifest["final_rows"] = sum(
+        int(info.get("rows", 0))
+        for info in parts.values()
+    )
+    manifest["final_file"] = os.path.basename(final_path)
+    write_manifest(manifest)
+    _mark_on_demand_global_cache_ready("movimentacao_mensal_gtin_global", final_path)
+    if progress_callback:
+        progress_callback(100)
 
 def _load_or_sync_global_cache_simple(name, filepath, query, engine, progress_callback=None, extra_columns=None):
     import pandas as pd

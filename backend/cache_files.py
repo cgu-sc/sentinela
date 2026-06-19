@@ -61,6 +61,7 @@ CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET = _module("crm_concentracao_mul
 CRM_TIMELINE_DIA_GLOBAL_PARQUET = _module("crm_timeline_dia_global")
 CRM_TIMELINE_HORA_GLOBAL_PARQUET = _module("crm_timeline_hora_global")
 CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET = _module("crm_timeline_eventos_global")
+MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET = _module("movimentacao_mensal_gtin_global")
 TEIA_GRAFO_NIVEL2_NODES_PARQUET = _module("teia_grafo_nivel2_nodes")
 TEIA_GRAFO_NIVEL2_EDGES_PARQUET = _module("teia_grafo_nivel2_edges")
 TEIA_GRAFO_NIVEL3_NODES_PARQUET = _module("teia_grafo_nivel3_nodes")

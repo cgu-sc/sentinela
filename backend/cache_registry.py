@@ -12,6 +12,7 @@ from cache_files import (
     CRM_TIMELINE_DIA_GLOBAL_PARQUET,
     CRM_TIMELINE_HORA_GLOBAL_PARQUET,
     CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET,
+    MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET,
 )
 
 
@@ -219,6 +220,19 @@ def _crm_timeline_eventos_global_schema() -> dict:
     }
 
 
+def _movimentacao_mensal_gtin_global_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "codigo_barra": pl.Utf8,
+        "periodo": pl.Date,
+        "qnt_caixas_vendidas": pl.Int64,
+        "qnt_caixas_sem_comprovacao": pl.Int64,
+        "num_autorizacoes": pl.Int64,
+        "valor_vendas": pl.Float64,
+        "valor_sem_comprovacao": pl.Float64,
+    }
+
+
 def _crm_prescritores_schema(
     include_id_cnpj: bool = False,
     include_no_medico: bool = True,
@@ -410,6 +424,7 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("crm_timeline_dia_global", CRM_TIMELINE_DIA_GLOBAL_PARQUET, "global", _crm_timeline_dia_global_schema()),
     CacheDefinition("crm_timeline_hora_global", CRM_TIMELINE_HORA_GLOBAL_PARQUET, "global", _crm_timeline_hora_global_schema()),
     CacheDefinition("crm_timeline_eventos_global", CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET, "global", _crm_timeline_eventos_global_schema()),
+    CacheDefinition("movimentacao_mensal_gtin_global", cache_files.MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET, "global", _movimentacao_mensal_gtin_global_schema()),
 )
 
 

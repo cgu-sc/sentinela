@@ -55,6 +55,7 @@ from data_cache import (
     _sync_crm_timeline_dia_global,
     _sync_crm_timeline_hora_global,
     _sync_crm_timeline_eventos_global,
+    _sync_movimentacao_mensal_gtin_global,
 )
 
 
@@ -366,7 +367,9 @@ MODULOS = sorted([
     {"id": 39, "name": "CRM Eventos Global", "func": _sync_crm_timeline_eventos_global, "peso": "pesado", "ordem": 39},
     {"id": 40, "name": "Mem. Calc. por UF", "func": _sync_memoria_calculo_ufs, "peso": "pesado", "ordem": 40},
     {"id": 41, "name": "CRM por UF", "func": _sync_crm_ufs, "peso": "pesado", "ordem": 41},
+    {"id": 42, "name": "GTIN Mensal Global", "func": _sync_movimentacao_mensal_gtin_global, "peso": "muito pesado", "ordem": 42},
 ], key=lambda modulo: modulo["ordem"])
+
 
 DEPENDENCIAS_MODULOS = {
     8: {7},

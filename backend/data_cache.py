@@ -434,6 +434,7 @@ _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH = _global_cache_path("crm
 _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH = _global_cache_path("crm_timeline_dia_global")
 _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH = _global_cache_path("crm_timeline_hora_global")
 _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH = _global_cache_path("crm_timeline_eventos_global")
+_MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH = _global_cache_path("movimentacao_mensal_gtin_global")
 
 
 for _dir in (get_modules_dir(), _CACHE_DIR, get_cnpj_cache_root()):
@@ -1456,6 +1457,33 @@ def _sync_crm_timeline_eventos_global(engine, progress_callback=None):
         FROM temp_CGUSC.fp.app_crm_timeline_eventos P
     """)
     _load_or_sync_global_cache_simple("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH, query, engine, progress_callback)
+
+
+def _sync_movimentacao_mensal_gtin_global(engine, progress_callback=None):
+    """Sincroniza a movimentacao mensal por GTIN de todos os CNPJs em um parquet global."""
+    print("Sincronizando Movimentacao Mensal GTIN Global...")
+    query = text("""
+        SELECT F.id AS id_cnpj,
+               gtin.codigo_barra,
+               m.periodo,
+               m.qnt_caixas_vendidas,
+               m.qnt_caixas_sem_comprovacao,
+               m.num_autorizacoes,
+               CAST(m.valor_vendas AS FLOAT) AS valor_vendas,
+               CAST(m.valor_sem_comprovacao AS FLOAT) AS valor_sem_comprovacao
+        FROM [temp_CGUSC].[fp].[movimentacao_mensal_gtin] m
+        INNER JOIN [temp_CGUSC].[fp].[processamento] p ON p.id = m.id_processamento
+        INNER JOIN [temp_CGUSC].[fp].[medicamentos_patologia_chave] gtin ON gtin.id = m.id_gtin
+        INNER JOIN [temp_CGUSC].[fp].[dados_farmacia] F ON F.cnpj = p.cnpj
+        WHERE p.situacao = 1
+    """)
+    _load_or_sync_global_cache_simple(
+        "movimentacao_mensal_gtin_global",
+        _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH,
+        query,
+        engine,
+        progress_callback,
+    )
 
 def _load_or_sync_global_cache_simple(name, filepath, query, engine, progress_callback=None, extra_columns=None):
     import pandas as pd
@@ -3900,6 +3928,7 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _try_mark_on_demand("crm_timeline_dia_global", _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("crm_timeline_hora_global", _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand("movimentacao_mensal_gtin_global", _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH)
         _df_esocial_cnpj_ano = None
         _df_esocial_cnpj_trabalhador_ano = None
         _df_esocial_cnpj_movimentacao_ano = None
@@ -3962,9 +3991,9 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         {"name": "CRM Geografico Global", "weight": 2, "func": lambda cb: _sync_geografico_global(engine, cb)},
         {"name": "CRM Conc. Unico Global", "weight": 2, "func": lambda cb: _sync_crm_concentracao_unico_alertas_global(engine, cb)},
         {"name": "CRM Conc. Multiplo Global", "weight": 2, "func": lambda cb: _sync_crm_concentracao_multiplo_alertas_global(engine, cb)},
-        {"name": "CRM Timeline Dia Global", "weight": 2, "func": lambda cb: _sync_crm_timeline_dia_global(engine, cb)},
         {"name": "CRM Timeline Hora Global", "weight": 2, "func": lambda cb: _sync_crm_timeline_hora_global(engine, cb)},
         {"name": "CRM Timeline Eventos Global", "weight": 2, "func": lambda cb: _sync_crm_timeline_eventos_global(engine, cb)},
+        {"name": "Movimentacao Mensal GTIN Global", "weight": 5, "func": lambda cb: _sync_movimentacao_mensal_gtin_global(engine, cb)},
     ]
 
     t0 = time.perf_counter()
@@ -4156,6 +4185,9 @@ def scan_crm_timeline_hora_global() -> pl.LazyFrame:
 def scan_crm_timeline_eventos_global() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH)
 
+def scan_movimentacao_mensal_gtin_global() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet("movimentacao_mensal_gtin_global", _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH)
+
 def scan_crm_raiox_tx_global() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet(
         "crm_raiox_tx_global",
@@ -4218,6 +4250,7 @@ def get_cache_status() -> dict:
         "crm_timeline_hora_global",
         "crm_concentracao_multiplo_alertas_global",
         "crm_concentracao_unico_alertas_global",
+        "movimentacao_mensal_gtin_global",
     }
     modules = {
         "movimentacao":   {"label": "Movimentação Mensal",     "path": _PARQUET_PATH,             "loaded": _df_movimentacao is not None},
@@ -4238,6 +4271,7 @@ def get_cache_status() -> dict:
         "crm_timeline_dia_global": {"label": "CRM Timeline Dia Global", "path": _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_timeline_dia_global", _CRM_TIMELINE_DIA_GLOBAL_PARQUET_PATH)},
         "crm_timeline_hora_global": {"label": "CRM Timeline Hora Global", "path": _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_timeline_hora_global", _CRM_TIMELINE_HORA_GLOBAL_PARQUET_PATH)},
         "crm_timeline_eventos_global": {"label": "CRM Timeline Eventos Global", "path": _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_timeline_eventos_global", _CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET_PATH)},
+        "movimentacao_mensal_gtin_global": {"label": "GTIN Mensal Global", "path": _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("movimentacao_mensal_gtin_global", _MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET_PATH)},
         "dados_farmacia": {"label": "Dados das Farmácias",     "path": _DADOS_FARMACIA_PARQUET_PATH,  "loaded": _df_dados_farmacia is not None},
         "dados_farmacia_cnaes_secundarios": {
             "label": "CNAEs Secundarios das Farmacias",

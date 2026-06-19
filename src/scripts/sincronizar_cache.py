@@ -67,6 +67,12 @@ CRM_CNPJ_CACHE_KEYS = [
     ("crm_timeline_eventos", "CRM timeline eventos"),
 ]
 
+CRM_UF_CACHE_KEYS = [
+    ("crm_prescritores", "CRM prescritores"),
+    ("crm_raiox_tx", "CRM Raio-X transacoes"),
+    *CRM_CNPJ_CACHE_KEYS,
+]
+
 CRM_COMPLETO_ID = 9
 CRM_INDIVIDUAL_IDS: frozenset[int] = frozenset()  # Módulos legados 10-15 removidos; globais 33-38 são o padrão.
 
@@ -249,6 +255,49 @@ def _sync_memoria_calculo_ufs(engine, progress_callback=None) -> None:
         progress_callback(100)
 
 
+def _sync_crm_ufs(engine, progress_callback=None) -> None:
+    """Sincroniza os modulos CRM por CNPJ para CNPJs de UFs especificas."""
+    print()
+    entrada = input("Digite as UFs desejadas separadas por virgula (ex: SC, RJ) ou ENTER para pular: ").strip().upper()
+    if not entrada:
+        print("Operacao cancelada (nenhuma UF informada).")
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    ufs = [uf.strip() for uf in entrada.split(",") if uf.strip()]
+    cnpjs_sync = _buscar_cnpjs_por_uf(engine, ufs)
+
+    total = len(cnpjs_sync)
+    if total == 0:
+        print(f"Nenhum CNPJ elegivel encontrado para as UFs: {', '.join(ufs)}.")
+        if progress_callback:
+            progress_callback(100)
+        return
+
+    print(f"Encontrados {total} estabelecimentos nas UFs: {', '.join(ufs)}.")
+    print(
+        "Sincronizando pacote CRM por UF: "
+        f"{len(CRM_UF_CACHE_KEYS)} modulo(s), {total} estabelecimento(s)..."
+    )
+
+    total_steps = total * len(CRM_UF_CACHE_KEYS)
+    step = 0
+    for cnpj in cnpjs_sync:
+        for cache_key, label in CRM_UF_CACHE_KEYS:
+            try:
+                _sync_crm_cnpj_unit(cache_key, cnpj, engine)
+                step += 1
+                if progress_callback:
+                    progress_callback(int((step / total_steps) * 100))
+            except Exception as e:
+                print(f"\n[AVISO] Erro ao sincronizar {label} para CNPJ {cnpj}: {e}")
+                raise
+
+    if progress_callback:
+        progress_callback(100)
+
+
 MODULOS = sorted([
     {"id": 1, "name": "Localidades", "func": _sync_localidades, "peso": "rapido", "ordem": 1},
     {"id": 2, "name": "Rede", "func": _sync_rede, "peso": "rapido", "ordem": 2},
@@ -284,6 +333,7 @@ MODULOS = sorted([
     {"id": 38, "name": "CRM Hora Global", "func": _sync_crm_timeline_hora_global, "peso": "pesado", "ordem": 38},
     {"id": 39, "name": "CRM Eventos Global", "func": _sync_crm_timeline_eventos_global, "peso": "pesado", "ordem": 39},
     {"id": 40, "name": "Mem. Calc. por UF", "func": _sync_memoria_calculo_ufs, "peso": "pesado", "ordem": 40},
+    {"id": 41, "name": "CRM por UF", "func": _sync_crm_ufs, "peso": "pesado", "ordem": 41},
 ], key=lambda modulo: modulo["ordem"])
 
 DEPENDENCIAS_MODULOS = {
@@ -291,6 +341,7 @@ DEPENDENCIAS_MODULOS = {
     9: {7, 8, 16, 34, 35, 36, 37, 38, 39},
     21: {20},
     23: {22},
+    41: {7, 8, 16, 34, 35, 36, 37, 38, 39},
 }
 
 

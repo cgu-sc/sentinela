@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useRecentCnpjStore } from '@/stores/recentCnpj';
 import { useFarmaciaListsStore } from '@/stores/farmaciaLists';
 import { useSyncManager } from '@/composables/useSyncManager';
-import ThemeSelector from '@/components/ThemeSelector.vue';
+import { useThemeStore } from '@/stores/theme';
 import Button from 'primevue/button';
 import AutoComplete from 'primevue/autocomplete';
 import { useGeoStore } from '@/stores/geo';
@@ -17,6 +17,7 @@ const farmaciaLists = useFarmaciaListsStore();
 const totalListas = computed(() => farmaciaLists.interesse.length);
 const { showConfirmSync } = useSyncManager();
 const geoStore = useGeoStore();
+const themeStore = useThemeStore();
 
 const tabs = [
   { label: 'Home', path: '/' },
@@ -136,7 +137,14 @@ function onNavSelect(event) {
       >
         <i class="pi pi-book" />
       </a>
-      <ThemeSelector />
+      <Button
+        :icon="themeStore.isDark ? 'pi pi-sun' : 'pi pi-moon'"
+        text
+        rounded
+        severity="secondary"
+        v-tooltip.bottom="themeStore.isDark ? 'Modo claro' : 'Modo escuro'"
+        @click="themeStore.toggleTheme()"
+      />
       <Button
         icon="pi pi-cog"
         text

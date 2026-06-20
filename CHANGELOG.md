@@ -4,6 +4,21 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
+## [1.1.0] - 2026-06-20
+
+### Adicionado
+- Sistema de verificação automática de atualizações com assinatura Ed25519 e manifesto público no GitHub Pages.
+- Tela de bloqueio profissional exibida quando a versão instalada está abaixo da versão mínima suportada.
+- Cache local offline do manifesto validado em `%LOCALAPPDATA%\Sentinela\updates\` com proteção anti-downgrade.
+- Card Sistema expandido com linha de status de atualização (Atualizado, Atualização disponível, Verificação offline, Não verificado) e tooltip com data da última verificação.
+- Link para documentação do sistema (`https://cgu-sc.github.io/sentinela/`) na barra de navegação.
+- Endpoints `GET /api/v1/system/update-status` e `POST /api/v1/system/check-update`.
+- Fonte única de versão do produto em `version.json` na raiz do projeto.
+
+### Alterado
+- Seletor de aparência simplificado: removida a seleção de paleta de cores; o tema Carbon Gold passa a ser fixo e apenas o alternador claro/escuro permanece na navbar.
+- Linha "Atualizado" (data do cache de dados) removida do card Sistema para reduzir redundância.
+
 ## [1.0.0] - 2026-06-20
 
 ### Adicionado

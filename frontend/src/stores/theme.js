@@ -101,13 +101,6 @@ export const useThemeStore = defineStore('theme', () => {
     saveThemePreferences();
   };
 
-  const setPalette = (palette) => {
-    currentPalette.value = AVAILABLE_PALETTES.has(palette) ? palette : DEFAULT_PALETTE;
-    applyTheme();
-    saveThemePreferences();
-  };
-
-  // Mantido para compatibilidade com usos anteriores
   const toggleTheme = () => {
     setMode(isDark.value ? 'light' : 'dark');
   };
@@ -128,9 +121,7 @@ export const useThemeStore = defineStore('theme', () => {
       if (ui.themeMode === 'dark' || ui.themeMode === 'light') {
         isDark.value = ui.themeMode === 'dark';
       }
-      if (AVAILABLE_PALETTES.has(ui.themePalette)) {
-        currentPalette.value = ui.themePalette;
-      }
+      // Paleta fixada em carbon — ignorar preferência salva
 
       applyTheme();
 
@@ -164,5 +155,5 @@ export const useThemeStore = defineStore('theme', () => {
     };
   });
 
-  return { isDark, currentPalette, tokens, toggleTheme, setMode, setPalette, initTheme };
+  return { isDark, currentPalette, tokens, toggleTheme, setMode, initTheme };
 });

@@ -8,10 +8,10 @@
 <meta content="Sistema de Auditoria Automatizada do Programa Farmácia Popular do Brasil" name="description"/>
 <meta content="CGU - Núcleo de Estudos e Pesquisas (NEP/SC)" name="author"/>
 <link href="https://cgu-sc.github.io/sentinela/indicadores/index.html" rel="canonical"/>
-<link href="../relatorios/aba-crms.html" rel="prev"/>
+<link href="../arquitetura/fase4-analise.html" rel="prev"/>
 <link href="matriz-risco.html" rel="next"/>
 <link href="../assets/images/favicon.png" rel="icon"/>
-<meta content="mkdocs-1.6.1, mkdocs-material-9.7.1" name="generator"/>
+<meta content="mkdocs-1.6.1, mkdocs-material-9.7.6" name="generator"/>
 <title>Indicadores de Risco e Fraude - Projeto Sentinela</title>
 <link href="../assets/stylesheets/main.484c7ddc.min.css" rel="stylesheet"/>
 <link href="../assets/stylesheets/palette.ab4e12ef.min.css" rel="stylesheet"/>
@@ -154,7 +154,7 @@
         </a>
 </li>
 <li class="md-tabs__item">
-<a class="md-tabs__link" href="../relatorios/index.html">
+<a class="md-tabs__link" href="../relatorios/index.md">
           
   
   
@@ -530,11 +530,11 @@
           </label>
 <ul class="md-nav__list" data-md-scrollfix="">
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/index.html">
+<a class="md-nav__link" href="../relatorios/index.md">
 <span class="md-ellipsis">
     
   
-    Relatórios
+    None
   
 
     
@@ -542,7 +542,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-movimentacao.html">
+<a class="md-nav__link" href="../relatorios/aba-movimentacao.md">
 <span class="md-ellipsis">
     
   
@@ -554,7 +554,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-evolucao.html">
+<a class="md-nav__link" href="../relatorios/aba-evolucao.md">
 <span class="md-ellipsis">
     
   
@@ -566,7 +566,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-indicadores.html">
+<a class="md-nav__link" href="../relatorios/aba-indicadores.md">
 <span class="md-ellipsis">
     
   
@@ -578,7 +578,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-crms.html">
+<a class="md-nav__link" href="../relatorios/aba-crms.md">
 <span class="md-ellipsis">
     
   
@@ -663,29 +663,38 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#visao-geral-dos-17-indicadores">
+<a class="md-nav__link" href="#visao-geral-dos-indicadores">
 <span class="md-ellipsis">
       
-        Visão Geral dos 17 Indicadores
+        Visão Geral dos Indicadores
       
     </span>
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#conceito-de-risco-relativo-rr">
+<a class="md-nav__link" href="#normalizacao-por-percentil-modelo-v70">
 <span class="md-ellipsis">
       
-        Conceito de Risco Relativo (RR)
+        Normalização por Percentil (Modelo V7.0)
       
     </span>
 </a>
-<nav aria-label="Conceito de Risco Relativo (RR)" class="md-nav">
+<nav aria-label="Normalização por Percentil (Modelo V7.0)" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#interpretacao-do-rr">
+<a class="md-nav__link" href="#a-escala-0-100">
 <span class="md-ellipsis">
       
-        Interpretação do RR
+        A Escala 0-100
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#penalidade-linear-por-flags-criticos">
+<span class="md-ellipsis">
+      
+        Penalidade Linear por Flags Críticos
       
     </span>
 </a>
@@ -694,10 +703,10 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#fontes-de-dados-para-indicadores">
+<a class="md-nav__link" href="#fontes-de-dados">
 <span class="md-ellipsis">
       
-        Fontes de Dados para Indicadores
+        Fontes de Dados
       
     </span>
 </a>
@@ -863,29 +872,38 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#visao-geral-dos-17-indicadores">
+<a class="md-nav__link" href="#visao-geral-dos-indicadores">
 <span class="md-ellipsis">
       
-        Visão Geral dos 17 Indicadores
+        Visão Geral dos Indicadores
       
     </span>
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#conceito-de-risco-relativo-rr">
+<a class="md-nav__link" href="#normalizacao-por-percentil-modelo-v70">
 <span class="md-ellipsis">
       
-        Conceito de Risco Relativo (RR)
+        Normalização por Percentil (Modelo V7.0)
       
     </span>
 </a>
-<nav aria-label="Conceito de Risco Relativo (RR)" class="md-nav">
+<nav aria-label="Normalização por Percentil (Modelo V7.0)" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#interpretacao-do-rr">
+<a class="md-nav__link" href="#a-escala-0-100">
 <span class="md-ellipsis">
       
-        Interpretação do RR
+        A Escala 0-100
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#penalidade-linear-por-flags-criticos">
+<span class="md-ellipsis">
+      
+        Penalidade Linear por Flags Críticos
       
     </span>
 </a>
@@ -894,10 +912,10 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#fontes-de-dados-para-indicadores">
+<a class="md-nav__link" href="#fontes-de-dados">
 <span class="md-ellipsis">
       
-        Fontes de Dados para Indicadores
+        Fontes de Dados
       
     </span>
 </a>
@@ -968,223 +986,178 @@
 <h2 id="matriz-de-risco">Matriz de Risco<a class="headerlink" href="#matriz-de-risco" title="Permanent link">¶</a></h2>
 <div class="grid cards">
 <ul>
-<li><span class="twemoji lg middle"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2M9 17H7v-7h2zm4 0h-2V7h2zm4 0h-2v-4h2z"></path></svg></span> <strong>Score de Risco Final</strong></li>
+<li><span class="twemoji lg middle"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2M9 17H7v-7h2zm4 0h-2V7h2zm4 0h-2v-4h2z"></path></svg></span> <strong>Score de Risco Final (V7.0)</strong></li>
 </ul>
 <hr/>
-<p>Entenda como os indicadores são combinados para gerar um score único e classificação de risco.</p>
+<p>A V7 utiliza normalização regional por percentil e penalidade linear por indicadores críticos.</p>
 <p><a href="matriz-risco.html"><span class="twemoji"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path></svg></span> Ver metodologia</a></p>
 <ul>
-<li><span class="twemoji lg middle"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 8c.56 0 1 .43 1 1a1 1 0 0 1-1 1c-.57 0-1-.45-1-1 0-.57.43-1 1-1M2 2v9c0 2.96 2.19 5.5 5.14 5.91.62 3.01 3.28 5.09 6.36 5.09a6.5 6.5 0 0 0 6.5-6.5v-3.69c1.16-.42 2-1.52 2-2.81a3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 1.29.84 2.4 2 2.81v3.6c0 2.5-2 4.5-4.5 4.5-2 0-3.68-1.21-4.28-3.01C12 16.3 14 13.8 14 11V2h-4v3h2v6a4 4 0 0 1-4 4 4 4 0 0 1-4-4V5h2V2z"></path></svg></span> <strong>Análise de Prescritores</strong></li>
+<li>:material- stethoscope:{ .lg .middle } <strong>Análise de Prescritores</strong></li>
 </ul>
 <hr/>
 <p>Detalhamento especial da análise de CRMs e médicos prescritores.</p>
 <p><a href="analise-prescritores.html"><span class="twemoji"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path></svg></span> Ver análise</a></p>
 </div>
 <hr/>
-<h2 id="visao-geral-dos-17-indicadores">Visão Geral dos 17 Indicadores<a class="headerlink" href="#visao-geral-dos-17-indicadores" title="Permanent link">¶</a></h2>
+<h2 id="visao-geral-dos-indicadores">Visão Geral dos Indicadores<a class="headerlink" href="#visao-geral-dos-indicadores" title="Permanent link">¶</a></h2>
 <table>
 <thead>
 <tr>
-<th>#</th>
-<th>Indicador</th>
-<th>Grupo</th>
-<th>O que mede</th>
+<th style="text-align: left;">#</th>
+<th style="text-align: left;">Indicador</th>
+<th style="text-align: left;">Grupo</th>
+<th style="text-align: left;">O que mede</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1</td>
-<td>Vendas para Falecidos</td>
-<td>Elegibilidade</td>
-<td>% de vendas para beneficiários após óbito</td>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">Vendas para Falecidos</td>
+<td style="text-align: left;">Elegibilidade</td>
+<td style="text-align: left;">% de vendas para beneficiários após óbito</td>
 </tr>
 <tr>
-<td>2</td>
-<td>Incompatibilidade Clínica</td>
-<td>Elegibilidade</td>
-<td>% de vendas com perfil idade/sexo incompatível</td>
+<td style="text-align: left;">2</td>
+<td style="text-align: left;">Incompatibilidade Clínica</td>
+<td style="text-align: left;">Elegibilidade</td>
+<td style="text-align: left;">% de vendas com perfil idade/sexo incompatível</td>
 </tr>
 <tr>
-<td>3</td>
-<td>Dispensação em Teto</td>
-<td>Quantidade</td>
-<td>% de vendas no limite máximo permitido</td>
+<td style="text-align: left;">3</td>
+<td style="text-align: left;">Dispensação em Teto</td>
+<td style="text-align: left;">Quantidade</td>
+<td style="text-align: left;">% de vendas no limite máximo permitido</td>
 </tr>
 <tr>
-<td>4</td>
-<td>Polimedicamentos</td>
-<td>Quantidade</td>
-<td>% de cupons com 4+ medicamentos</td>
+<td style="text-align: left;">4</td>
+<td style="text-align: left;">Polimedicamentos</td>
+<td style="text-align: left;">Quantidade</td>
+<td style="text-align: left;">% de cupons com 4+ medicamentos</td>
 </tr>
 <tr>
-<td>5</td>
-<td>Média de Itens</td>
-<td>Quantidade</td>
-<td>Média de itens por autorização</td>
+<td style="text-align: left;">5</td>
+<td style="text-align: left;">Ticket Médio</td>
+<td style="text-align: left;">Financeiro</td>
+<td style="text-align: left;">Valor médio por autorização</td>
 </tr>
 <tr>
-<td>6</td>
-<td>Ticket Médio</td>
-<td>Financeiro</td>
-<td>Valor médio por autorização</td>
+<td style="text-align: left;">6</td>
+<td style="text-align: left;">Receita por Paciente</td>
+<td style="text-align: left;">Financeiro</td>
+<td style="text-align: left;">Faturamento médio por CPF</td>
 </tr>
 <tr>
-<td>7</td>
-<td>Receita por Paciente</td>
-<td>Financeiro</td>
-<td>Faturamento médio por CPF</td>
+<td style="text-align: left;">7</td>
+<td style="text-align: left;">Venda Per Capita</td>
+<td style="text-align: left;">Financeiro</td>
+<td style="text-align: left;">Faturamento / população do município</td>
 </tr>
 <tr>
-<td>8</td>
-<td>Venda Per Capita</td>
-<td>Financeiro</td>
-<td>Faturamento / população do município</td>
+<td style="text-align: left;">8</td>
+<td style="text-align: left;">Medicamentos Alto Custo</td>
+<td style="text-align: left;">Financeiro</td>
+<td style="text-align: left;">% de vendas de medicamentos caros</td>
 </tr>
 <tr>
-<td>9</td>
-<td>Medicamentos Alto Custo</td>
-<td>Financeiro</td>
-<td>% de vendas de medicamentos caros</td>
+<td style="text-align: left;">9</td>
+<td style="text-align: left;">Vendas Rápidas</td>
+<td style="text-align: left;">Automação</td>
+<td style="text-align: left;">% de vendas consecutivas &lt;60 segundos</td>
 </tr>
 <tr>
-<td>10</td>
-<td>Vendas Rápidas</td>
-<td>Automação</td>
-<td>% de vendas consecutivas &lt;60 segundos</td>
+<td style="text-align: left;">10</td>
+<td style="text-align: left;">Horário Atípico</td>
+<td style="text-align: left;">Automação</td>
+<td style="text-align: left;">% de vendas na madrugada (00h-06h)</td>
 </tr>
 <tr>
-<td>11</td>
-<td>Horário Atípico</td>
-<td>Automação</td>
-<td>% de vendas na madrugada (00h-06h)</td>
+<td style="text-align: left;">11</td>
+<td style="text-align: left;">Concentração em Pico</td>
+<td style="text-align: left;">Automação</td>
+<td style="text-align: left;">% de vendas nos 3 dias de maior movimento</td>
 </tr>
 <tr>
-<td>12</td>
-<td>Concentração em Pico</td>
-<td>Automação</td>
-<td>% de vendas nos 3 dias de maior movimento</td>
+<td style="text-align: left;">12</td>
+<td style="text-align: left;">Dispersão Geográfica</td>
+<td style="text-align: left;">Automação</td>
+<td style="text-align: left;">% de pacientes de outras UFs</td>
 </tr>
 <tr>
-<td>13</td>
-<td>Dispersão Geográfica</td>
-<td>Automação</td>
-<td>% de pacientes de outras UFs</td>
+<td style="text-align: left;">13</td>
+<td style="text-align: left;">Concentração HHI</td>
+<td style="text-align: left;">CRMs</td>
+<td style="text-align: left;">Índice de concentração de prescritores</td>
 </tr>
 <tr>
-<td>14</td>
-<td>Pacientes Únicos</td>
-<td>Automação</td>
-<td>% de CPFs com apenas uma compra</td>
+<td style="text-align: left;">14</td>
+<td style="text-align: left;">Exclusividade CRM</td>
+<td style="text-align: left;">CRMs</td>
+<td style="text-align: left;">% de CRMs exclusivos da farmácia</td>
 </tr>
 <tr>
-<td>15</td>
-<td>Concentração HHI</td>
-<td>CRMs</td>
-<td>Índice de concentração de prescritores</td>
+<td style="text-align: left;">15</td>
+<td style="text-align: left;">Irregularidade CRM</td>
+<td style="text-align: left;">CRMs</td>
+<td style="text-align: left;">% de CRMs inválidos ou retroativos</td>
 </tr>
 <tr>
-<td>16</td>
-<td>Exclusividade CRM</td>
-<td>CRMs</td>
-<td>% de CRMs exclusivos da farmácia</td>
+<td style="text-align: left;">16</td>
+<td style="text-align: left;"><strong>Recorrência Sistêmica</strong></td>
+<td style="text-align: left;">Automação</td>
+<td style="text-align: left;">Padrão repetitivo de horários e datas</td>
 </tr>
 <tr>
-<td>17</td>
-<td>Irregularidade CRM</td>
-<td>CRMs</td>
-<td>% de CRMs inválidos ou retroativos</td>
+<td style="text-align: left;">17</td>
+<td style="text-align: left;"><strong>Auditoria Financeira</strong></td>
+<td style="text-align: left;">Financeiro</td>
+<td style="text-align: left;">% de não comprovação em auditorias prévias</td>
 </tr>
 </tbody>
 </table>
 <hr/>
-<h2 id="conceito-de-risco-relativo-rr">Conceito de Risco Relativo (RR)<a class="headerlink" href="#conceito-de-risco-relativo-rr" title="Permanent link">¶</a></h2>
-<p>Todos os indicadores são normalizados através do conceito de <strong>Risco Relativo</strong>:</p>
-<div class="arithmatex">\[
-RR = \frac{\text{Valor do Indicador na Farmácia}}{\text{Média do Indicador na UF}}
-\]</div>
-<h3 id="interpretacao-do-rr">Interpretação do RR<a class="headerlink" href="#interpretacao-do-rr" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Valor RR</th>
-<th>Interpretação</th>
-<th>Nível de Alerta</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>&lt; 1.0</strong></td>
-<td>Abaixo da média</td>
-<td>🟢 Normal</td>
-</tr>
-<tr>
-<td><strong>≈ 1.0</strong></td>
-<td>Na média</td>
-<td>🟢 Normal</td>
-</tr>
-<tr>
-<td><strong>1.5 - 2.0</strong></td>
-<td>Levemente acima</td>
-<td>🟡 Atenção</td>
-</tr>
-<tr>
-<td><strong>2.0 - 5.0</strong></td>
-<td>Significativamente acima</td>
-<td>🟠 Alerta</td>
-</tr>
-<tr>
-<td><strong>&gt; 5.0</strong></td>
-<td>Muito acima</td>
-<td>🔴 Crítico</td>
-</tr>
-</tbody>
-</table>
+<h2 id="normalizacao-por-percentil-modelo-v70">Normalização por Percentil (Modelo V7.0)<a class="headerlink" href="#normalizacao-por-percentil-modelo-v70" title="Permanent link">¶</a></h2>
+<p>Diferente de versões anteriores, o Sistema Sentinela agora utiliza a função <strong>Percentil Acumulado (CUME_DIST)</strong> para normalizar os resultados:</p>
+<h3 id="a-escala-0-100">A Escala 0-100<a class="headerlink" href="#a-escala-0-100" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>0.0</strong>: Comportamento padrão (baixa suspeição).</li>
+<li><strong>50.0</strong>: Posição mediana no benchmark regional.</li>
+<li><strong>100.0</strong>: Posição máxima de risco no benchmark regional.</li>
+</ul>
+<h3 id="penalidade-linear-por-flags-criticos">Penalidade Linear por Flags Críticos<a class="headerlink" href="#penalidade-linear-por-flags-criticos" title="Permanent link">¶</a></h3>
+<p>Além da escala base, cada indicador que apresenta uma anomalia severa (&gt;5x a média regional) gera um <strong>Flag Crítico</strong>, adicionando <strong>+10 pontos fixos</strong> ao score final.</p>
 <hr/>
-<h2 id="fontes-de-dados-para-indicadores">Fontes de Dados para Indicadores<a class="headerlink" href="#fontes-de-dados-para-indicadores" title="Permanent link">¶</a></h2>
+<h2 id="fontes-de-dados">Fontes de Dados<a class="headerlink" href="#fontes-de-dados" title="Permanent link">¶</a></h2>
 <table>
 <thead>
 <tr>
-<th>Indicador</th>
-<th>Fontes Utilizadas</th>
+<th style="text-align: left;">Fonte</th>
+<th style="text-align: left;">Descrição</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Falecidos</td>
-<td><code>movimentacaoFP</code> + <code>tb_obitos_unificada</code></td>
+<td style="text-align: left;"><code>movimentacaoFP</code></td>
+<td style="text-align: left;">Dados transacionais do Farmácia Popular.</td>
 </tr>
 <tr>
-<td>Incompatibilidade</td>
-<td><code>movimentacaoFP</code> + <code>medicamentosPatologiaFP</code> + <code>db_CPF</code></td>
+<td style="text-align: left;"><code>tb_obitos_unificada</code></td>
+<td style="text-align: left;">Base de óbitos do SISOBI/Cartórios.</td>
 </tr>
 <tr>
-<td>Quantidade</td>
-<td><code>movimentacaoFP</code></td>
+<td style="text-align: left;"><code>base_CFM</code></td>
+<td style="text-align: left;">Cadastro nacional de médicos e CRMs.</td>
 </tr>
 <tr>
-<td>Financeiros</td>
-<td><code>movimentacaoFP</code> + <code>tb_ibge</code></td>
-</tr>
-<tr>
-<td>Automação</td>
-<td><code>movimentacaoFP</code> (timestamps)</td>
-</tr>
-<tr>
-<td>CRMs</td>
-<td><code>movimentacaoFP</code> + Base CFM</td>
+<td style="text-align: left;"><code>tb_ibge</code></td>
+<td style="text-align: left;">Dados populacionais e geográficos.</td>
 </tr>
 </tbody>
 </table>
 <hr/>
 <div class="admonition tip">
-<p class="admonition-title">Como usar esta seção</p>
+<p class="admonition-title">Manual Detalhado</p>
+<p>Clique em cada grupo de indicadores no topo para ver as fórmulas matemáticas e critérios de corte específicos.</p>
 </div>
-<p>Clique em cada grupo para ver a <strong>metodologia detalhada</strong> de cálculo de cada indicador, incluindo:</p>
-<div class="language-text highlight"><pre><span></span><code>- Lógica de seleção de dados
-- Fórmula de cálculo
-- Interpretação dos resultados
-- Casos de borda e exceções
-</code></pre></div>
 </article>
 </div>
 <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
@@ -1197,7 +1170,7 @@ RR = \frac{\text{Valor do Indicador na Farmácia}}{\text{Média do Indicador na 
 </main>
 <footer class="md-footer">
 <nav aria-label="Rodapé" class="md-footer__inner md-grid">
-<a aria-label="Anterior: Aba Análise de CRMs" class="md-footer__link md-footer__link--prev" href="../relatorios/aba-crms.html">
+<a aria-label="Anterior: Fase 4 - Análise Gerencial" class="md-footer__link md-footer__link--prev" href="../arquitetura/fase4-analise.html">
 <div class="md-footer__button md-icon">
 <svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
 </div>
@@ -1206,7 +1179,7 @@ RR = \frac{\text{Valor do Indicador na Farmácia}}{\text{Média do Indicador na 
                 Anterior
               </span>
 <div class="md-ellipsis">
-                Aba Análise de CRMs
+                Fase 4 - Análise Gerencial
               </div>
 </div>
 </a>

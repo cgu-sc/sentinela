@@ -11,7 +11,7 @@
 <link href="index.html" rel="prev"/>
 <link href="grupo1-elegibilidade.html" rel="next"/>
 <link href="../assets/images/favicon.png" rel="icon"/>
-<meta content="mkdocs-1.6.1, mkdocs-material-9.7.1" name="generator"/>
+<meta content="mkdocs-1.6.1, mkdocs-material-9.7.6" name="generator"/>
 <title>Matriz de Risco - Projeto Sentinela</title>
 <link href="../assets/stylesheets/main.484c7ddc.min.css" rel="stylesheet"/>
 <link href="../assets/stylesheets/palette.ab4e12ef.min.css" rel="stylesheet"/>
@@ -27,7 +27,7 @@
 <input autocomplete="off" class="md-toggle" data-md-toggle="search" id="__search" type="checkbox"/>
 <label class="md-overlay" for="__drawer"></label>
 <div data-md-component="skip">
-<a class="md-skip" href="#matriz-de-risco-final">
+<a class="md-skip" href="#metodologia-da-matriz-de-risco-v82">
           Pular para conteúdo
         </a>
 </div>
@@ -154,7 +154,7 @@
         </a>
 </li>
 <li class="md-tabs__item">
-<a class="md-tabs__link" href="../relatorios/index.html">
+<a class="md-tabs__link" href="../relatorios/index.md">
           
   
   
@@ -530,11 +530,11 @@
           </label>
 <ul class="md-nav__list" data-md-scrollfix="">
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/index.html">
+<a class="md-nav__link" href="../relatorios/index.md">
 <span class="md-ellipsis">
     
   
-    Relatórios
+    None
   
 
     
@@ -542,7 +542,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-movimentacao.html">
+<a class="md-nav__link" href="../relatorios/aba-movimentacao.md">
 <span class="md-ellipsis">
     
   
@@ -554,7 +554,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-evolucao.html">
+<a class="md-nav__link" href="../relatorios/aba-evolucao.md">
 <span class="md-ellipsis">
     
   
@@ -566,7 +566,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-indicadores.html">
+<a class="md-nav__link" href="../relatorios/aba-indicadores.md">
 <span class="md-ellipsis">
     
   
@@ -578,7 +578,7 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="../relatorios/aba-crms.html">
+<a class="md-nav__link" href="../relatorios/aba-crms.md">
 <span class="md-ellipsis">
     
   
@@ -657,29 +657,38 @@
     </label>
 <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#1-conceito">
+<a class="md-nav__link" href="#1-arquitetura-do-score-final">
 <span class="md-ellipsis">
       
-        1. Conceito
-      
-    </span>
-</a>
-<nav aria-label="1. Conceito" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#11-o-que-e-a-matriz-de-risco">
-<span class="md-ellipsis">
-      
-        1.1. O que é a Matriz de Risco
+        1. Arquitetura do Score Final
       
     </span>
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#12-script-de-geracao">
+<a class="md-nav__link" href="#2-deteccao-de-anomalias-o-metodo-mad">
 <span class="md-ellipsis">
       
-        1.2. Script de Geração
+        2. Detecção de Anomalias: O Método MAD
+      
+    </span>
+</a>
+<nav aria-label="2. Detecção de Anomalias: O Método MAD" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#21-o-que-e-o-modified-z-score">
+<span class="md-ellipsis">
+      
+        2.1. O que é o Modified Z-Score?
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#22-vantagens-da-metodologia">
+<span class="md-ellipsis">
+      
+        2.2. Vantagens da Metodologia
       
     </span>
 </a>
@@ -688,38 +697,20 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#2-calculo-do-score-de-risco">
+<a class="md-nav__link" href="#3-sistema-multinivel-atencao-vs-critico">
 <span class="md-ellipsis">
       
-        2. Cálculo do Score de Risco
+        3. Sistema Multinível (Atenção vs. Crítico)
       
     </span>
 </a>
-<nav aria-label="2. Cálculo do Score de Risco" class="md-nav">
+<nav aria-label="3. Sistema Multinível (Atenção vs. Crítico)" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#21-metodologia">
+<a class="md-nav__link" href="#31-calibracao-de-sensibilidade">
 <span class="md-ellipsis">
       
-        2.1. Metodologia
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#22-tratamento-de-excecoes">
-<span class="md-ellipsis">
-      
-        2.2. Tratamento de Exceções
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#23-interpretacao-do-score">
-<span class="md-ellipsis">
-      
-        2.3. Interpretação do Score
+        3.1. Calibração de Sensibilidade
       
     </span>
 </a>
@@ -728,38 +719,29 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#3-classificacao-de-risco">
+<a class="md-nav__link" href="#4-classificacoes-de-risco-v82">
 <span class="md-ellipsis">
       
-        3. Classificação de Risco
+        4. Classificações de Risco (V8.2)
       
     </span>
 </a>
-<nav aria-label="3. Classificação de Risco" class="md-nav">
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#5-estrutura-de-rankings-e-diagnostico">
+<span class="md-ellipsis">
+      
+        5. Estrutura de Rankings e Diagnóstico
+      
+    </span>
+</a>
+<nav aria-label="5. Estrutura de Rankings e Diagnóstico" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#31-metodologia-percentil">
+<a class="md-nav__link" href="#51-exemplo-de-consulta-de-diagnostico">
 <span class="md-ellipsis">
       
-        3.1. Metodologia (Percentil)
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#32-faixas-de-classificacao">
-<span class="md-ellipsis">
-      
-        3.2. Faixas de Classificação
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#33-cores-e-alertas-visuais">
-<span class="md-ellipsis">
-      
-        3.3. Cores e Alertas Visuais
+        5.1. Exemplo de Consulta de Diagnóstico
       
     </span>
 </a>
@@ -768,213 +750,13 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#4-rankings">
+<a class="md-nav__link" href="#6-evolucao-metodologica">
 <span class="md-ellipsis">
       
-        4. Rankings
+        6. Evolução Metodológica
       
     </span>
 </a>
-<nav aria-label="4. Rankings" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#41-tipos-de-ranking">
-<span class="md-ellipsis">
-      
-        4.1. Tipos de Ranking
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#42-calculo">
-<span class="md-ellipsis">
-      
-        4.2. Cálculo
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#43-exemplo-de-interpretacao">
-<span class="md-ellipsis">
-      
-        4.3. Exemplo de Interpretação
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#5-indicador-de-qualidade-dos-dados">
-<span class="md-ellipsis">
-      
-        5. Indicador de Qualidade dos Dados
-      
-    </span>
-</a>
-<nav aria-label="5. Indicador de Qualidade dos Dados" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#51-o-que-e">
-<span class="md-ellipsis">
-      
-        5.1. O que é
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#52-criterios">
-<span class="md-ellipsis">
-      
-        5.2. Critérios
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#53-uso">
-<span class="md-ellipsis">
-      
-        5.3. Uso
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#6-campos-da-matriz-de-risco">
-<span class="md-ellipsis">
-      
-        6. Campos da Matriz de Risco
-      
-    </span>
-</a>
-<nav aria-label="6. Campos da Matriz de Risco" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#61-identificacao">
-<span class="md-ellipsis">
-      
-        6.1. Identificação
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#62-score-e-classificacao">
-<span class="md-ellipsis">
-      
-        6.2. Score e Classificação
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#63-rankings">
-<span class="md-ellipsis">
-      
-        6.3. Rankings
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#64-indicadores-individuais">
-<span class="md-ellipsis">
-      
-        6.4. Indicadores Individuais
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#65-contexto">
-<span class="md-ellipsis">
-      
-        6.5. Contexto
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#7-uso-da-matriz-de-risco">
-<span class="md-ellipsis">
-      
-        7. Uso da Matriz de Risco
-      
-    </span>
-</a>
-<nav aria-label="7. Uso da Matriz de Risco" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#71-priorizacao-de-auditorias">
-<span class="md-ellipsis">
-      
-        7.1. Priorização de Auditorias
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#72-consultas-tipicas">
-<span class="md-ellipsis">
-      
-        7.2. Consultas Típicas
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#8-limitacoes-e-consideracoes">
-<span class="md-ellipsis">
-      
-        8. Limitações e Considerações
-      
-    </span>
-</a>
-<nav aria-label="8. Limitações e Considerações" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#81-o-que-a-matriz-nao-e">
-<span class="md-ellipsis">
-      
-        8.1. O que a Matriz NÃO é
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#82-fatores-que-podem-gerar-falsos-positivos">
-<span class="md-ellipsis">
-      
-        8.2. Fatores que podem gerar falsos positivos
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#83-recomendacao">
-<span class="md-ellipsis">
-      
-        8.3. Recomendação
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
 </li>
 </ul>
 </nav>
@@ -1107,29 +889,38 @@
     </label>
 <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#1-conceito">
+<a class="md-nav__link" href="#1-arquitetura-do-score-final">
 <span class="md-ellipsis">
       
-        1. Conceito
-      
-    </span>
-</a>
-<nav aria-label="1. Conceito" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#11-o-que-e-a-matriz-de-risco">
-<span class="md-ellipsis">
-      
-        1.1. O que é a Matriz de Risco
+        1. Arquitetura do Score Final
       
     </span>
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#12-script-de-geracao">
+<a class="md-nav__link" href="#2-deteccao-de-anomalias-o-metodo-mad">
 <span class="md-ellipsis">
       
-        1.2. Script de Geração
+        2. Detecção de Anomalias: O Método MAD
+      
+    </span>
+</a>
+<nav aria-label="2. Detecção de Anomalias: O Método MAD" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#21-o-que-e-o-modified-z-score">
+<span class="md-ellipsis">
+      
+        2.1. O que é o Modified Z-Score?
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#22-vantagens-da-metodologia">
+<span class="md-ellipsis">
+      
+        2.2. Vantagens da Metodologia
       
     </span>
 </a>
@@ -1138,38 +929,20 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#2-calculo-do-score-de-risco">
+<a class="md-nav__link" href="#3-sistema-multinivel-atencao-vs-critico">
 <span class="md-ellipsis">
       
-        2. Cálculo do Score de Risco
+        3. Sistema Multinível (Atenção vs. Crítico)
       
     </span>
 </a>
-<nav aria-label="2. Cálculo do Score de Risco" class="md-nav">
+<nav aria-label="3. Sistema Multinível (Atenção vs. Crítico)" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#21-metodologia">
+<a class="md-nav__link" href="#31-calibracao-de-sensibilidade">
 <span class="md-ellipsis">
       
-        2.1. Metodologia
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#22-tratamento-de-excecoes">
-<span class="md-ellipsis">
-      
-        2.2. Tratamento de Exceções
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#23-interpretacao-do-score">
-<span class="md-ellipsis">
-      
-        2.3. Interpretação do Score
+        3.1. Calibração de Sensibilidade
       
     </span>
 </a>
@@ -1178,38 +951,29 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#3-classificacao-de-risco">
+<a class="md-nav__link" href="#4-classificacoes-de-risco-v82">
 <span class="md-ellipsis">
       
-        3. Classificação de Risco
+        4. Classificações de Risco (V8.2)
       
     </span>
 </a>
-<nav aria-label="3. Classificação de Risco" class="md-nav">
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#5-estrutura-de-rankings-e-diagnostico">
+<span class="md-ellipsis">
+      
+        5. Estrutura de Rankings e Diagnóstico
+      
+    </span>
+</a>
+<nav aria-label="5. Estrutura de Rankings e Diagnóstico" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
-<a class="md-nav__link" href="#31-metodologia-percentil">
+<a class="md-nav__link" href="#51-exemplo-de-consulta-de-diagnostico">
 <span class="md-ellipsis">
       
-        3.1. Metodologia (Percentil)
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#32-faixas-de-classificacao">
-<span class="md-ellipsis">
-      
-        3.2. Faixas de Classificação
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#33-cores-e-alertas-visuais">
-<span class="md-ellipsis">
-      
-        3.3. Cores e Alertas Visuais
+        5.1. Exemplo de Consulta de Diagnóstico
       
     </span>
 </a>
@@ -1218,213 +982,13 @@
 </nav>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#4-rankings">
+<a class="md-nav__link" href="#6-evolucao-metodologica">
 <span class="md-ellipsis">
       
-        4. Rankings
+        6. Evolução Metodológica
       
     </span>
 </a>
-<nav aria-label="4. Rankings" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#41-tipos-de-ranking">
-<span class="md-ellipsis">
-      
-        4.1. Tipos de Ranking
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#42-calculo">
-<span class="md-ellipsis">
-      
-        4.2. Cálculo
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#43-exemplo-de-interpretacao">
-<span class="md-ellipsis">
-      
-        4.3. Exemplo de Interpretação
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#5-indicador-de-qualidade-dos-dados">
-<span class="md-ellipsis">
-      
-        5. Indicador de Qualidade dos Dados
-      
-    </span>
-</a>
-<nav aria-label="5. Indicador de Qualidade dos Dados" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#51-o-que-e">
-<span class="md-ellipsis">
-      
-        5.1. O que é
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#52-criterios">
-<span class="md-ellipsis">
-      
-        5.2. Critérios
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#53-uso">
-<span class="md-ellipsis">
-      
-        5.3. Uso
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#6-campos-da-matriz-de-risco">
-<span class="md-ellipsis">
-      
-        6. Campos da Matriz de Risco
-      
-    </span>
-</a>
-<nav aria-label="6. Campos da Matriz de Risco" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#61-identificacao">
-<span class="md-ellipsis">
-      
-        6.1. Identificação
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#62-score-e-classificacao">
-<span class="md-ellipsis">
-      
-        6.2. Score e Classificação
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#63-rankings">
-<span class="md-ellipsis">
-      
-        6.3. Rankings
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#64-indicadores-individuais">
-<span class="md-ellipsis">
-      
-        6.4. Indicadores Individuais
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#65-contexto">
-<span class="md-ellipsis">
-      
-        6.5. Contexto
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#7-uso-da-matriz-de-risco">
-<span class="md-ellipsis">
-      
-        7. Uso da Matriz de Risco
-      
-    </span>
-</a>
-<nav aria-label="7. Uso da Matriz de Risco" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#71-priorizacao-de-auditorias">
-<span class="md-ellipsis">
-      
-        7.1. Priorização de Auditorias
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#72-consultas-tipicas">
-<span class="md-ellipsis">
-      
-        7.2. Consultas Típicas
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#8-limitacoes-e-consideracoes">
-<span class="md-ellipsis">
-      
-        8. Limitações e Considerações
-      
-    </span>
-</a>
-<nav aria-label="8. Limitações e Considerações" class="md-nav">
-<ul class="md-nav__list">
-<li class="md-nav__item">
-<a class="md-nav__link" href="#81-o-que-a-matriz-nao-e">
-<span class="md-ellipsis">
-      
-        8.1. O que a Matriz NÃO é
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#82-fatores-que-podem-gerar-falsos-positivos">
-<span class="md-ellipsis">
-      
-        8.2. Fatores que podem gerar falsos positivos
-      
-    </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="#83-recomendacao">
-<span class="md-ellipsis">
-      
-        8.3. Recomendação
-      
-    </span>
-</a>
-</li>
-</ul>
-</nav>
 </li>
 </ul>
 </nav>
@@ -1451,464 +1015,169 @@
 </ol>
 </nav>
 <article class="md-content__inner md-typeset">
-<h1 id="matriz-de-risco-final">Matriz de Risco Final<a class="headerlink" href="#matriz-de-risco-final" title="Permanent link">¶</a></h1>
-<p>A Matriz de Risco Final é o produto central da análise do Sistema Sentinela. Ela consolida os 17 indicadores individuais em um <strong>score único</strong> e uma <strong>classificação de risco</strong> para cada farmácia.</p>
+<h1 id="metodologia-da-matriz-de-risco-v82">Metodologia da Matriz de Risco (V8.2)<a class="headerlink" href="#metodologia-da-matriz-de-risco-v82" title="Permanent link">¶</a></h1>
+<p>A Matriz de Risco Final (V8.2) utiliza uma metodologia de <strong>Estatística Robusta</strong> baseada no método de <strong>Modified Z-Score (MAD)</strong> e um sistema <strong>Multinível de Alertas</strong>. Ela foi projetada para ser imune a distorções causadas por fraudadores extremos e para identificar comportamentos anômalos de forma proporcional ao contexto regional.</p>
 <hr/>
-<h2 id="1-conceito">1. Conceito<a class="headerlink" href="#1-conceito" title="Permanent link">¶</a></h2>
-<h3 id="11-o-que-e-a-matriz-de-risco">1.1. O que é a Matriz de Risco<a class="headerlink" href="#11-o-que-e-a-matriz-de-risco" title="Permanent link">¶</a></h3>
-<p>A Matriz de Risco é uma tabela que contém, para cada farmácia:</p>
-<ul>
-<li>Valores individuais de cada indicador</li>
-<li>Score de risco consolidado</li>
-<li>Classificação de risco (Crítico, Alto, Médio, Baixo, Mínimo)</li>
-<li>Rankings em diferentes níveis (Nacional, Estadual, Municipal)</li>
-</ul>
-<h3 id="12-script-de-geracao">1.2. Script de Geração<a class="headerlink" href="#12-script-de-geracao" title="Permanent link">¶</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a href="#__codelineno-0-1" id="__codelineno-0-1" name="__codelineno-0-1"></a>📄 Indicadores/matriz_risco_final.sql
-</span></code></pre></div>
-<hr/>
-<h2 id="2-calculo-do-score-de-risco">2. Cálculo do Score de Risco<a class="headerlink" href="#2-calculo-do-score-de-risco" title="Permanent link">¶</a></h2>
-<h3 id="21-metodologia">2.1. Metodologia<a class="headerlink" href="#21-metodologia" title="Permanent link">¶</a></h3>
-<p>O Score de Risco Final é calculado em duas etapas:</p>
-<h4 id="etapa-1-normalizacao-risco-relativo">Etapa 1: Normalização (Risco Relativo)<a class="headerlink" href="#etapa-1-normalizacao-risco-relativo" title="Permanent link">¶</a></h4>
-<p>Para cada um dos 17 indicadores, calcula-se o <strong>Risco Relativo (RR)</strong>:</p>
-<div class="arithmatex">\[
-RR_i = \frac{\text{Indicador}_i^{\text{farmácia}}}{\text{Média}_i^{\text{UF}}}
-\]</div>
-<p>Onde:</p>
-<ul>
-<li><span class="arithmatex">\(\text{Indicador}_i^{\text{farmácia}}\)</span> = Valor do indicador <span class="arithmatex">\(i\)</span> para a farmácia</li>
-<li><span class="arithmatex">\(\text{Média}_i^{\text{UF}}\)</span> = Média do indicador <span class="arithmatex">\(i\)</span> para todas as farmácias da mesma UF</li>
-</ul>
-<div class="admonition info">
-<p class="admonition-title">Por que usar a média da UF?</p>
-</div>
-<p>Usar a média estadual como referência permite comparar farmácias em contextos semelhantes, minimizando diferenças regionais de comportamento.</p>
-<h4 id="etapa-2-agregacao-media-aritmetica">Etapa 2: Agregação (Média Aritmética)<a class="headerlink" href="#etapa-2-agregacao-media-aritmetica" title="Permanent link">¶</a></h4>
-<p>O Score Final é a média simples dos 17 Riscos Relativos:</p>
-<div class="arithmatex">\[
-\text{SCORE\_RISCO\_FINAL} = \frac{1}{17} \sum_{i=1}^{17} RR_i
-\]</div>
-<h3 id="22-tratamento-de-excecoes">2.2. Tratamento de Exceções<a class="headerlink" href="#22-tratamento-de-excecoes" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Situação</th>
-<th>Tratamento</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Média da UF = 0</td>
-<td>Usa média nacional como referência</td>
-</tr>
-<tr>
-<td>Média nacional = 0</td>
-<td>Considera RR = 1 (neutro)</td>
-</tr>
-<tr>
-<td>Indicador não disponível</td>
-<td>Exclui do cálculo (ajusta denominador)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="23-interpretacao-do-score">2.3. Interpretação do Score<a class="headerlink" href="#23-interpretacao-do-score" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Score</th>
-<th>Significado</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>0.0 - 0.5</strong></td>
-<td>Muito abaixo da média (comportamento exemplar)</td>
-</tr>
-<tr>
-<td><strong>0.5 - 1.0</strong></td>
-<td>Abaixo da média (normal)</td>
-</tr>
-<tr>
-<td><strong>1.0</strong></td>
-<td>Exatamente na média</td>
-</tr>
-<tr>
-<td><strong>1.0 - 2.0</strong></td>
-<td>Acima da média (atenção)</td>
-</tr>
-<tr>
-<td><strong>2.0 - 5.0</strong></td>
-<td>Significativamente acima (alerta)</td>
-</tr>
-<tr>
-<td><strong>&gt; 5.0</strong></td>
-<td>Muito acima (crítico)</td>
-</tr>
-</tbody>
-</table>
-<hr/>
-<h2 id="3-classificacao-de-risco">3. Classificação de Risco<a class="headerlink" href="#3-classificacao-de-risco" title="Permanent link">¶</a></h2>
-<h3 id="31-metodologia-percentil">3.1. Metodologia (Percentil)<a class="headerlink" href="#31-metodologia-percentil" title="Permanent link">¶</a></h3>
-<p>Após calcular o Score para todas as farmácias, aplica-se a função <code>PERCENT_RANK()</code> do SQL Server para distribuir os estabelecimentos em faixas.</p>
-<h3 id="32-faixas-de-classificacao">3.2. Faixas de Classificação<a class="headerlink" href="#32-faixas-de-classificacao" title="Permanent link">¶</a></h3>
-<div class="mermaid">pie title Distribuição das Classificações
-    "MÍNIMO (0-25%)" : 25
-    "BAIXO (25-75%)" : 50
-    "MÉDIO (75-95%)" : 20
-    "ALTO (95-99%)" : 4
-    "CRÍTICO (99-100%)" : 1
-</div>
-<table>
-<thead>
-<tr>
-<th>Classificação</th>
-<th>Percentil</th>
-<th>Proporção</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>🔴 <strong>CRÍTICO</strong></td>
-<td>99% - 100%</td>
-<td>~1%</td>
-<td>Top 1% - Maior prioridade</td>
-</tr>
-<tr>
-<td>🟠 <strong>ALTO</strong></td>
-<td>95% - 99%</td>
-<td>~4%</td>
-<td>Top 5% - Alta prioridade</td>
-</tr>
-<tr>
-<td>🟡 <strong>MÉDIO</strong></td>
-<td>75% - 95%</td>
-<td>~20%</td>
-<td>Quartil superior - Monitorar</td>
-</tr>
-<tr>
-<td>🟢 <strong>BAIXO</strong></td>
-<td>25% - 75%</td>
-<td>~50%</td>
-<td>Faixa central - Normal</td>
-</tr>
-<tr>
-<td>🟢 <strong>MÍNIMO</strong></td>
-<td>0% - 25%</td>
-<td>~25%</td>
-<td>Quartil inferior - Comportamento exemplar</td>
-</tr>
-</tbody>
-</table>
-<h3 id="33-cores-e-alertas-visuais">3.3. Cores e Alertas Visuais<a class="headerlink" href="#33-cores-e-alertas-visuais" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Classificação</th>
-<th>Cor</th>
-<th>Código Hex</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>CRÍTICO</td>
-<td>Vermelho escuro</td>
-<td><code>#8B0000</code></td>
-</tr>
-<tr>
-<td>ALTO</td>
-<td>Laranja</td>
-<td><code>#FF8C00</code></td>
-</tr>
-<tr>
-<td>MÉDIO</td>
-<td>Amarelo</td>
-<td><code>#FFD700</code></td>
-</tr>
-<tr>
-<td>BAIXO</td>
-<td>Verde claro</td>
-<td><code>#90EE90</code></td>
-</tr>
-<tr>
-<td>MÍNIMO</td>
-<td>Verde</td>
-<td><code>#228B22</code></td>
-</tr>
-</tbody>
-</table>
-<hr/>
-<h2 id="4-rankings">4. Rankings<a class="headerlink" href="#4-rankings" title="Permanent link">¶</a></h2>
-<h3 id="41-tipos-de-ranking">4.1. Tipos de Ranking<a class="headerlink" href="#41-tipos-de-ranking" title="Permanent link">¶</a></h3>
-<p>O sistema calcula três rankings para cada farmácia:</p>
-<table>
-<thead>
-<tr>
-<th>Ranking</th>
-<th>Escopo</th>
-<th>Uso</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Nacional</strong></td>
-<td>Todas as farmácias do Brasil</td>
-<td>Priorização geral de auditorias</td>
-</tr>
-<tr>
-<td><strong>Estadual</strong></td>
-<td>Farmácias da mesma UF</td>
-<td>Comparação regional</td>
-</tr>
-<tr>
-<td><strong>Municipal</strong></td>
-<td>Farmácias do mesmo município</td>
-<td>Análise local</td>
-</tr>
-</tbody>
-</table>
-<h3 id="42-calculo">4.2. Cálculo<a class="headerlink" href="#42-calculo" title="Permanent link">¶</a></h3>
-<p>Os rankings são calculados usando a função <code>ROW_NUMBER()</code> ordenada pelo Score de Risco (decrescente):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a href="#__codelineno-1-1" id="__codelineno-1-1" name="__codelineno-1-1"></a>ROW_NUMBER() OVER (ORDER BY SCORE_RISCO_FINAL DESC)
-</span></code></pre></div>
-<h3 id="43-exemplo-de-interpretacao">4.3. Exemplo de Interpretação<a class="headerlink" href="#43-exemplo-de-interpretacao" title="Permanent link">¶</a></h3>
-<div class="admonition example">
-<p class="admonition-title">Exemplo</p>
-</div>
-<p><strong>Farmácia XYZ</strong></p>
-<div class="language-text highlight"><pre><span></span><code>- Ranking Nacional: 234º de 34.000 (Top 1%)
-- Ranking Estadual: 12º de 850 (Top 2%)
-- Ranking Municipal: 3º de 45 (Top 7%)
+<h2 id="1-arquitetura-do-score-final">1. Arquitetura do Score Final<a class="headerlink" href="#1-arquitetura-do-score-final" title="Permanent link">¶</a></h2>
+<p>O Score de Risco Final (<code>score_risco_final</code>) é a soma da posição relativa da farmácia com a gravidade das anomalias detectadas em seus indicadores.</p>
+<div class="mermaid">graph TD
+    A[Score de Risco Final] --&gt; B[Score Base: Percentil 0-100]
+    A --&gt; C[Bônus de Penalidade: Multinível]
 
-**Interpretação:** Esta farmácia está entre as mais arriscadas do país, ocupando a 234ª posição. No seu estado, está entre as 12 piores. No município, é a 3ª mais arriscada.
-</code></pre></div>
-<hr/>
-<h2 id="5-indicador-de-qualidade-dos-dados">5. Indicador de Qualidade dos Dados<a class="headerlink" href="#5-indicador-de-qualidade-dos-dados" title="Permanent link">¶</a></h2>
-<h3 id="51-o-que-e">5.1. O que é<a class="headerlink" href="#51-o-que-e" title="Permanent link">¶</a></h3>
-<p>Um flag que indica a <strong>confiabilidade</strong> dos indicadores calculados para cada farmácia.</p>
-<h3 id="52-criterios">5.2. Critérios<a class="headerlink" href="#52-criterios" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Qualidade</th>
-<th>Critérios</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>ALTA</strong></td>
-<td>≥24 meses de dados, todos indicadores calculados</td>
-<td>Análise robusta</td>
-</tr>
-<tr>
-<td><strong>MÉDIA</strong></td>
-<td>12-23 meses de dados, maioria dos indicadores</td>
-<td>Análise confiável</td>
-</tr>
-<tr>
-<td><strong>BAIXA</strong></td>
-<td>&lt;12 meses ou muitos indicadores faltando</td>
-<td>Interpretar com cautela</td>
-</tr>
-</tbody>
-</table>
-<h3 id="53-uso">5.3. Uso<a class="headerlink" href="#53-uso" title="Permanent link">¶</a></h3>
-<p>Farmácias com qualidade de dados BAIXA devem ter seus resultados interpretados com <strong>cautela extra</strong>, pois a base de dados pode não ser representativa.</p>
-<hr/>
-<h2 id="6-campos-da-matriz-de-risco">6. Campos da Matriz de Risco<a class="headerlink" href="#6-campos-da-matriz-de-risco" title="Permanent link">¶</a></h2>
-<h3 id="61-identificacao">6.1. Identificação<a class="headerlink" href="#61-identificacao" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Campo</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>cnpj</code></td>
-<td>CNPJ da farmácia</td>
-</tr>
-<tr>
-<td><code>razaoSocial</code></td>
-<td>Nome da empresa</td>
-</tr>
-<tr>
-<td><code>municipio</code></td>
-<td>Cidade de localização</td>
-</tr>
-<tr>
-<td><code>uf</code></td>
-<td>Estado</td>
-</tr>
-</tbody>
-</table>
-<h3 id="62-score-e-classificacao">6.2. Score e Classificação<a class="headerlink" href="#62-score-e-classificacao" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Campo</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>SCORE_RISCO_FINAL</code></td>
-<td>Score consolidado (0 a 10+)</td>
-</tr>
-<tr>
-<td><code>CLASSIFICACAO_RISCO</code></td>
-<td>Categoria (CRÍTICO a MÍNIMO)</td>
-</tr>
-<tr>
-<td><code>percentil_risco</code></td>
-<td>Percentil no ranking nacional</td>
-</tr>
-</tbody>
-</table>
-<h3 id="63-rankings">6.3. Rankings<a class="headerlink" href="#63-rankings" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Campo</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>rank_nacional</code></td>
-<td>Posição no Brasil</td>
-</tr>
-<tr>
-<td><code>rank_uf</code></td>
-<td>Posição no estado</td>
-</tr>
-<tr>
-<td><code>rank_municipio</code></td>
-<td>Posição na cidade</td>
-</tr>
-<tr>
-<td><code>total_nacional</code></td>
-<td>Total de farmácias no país</td>
-</tr>
-<tr>
-<td><code>total_uf</code></td>
-<td>Total de farmácias no estado</td>
-</tr>
-<tr>
-<td><code>total_municipio</code></td>
-<td>Total de farmácias na cidade</td>
-</tr>
-</tbody>
-</table>
-<h3 id="64-indicadores-individuais">6.4. Indicadores Individuais<a class="headerlink" href="#64-indicadores-individuais" title="Permanent link">¶</a></h3>
-<p>Para cada um dos 17 indicadores:</p>
-<table>
-<thead>
-<tr>
-<th>Campo</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>ind_&lt;nome&gt;_valor</code></td>
-<td>Valor bruto do indicador</td>
-</tr>
-<tr>
-<td><code>ind_&lt;nome&gt;_rr</code></td>
-<td>Risco Relativo do indicador</td>
-</tr>
-<tr>
-<td><code>ind_&lt;nome&gt;_media_uf</code></td>
-<td>Média da UF</td>
-</tr>
-<tr>
-<td><code>ind_&lt;nome&gt;_media_br</code></td>
-<td>Média nacional</td>
-</tr>
-</tbody>
-</table>
-<h3 id="65-contexto">6.5. Contexto<a class="headerlink" href="#65-contexto" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Campo</th>
-<th>Descrição</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>populacao_municipio</code></td>
-<td>População do município (IBGE)</td>
-</tr>
-<tr>
-<td><code>total_farmacias_municipio</code></td>
-<td>Número de farmácias no município</td>
-</tr>
-<tr>
-<td><code>habitantes_por_farmacia</code></td>
-<td>Razão população/farmácias</td>
-</tr>
-<tr>
-<td><code>flag_qualidade_dados</code></td>
-<td>Indicador de confiabilidade</td>
-</tr>
-</tbody>
-</table>
-<hr/>
-<h2 id="7-uso-da-matriz-de-risco">7. Uso da Matriz de Risco<a class="headerlink" href="#7-uso-da-matriz-de-risco" title="Permanent link">¶</a></h2>
-<h3 id="71-priorizacao-de-auditorias">7.1. Priorização de Auditorias<a class="headerlink" href="#71-priorizacao-de-auditorias" title="Permanent link">¶</a></h3>
-<div class="mermaid">flowchart LR
-    A[Matriz de Risco] --&gt; B{Classificação}
-    B --&gt;|CRÍTICO| C[Auditoria Prioritária]
-    B --&gt;|ALTO| D[Auditoria Programada]
-    B --&gt;|MÉDIO| E[Monitoramento]
-    B --&gt;|BAIXO/MÍNIMO| F[Acompanhamento Padrão]
-</div>
-<h3 id="72-consultas-tipicas">7.2. Consultas Típicas<a class="headerlink" href="#72-consultas-tipicas" title="Permanent link">¶</a></h3>
-<div class="admonition example">
-<p class="admonition-title">Exemplos de Consultas</p>
-<p><strong>Top 100 farmácias mais arriscadas:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a href="#__codelineno-2-1" id="__codelineno-2-1" name="__codelineno-2-1"></a>SELECT TOP 100 * FROM Matriz_Risco_Final
-</span><span id="__span-2-2"><a href="#__codelineno-2-2" id="__codelineno-2-2" name="__codelineno-2-2"></a>ORDER BY SCORE_RISCO_FINAL DESC
-</span></code></pre></div></p>
-<p><strong>Farmácias críticas em SC:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a href="#__codelineno-3-1" id="__codelineno-3-1" name="__codelineno-3-1"></a>SELECT * FROM Matriz_Risco_Final
-</span><span id="__span-3-2"><a href="#__codelineno-3-2" id="__codelineno-3-2" name="__codelineno-3-2"></a>WHERE uf = 'SC' AND CLASSIFICACAO_RISCO = 'CRÍTICO'
-</span></code></pre></div></p>
-<p><strong>Comparação de médias por UF:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a href="#__codelineno-4-1" id="__codelineno-4-1" name="__codelineno-4-1"></a>SELECT uf, AVG(SCORE_RISCO_FINAL) as media_score
-</span><span id="__span-4-2"><a href="#__codelineno-4-2" id="__codelineno-4-2" name="__codelineno-4-2"></a>FROM Matriz_Risco_Final
-</span><span id="__span-4-3"><a href="#__codelineno-4-3" id="__codelineno-4-3" name="__codelineno-4-3"></a>GROUP BY uf
-</span><span id="__span-4-4"><a href="#__codelineno-4-4" id="__codelineno-4-4" name="__codelineno-4-4"></a>ORDER BY media_score DESC
-</span></code></pre></div></p>
+    B --&gt; B1[Normalização Hierárquica]
+    B1 --&gt; B2[CUME_DIST por Região/UF]
+
+    C --&gt; C1[🟡 Alerta de Atenção: +3 pts]
+    C --&gt; C2[🔴 Alerta Crítico: +10 pts]
+
+    C1 --&gt; D[Modified Z-Score &gt;= Limiar Atenção]
+    C2 --&gt; E[Modified Z-Score &gt;= Limiar Crítico]
 </div>
 <hr/>
-<h2 id="8-limitacoes-e-consideracoes">8. Limitações e Considerações<a class="headerlink" href="#8-limitacoes-e-consideracoes" title="Permanent link">¶</a></h2>
-<h3 id="81-o-que-a-matriz-nao-e">8.1. O que a Matriz NÃO é<a class="headerlink" href="#81-o-que-a-matriz-nao-e" title="Permanent link">¶</a></h3>
-<div class="admonition warning">
-<p class="admonition-title">Importante</p>
-</div>
-<p>A Matriz de Risco <strong>não é uma prova de fraude</strong>. Ela é uma ferramenta de <strong>priorização</strong> que indica quais farmácias merecem investigação mais aprofundada.</p>
-<div class="language-text highlight"><pre><span></span><code>Um score alto indica **comportamento atípico**, não necessariamente ilegal.
-</code></pre></div>
-<h3 id="82-fatores-que-podem-gerar-falsos-positivos">8.2. Fatores que podem gerar falsos positivos<a class="headerlink" href="#82-fatores-que-podem-gerar-falsos-positivos" title="Permanent link">¶</a></h3>
+<h2 id="2-deteccao-de-anomalias-o-metodo-mad">2. Detecção de Anomalias: O Método MAD<a class="headerlink" href="#2-deteccao-de-anomalias-o-metodo-mad" title="Permanent link">¶</a></h2>
+<p>Diferente de médias aritméticas simples — que são facilmente "puxadas" por outliers — a V8.2 utiliza o <strong>Median Absolute Deviation (MAD)</strong>.</p>
+<h3 id="21-o-que-e-o-modified-z-score">2.1. O que é o Modified Z-Score?<a class="headerlink" href="#21-o-que-e-o-modified-z-score" title="Permanent link">¶</a></h3>
+<p>Para cada indicador, calculamos o quão longe a farmácia está da mediana regional usando a variabilidade real da própria região. O cálculo segue o padrão de <strong>Iglewicz &amp; Hoaglin</strong>:</p>
+<div class="arithmatex">\[M_i = \frac{0.6745 \times (Valor - Mediana)}{MAD}\]</div>
+<h3 id="22-vantagens-da-metodologia">2.2. Vantagens da Metodologia<a class="headerlink" href="#22-vantagens-da-metodologia" title="Permanent link">¶</a></h3>
 <ul>
-<li>Farmácias novas com poucos meses de dados</li>
-<li>Farmácias em regiões com poucos estabelecimentos</li>
-<li>Variações sazonais de demanda</li>
-<li>Eventos locais de saúde (epidemias, campanhas)</li>
+<li><strong>Resiliência</strong>: Um fraudador gigante na região não "esconde" os menores (a mediana e o MAD permanecem estáveis).</li>
+<li><strong>Contexto Local</strong>: O sistema se adapta automaticamente. Em regiões muito estáveis, pequenas anomalias disparam o alerta. Em regiões voláteis, o sistema se torna naturalmente mais tolerante.</li>
 </ul>
-<h3 id="83-recomendacao">8.3. Recomendação<a class="headerlink" href="#83-recomendacao" title="Permanent link">¶</a></h3>
-<p>Sempre analise o <strong>contexto completo</strong> antes de concluir sobre irregularidades. Use a Matriz como ponto de partida, não como veredito final.</p>
+<hr/>
+<h2 id="3-sistema-multinivel-atencao-vs-critico">3. Sistema Multinível (Atenção vs. Crítico)<a class="headerlink" href="#3-sistema-multinivel-atencao-vs-critico" title="Permanent link">¶</a></h2>
+<p>A V8.2 introduz a calibração de dois níveis para cada um dos 16 indicadores, permitindo identificar desde o "comportamento suspeito" até a "fraude explícita".</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Nível</th>
+<th style="text-align: left;">Flag</th>
+<th style="text-align: left;">Penalidade</th>
+<th style="text-align: left;">Critério Estatístico</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>ATENÇÃO</strong></td>
+<td style="text-align: left;">🟡</td>
+<td style="text-align: left;"><strong>+3 pontos</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(M_i \ge\)</span> Limiar Atenção</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>CRÍTICO</strong></td>
+<td style="text-align: left;">🔴</td>
+<td style="text-align: left;"><strong>+10 pontos</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(M_i \ge\)</span> Limiar Crítico</td>
+</tr>
+</tbody>
+</table>
+<h3 id="31-calibracao-de-sensibilidade">3.1. Calibração de Sensibilidade<a class="headerlink" href="#31-calibracao-de-sensibilidade" title="Permanent link">¶</a></h3>
+<p>Cada indicador possui limiares específicos. Indicadores como <strong>Teto Máximo</strong> são calibrados para serem extremamente sensíveis (<span class="arithmatex">\(M_i \ge 1.17\)</span>), enquanto <strong>Volume Atípico</strong> é calibrado para aceitar maior variância (<span class="arithmatex">\(M_i \ge 3.97\)</span>).</p>
+<hr/>
+<h2 id="4-classificacoes-de-risco-v82">4. Classificações de Risco (V8.2)<a class="headerlink" href="#4-classificacoes-de-risco-v82" title="Permanent link">¶</a></h2>
+<p>O enquadramento da farmácia agora considera o acúmulo de alertas de diferentes gravidades:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Classificação</th>
+<th style="text-align: left;">Critério Sugerido</th>
+<th style="text-align: left;">Ação Recomendada</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">🔴 <strong>CRÍTICO</strong></td>
+<td style="text-align: left;">Score Final <span class="arithmatex">\(\ge 120\)</span> OU <span class="arithmatex">\(\ge 3\)</span> Flags Vermelhos</td>
+<td style="text-align: left;"><strong>Auditoria Imediata</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">🟠 <strong>ALTO</strong></td>
+<td style="text-align: left;">Score Final <span class="arithmatex">\(\ge 90\)</span></td>
+<td style="text-align: left;"><strong>Investigação Programada</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">🟡 <strong>MÉDIO</strong></td>
+<td style="text-align: left;">Score Final <span class="arithmatex">\(\ge 60\)</span></td>
+<td style="text-align: left;"><strong>Monitoramento Ativo</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">🟢 <strong>BAIXO</strong></td>
+<td style="text-align: left;">Score Final <span class="arithmatex">\(\ge 30\)</span></td>
+<td style="text-align: left;"><strong>Acompanhamento Padrão</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">⚪ <strong>MÍNIMO</strong></td>
+<td style="text-align: left;">Score Final <span class="arithmatex">\(&lt; 30\)</span></td>
+<td style="text-align: left;"><strong>Nenhuma Ação</strong></td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<h2 id="5-estrutura-de-rankings-e-diagnostico">5. Estrutura de Rankings e Diagnóstico<a class="headerlink" href="#5-estrutura-de-rankings-e-diagnostico" title="Permanent link">¶</a></h2>
+<p>A tabela consolidada (<code>matriz_risco_consolidada</code>) fornece metadados detalhados para o auditor:</p>
+<ul>
+<li><strong><code>qtd_atencao</code></strong>: Número de indicadores que entraram em nível amarelo.</li>
+<li><strong><code>qtd_criticos_mad</code></strong>: Número de indicadores que entraram em nível vermelho (anomalia extrema).</li>
+<li><strong><code>pontos_penalidade</code></strong>: O valor total somado à nota base (0-100).</li>
+<li><strong><code>indicadores_risco_lista</code></strong>: Lista formatada com emojis para o Dashboard.<ul>
+<li><em>Exemplo:</em> <code>🔴Falecidos, 🟡Teto Máximo, 🔴Volume Atípico</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="51-exemplo-de-consulta-de-diagnostico">5.1. Exemplo de Consulta de Diagnóstico<a class="headerlink" href="#51-exemplo-de-consulta-de-diagnostico" title="Permanent link">¶</a></h3>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-0-1"><a href="#__codelineno-0-1" id="__codelineno-0-1" name="__codelineno-0-1"></a><span class="c1">-- Buscar estabelecimentos com alto acúmulo de alertas de atenção (Fraude Formiguinha)</span>
+</span><span id="__span-0-2"><a href="#__codelineno-0-2" id="__codelineno-0-2" name="__codelineno-0-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">TOP</span><span class="w"> </span><span class="mi">20</span><span class="w"> </span>
+</span><span id="__span-0-3"><a href="#__codelineno-0-3" id="__codelineno-0-3" name="__codelineno-0-3"></a><span class="w">    </span><span class="n">razaoSocial</span><span class="p">,</span><span class="w"> </span>
+</span><span id="__span-0-4"><a href="#__codelineno-0-4" id="__codelineno-0-4" name="__codelineno-0-4"></a><span class="w">    </span><span class="n">qtd_atencao</span><span class="p">,</span><span class="w"> </span>
+</span><span id="__span-0-5"><a href="#__codelineno-0-5" id="__codelineno-0-5" name="__codelineno-0-5"></a><span class="w">    </span><span class="n">pontos_penalidade</span><span class="p">,</span><span class="w"> </span>
+</span><span id="__span-0-6"><a href="#__codelineno-0-6" id="__codelineno-0-6" name="__codelineno-0-6"></a><span class="w">    </span><span class="n">indicadores_risco_lista</span><span class="w"> </span>
+</span><span id="__span-0-7"><a href="#__codelineno-0-7" id="__codelineno-0-7" name="__codelineno-0-7"></a><span class="k">FROM</span><span class="w"> </span><span class="n">temp_CGUSC</span><span class="p">.</span><span class="n">fp</span><span class="p">.</span><span class="n">matriz_risco_consolidada</span>
+</span><span id="__span-0-8"><a href="#__codelineno-0-8" id="__codelineno-0-8" name="__codelineno-0-8"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">qtd_atencao</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">5</span>
+</span><span id="__span-0-9"><a href="#__codelineno-0-9" id="__codelineno-0-9" name="__codelineno-0-9"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">pontos_penalidade</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
+</span></code></pre></div>
+<hr/>
+<h2 id="6-evolucao-metodologica">6. Evolução Metodológica<a class="headerlink" href="#6-evolucao-metodologica" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Recurso</th>
+<th style="text-align: left;">Modelo V7 (Antigo)</th>
+<th style="text-align: left;">Modelo V8.2 (Produção)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Detecção de Alerta</strong></td>
+<td style="text-align: left;">Múltiplo da Média (Fixo 5x)</td>
+<td style="text-align: left;"><strong>Modified Z-Score (MAD)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Gradação</strong></td>
+<td style="text-align: left;">Uninível (Só Crítico)</td>
+<td style="text-align: left;"><strong>Multinível (Atenção + Crítico)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Penalidade</strong></td>
+<td style="text-align: left;">+10 por flag</td>
+<td style="text-align: left;"><strong>+3 (Atenção) ou +10 (Crítico)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Sensibilidade</strong></td>
+<td style="text-align: left;">Igual para todos</td>
+<td style="text-align: left;"><strong>Calibrada por Indicador</strong></td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<div class="admonition success">
+<p class="admonition-title">Princípio de Defensibilidade Jurídica</p>
+<p>Com a V8.2, a auditoria pode afirmar: <em>"O padrão observado neste estabelecimento possui um desvio de 6.19 vezes o desvio absoluto da mediana da respectiva Região de Saúde, o que estatisticamente o situa fora de qualquer padrão de normalidade operacional"</em>.</p>
+</div>
 <hr/>
 <div class="admonition tip">
 <p class="admonition-title">Próximo Passo</p>
+<p>Acesse os manuais específicos de cada indicador para conferir os cálculos de base que alimentam o motor MAD da Matriz.</p>
 </div>
-<p>Explore cada grupo de indicadores para entender a metodologia detalhada de cálculo.</p>
 </article>
 </div>
 <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>

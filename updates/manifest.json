@@ -5,5 +5,6 @@
   "latest_version": "1.1.5",
   "minimum_supported_version": "1.0.0",
   "published_at": "2026-06-20T18:25:00-03:00",
-  "download_url": "https://github.com/cgu-sc/sentinela/releases/download/v1.1.5/Sentinela.exe"
+  "download_url": "https://github.com/cgu-sc/sentinela/releases/download/v1.1.5/Sentinela.exe",
+  "release_notes_url": "https://github.com/cgu-sc/sentinela/releases/tag/v1.1.5"
 }

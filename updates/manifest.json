@@ -2,9 +2,9 @@
   "schema_version": 1,
   "product": "sentinela",
   "channel": "stable",
-  "latest_version": "1.1.1",
+  "latest_version": "1.1.2",
   "minimum_supported_version": "1.0.0",
-  "published_at": "2026-06-20T14:00:00-03:00",
-  "download_url": "https://github.com/cgu-sc/sentinela/releases/tag/v1.1.1",
+  "published_at": "2026-06-20T14:20:00-03:00",
+  "download_url": "https://github.com/cgu-sc/sentinela/releases/tag/v1.1.2",
   "release_notes_url": "https://github.com/cgu-sc/sentinela/blob/main/CHANGELOG.md"
 }

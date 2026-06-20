@@ -27,3 +27,4 @@ python-docx                   # Geração de documentos Word (.docx)业务
 loguru                        # Logs estruturados de tempo das requisicoes
 pywebview                     # Wrapper desktop para abrir a SPA em janela nativa
 pyinstaller                   # Empacotamento do app desktop em executavel
+cryptography                  # Assinatura Ed25519 dos manifestos de atualizacao

@@ -100,10 +100,10 @@ const statusInfo = computed(() => {
       tone: 'warning',
     };
   }
-  if (isLoading.value) {
+  if (!cacheStatus.value) {
     return {
-      label: 'Atualizando',
-      detail: 'Sincronizando dados da visão atual',
+      label: 'Verificando',
+      detail: 'Validando módulos locais',
       icon: 'pi pi-spin pi-spinner',
       tone: 'loading',
     };

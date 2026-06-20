@@ -50,6 +50,8 @@ logger.info(f"CWD: {os.getcwd()}")
 
 
 NOTAS_TECNICAS_DIR = os.path.join(APP_DIR, "notas_tecnicas")
+DEFAULT_PORT = 8002
+MAX_PORT = 8020
 
 
 def sanitize_filename(filename):
@@ -166,6 +168,33 @@ def is_port_open(port, host="127.0.0.1", timeout=1):
         logger.debug(f"Erro ao verificar porta: {e}")
         return False
 
+
+def is_port_available(port, host="127.0.0.1"):
+    """Verifica se a porta pode ser usada pelo Sentinela."""
+    if is_port_open(port, host=host, timeout=0.2):
+        return False
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            exclusive_addr = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+            if exclusive_addr is not None:
+                sock.setsockopt(socket.SOL_SOCKET, exclusive_addr, 1)
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
+def find_available_port(start=DEFAULT_PORT, end=MAX_PORT):
+    """Escolhe uma porta previsivel, evitando abrir outro servico por engano."""
+    for port in range(start, end + 1):
+        if is_port_available(port):
+            if port != DEFAULT_PORT:
+                logger.warning(f"Porta {DEFAULT_PORT} ocupada; usando porta {port}.")
+            return port
+    raise RuntimeError(f"Nenhuma porta livre encontrada entre {start} e {end}.")
+
+
 def wait_for_server(port, timeout=30):
     """Aguarda o servidor iniciar."""
     logger.info("")
@@ -184,7 +213,18 @@ def wait_for_server(port, timeout=30):
     logger.error(f"TIMEOUT! Servidor nao respondeu apos {timeout}s")
     return False
 
-def start_server():
+
+def parse_server_port():
+    """Le a porta recebida pelo processo servidor."""
+    if "--port" not in sys.argv:
+        return DEFAULT_PORT
+    index = sys.argv.index("--port")
+    if index + 1 >= len(sys.argv):
+        raise RuntimeError("Parametro --port informado sem valor.")
+    return int(sys.argv[index + 1])
+
+
+def start_server(port):
     """Inicia o FastAPI com Granian no processo atual."""
     logger.info("")
     logger.info("="*40)
@@ -200,11 +240,11 @@ def start_server():
         from backend.main import app  # noqa: F401
         logger.info("  backend.main OK")
 
-        logger.info("Iniciando Granian na porta 8002...")
+        logger.info(f"Iniciando Granian na porta {port}...")
         Granian(
             "backend.main:app",
             address="127.0.0.1",
-            port=8002,
+            port=port,
             interface="asgi",
             log_access=True,
         ).serve()
@@ -226,15 +266,15 @@ def start_server():
         logger.error(traceback.format_exc())
         return False
 
-def build_server_command():
+def build_server_command(port):
     """Monta o comando do processo servidor para dev e executavel."""
     if getattr(sys, 'frozen', False):
-        return [sys.executable, "--server"]
-    return [sys.executable, os.path.abspath(__file__), "--server"]
+        return [sys.executable, "--server", "--port", str(port)]
+    return [sys.executable, os.path.abspath(__file__), "--server", "--port", str(port)]
 
-def start_server_process():
+def start_server_process(port):
     """Inicia o servidor em processo separado para permitir signals do Granian."""
-    command = build_server_command()
+    command = build_server_command(port)
     logger.info("")
     logger.info("Iniciando processo servidor:")
     logger.info(f"  Comando: {' '.join(command)}")
@@ -284,15 +324,24 @@ def main():
         logger.error(traceback.format_exc())
         return
 
+    try:
+        port = find_available_port()
+    except RuntimeError as exc:
+        logger.error(f"FALHA: {exc}")
+        return
+
+    app_url = f"http://127.0.0.1:{port}"
+    logger.info(f"URL local escolhida: {app_url}")
+
     # Iniciar servidor em processo separado. Granian precisa registrar signals
     # na thread principal do processo em que executa.
-    server_process = start_server_process()
+    server_process = start_server_process(port)
     if server_process is None:
         logger.error("FALHA: Processo servidor nao iniciou")
         return
 
     # Aguardar servidor
-    if not wait_for_server(8002, timeout=30):
+    if not wait_for_server(port, timeout=30):
         logger.error("")
         logger.error("="*40)
         logger.error("FALHA: Servidor nao iniciou!")
@@ -311,7 +360,7 @@ def main():
         logger.info("Criando janela webview...")
         window = webview.create_window(
             title="Sentinela",
-            url="http://127.0.0.1:8002",
+            url=app_url,
             width=1280,
             height=720,
             resizable=True,
@@ -336,7 +385,7 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
     try:
         if "--server" in sys.argv:
-            ok = start_server()
+            ok = start_server(parse_server_port())
             if not ok:
                 sys.exit(1)
         else:

@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8002';
+const isViteDevServer = window.location.port === '5173';
+const DEFAULT_API_URL = isViteDevServer ? 'http://127.0.0.1:8002' : window.location.origin;
+const BASE_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
 
 export const API_ENDPOINTS = {
   analyticsResumo:      `${BASE_URL}/api/v1/analytics/resumo`,

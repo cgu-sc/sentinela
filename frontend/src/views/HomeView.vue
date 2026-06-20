@@ -457,7 +457,7 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 
 .priority-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.9fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
 }

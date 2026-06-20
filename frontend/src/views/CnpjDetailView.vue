@@ -19,6 +19,7 @@ import CalculationMemoryTab from "./components/cnpj/CalculationMemoryTab.vue";
 import RiskDiagnosisTab from "./components/cnpj/RiskDiagnosisTab.vue";
 import SociosTab from "./components/cnpj/SociosTab.vue";
 import NetworkTab from "./components/cnpj/NetworkTab.vue";
+import CnpjTabLoadingOverlay from "./components/cnpj/CnpjTabLoadingOverlay.vue";
 import NotaTecnicaRegionalDialog from "./components/nota-tecnica/NotaTecnicaRegionalDialog.vue";
 import { storeToRefs } from "pinia";
 import TabView from "primevue/tabview";
@@ -123,6 +124,32 @@ const markTabVisited = (index) => {
 const resetVisitedTabs = (activeIndex = cnpjNav.activeTabIndex) => {
   visitedTabIndexes.value = new Set([activeIndex]);
 };
+
+const tabLoadingByIndex = computed(() => ({
+  [TAB_INDEX.EVOLUTION]:
+    cnpjDetailStore.evolucaoLoading ||
+    cnpjDetailStore.evolucaoMensalGtinLoading ||
+    cnpjDetailStore.gtinDetalhamentoMensalLoading,
+  [TAB_INDEX.DIAGNOSIS]: cnpjDetailStore.metricPercentilesLoading,
+  [TAB_INDEX.MOVEMENT]: cnpjDetailStore.movimentacaoLoading,
+  [TAB_INDEX.INDICATORS]: cnpjDetailStore.indicadoresLoading,
+  [TAB_INDEX.CRMS]:
+    cnpjDetailStore.prescritoresLoading ||
+    cnpjDetailStore.crmTimelineDatasetLoading ||
+    cnpjDetailStore.falecidosLoading,
+  [TAB_INDEX.SOCIOS]: cnpjDetailStore.sociosLoading,
+  [TAB_INDEX.NETWORK]:
+    cnpjDetailStore.networkLoading ||
+    Object.values(cnpjDetailStore.networkLevelLoading ?? {}).some(Boolean),
+  [TAB_INDEX.REGIONAL]:
+    cnpjDetailStore.municipiosRegiaoLoading ||
+    cnpjDetailStore.metricPercentilesLoading,
+}));
+
+const showTabLoadingOverlay = (index) =>
+  !isInitialLoading.value &&
+  cnpjNav.activeTabIndex === index &&
+  Boolean(tabLoadingByIndex.value[index]);
 
 // ── Composables ───────────────────────────────────────────
 const { getApiParams } = useFilterParameters();
@@ -760,11 +787,14 @@ watch(
             >Movimentação Financeira</span
           ></template
         >
-        <FinancialMovementTab
-          v-if="hasVisitedTab(TAB_INDEX.EVOLUTION)"
-          ref="financialMovementTabRef"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <FinancialMovementTab
+            v-if="hasVisitedTab(TAB_INDEX.EVOLUTION)"
+            ref="financialMovementTabRef"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.EVOLUTION)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
@@ -773,16 +803,19 @@ watch(
             >Diagnóstico de Risco</span
           ></template
         >
-        <RiskDiagnosisTab
-          v-if="hasVisitedTab(TAB_INDEX.DIAGNOSIS)"
-          :cnpj="cnpj"
-          :cnpj-data="cnpjData"
-          :geo-data="geoData"
-          :period-summary="periodSummary"
-          :period-loading="isPeriodSummaryLoading"
-          :is-active="cnpjNav.activeTabIndex === 1"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <RiskDiagnosisTab
+            v-if="hasVisitedTab(TAB_INDEX.DIAGNOSIS)"
+            :cnpj="cnpj"
+            :cnpj-data="cnpjData"
+            :geo-data="geoData"
+            :period-summary="periodSummary"
+            :period-loading="isPeriodSummaryLoading"
+            :is-active="cnpjNav.activeTabIndex === TAB_INDEX.DIAGNOSIS"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.DIAGNOSIS)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
@@ -791,24 +824,30 @@ watch(
             >Memória de Cálculo</span
           ></template
         >
-        <CalculationMemoryTab
-          v-if="hasVisitedTab(TAB_INDEX.MOVEMENT)"
-          :cnpj="cnpj"
-          :period-summary="periodSummary"
-          :period-loading="isPeriodSummaryLoading"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <CalculationMemoryTab
+            v-if="hasVisitedTab(TAB_INDEX.MOVEMENT)"
+            :cnpj="cnpj"
+            :period-summary="periodSummary"
+            :period-loading="isPeriodSummaryLoading"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.MOVEMENT)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
         <template #header
           ><i class="pi pi-shield tab-icon" /><span>Indicadores</span></template
         >
-        <IndicatorsTab
-          v-if="hasVisitedTab(TAB_INDEX.INDICATORS)"
-          ref="indicatorsTabRef"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <IndicatorsTab
+            v-if="hasVisitedTab(TAB_INDEX.INDICATORS)"
+            ref="indicatorsTabRef"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.INDICATORS)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
@@ -817,15 +856,18 @@ watch(
             >Análise de Autorizações</span
           ></template
         >
-        <AuthTab
-          v-if="hasVisitedTab(TAB_INDEX.CRMS)"
-          ref="authTabRef"
-          :cnpj="cnpj"
-          :is-active="cnpjNav.activeTabIndex === TAB_INDEX.CRMS"
-          :period-summary="periodSummary"
-          :period-loading="isPeriodSummaryLoading"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <AuthTab
+            v-if="hasVisitedTab(TAB_INDEX.CRMS)"
+            ref="authTabRef"
+            :cnpj="cnpj"
+            :is-active="cnpjNav.activeTabIndex === TAB_INDEX.CRMS"
+            :period-summary="periodSummary"
+            :period-loading="isPeriodSummaryLoading"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.CRMS)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
@@ -834,34 +876,43 @@ watch(
             >Quadro Societário</span
           ></template
         >
-        <SociosTab
-          v-if="hasVisitedTab(TAB_INDEX.SOCIOS)"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <SociosTab
+            v-if="hasVisitedTab(TAB_INDEX.SOCIOS)"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.SOCIOS)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
         <template #header>
           <i class="pi pi-share-alt tab-icon" /><span>Teia Societária</span>
         </template>
-        <NetworkTab
-          v-if="hasVisitedTab(TAB_INDEX.NETWORK)"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <NetworkTab
+            v-if="hasVisitedTab(TAB_INDEX.NETWORK)"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.NETWORK)" />
+        </div>
       </TabPanel>
 
       <TabPanel>
         <template #header>
           <i class="pi pi-map tab-icon" /><span>Região de Saúde</span>
         </template>
-        <RegionalTab
-          v-if="hasVisitedTab(TAB_INDEX.REGIONAL)"
-          :cnpj="cnpj"
-          :geo-data="geoData"
-          :cnpj-data="cnpjData"
-          :is-active="cnpjNav.activeTabIndex === TAB_INDEX.REGIONAL"
-          class="tab-content detail-tab-enter"
-        />
+        <div class="cnpj-tab-panel">
+          <RegionalTab
+            v-if="hasVisitedTab(TAB_INDEX.REGIONAL)"
+            :cnpj="cnpj"
+            :geo-data="geoData"
+            :cnpj-data="cnpjData"
+            :is-active="cnpjNav.activeTabIndex === TAB_INDEX.REGIONAL"
+            class="tab-content detail-tab-enter"
+          />
+          <CnpjTabLoadingOverlay :visible="showTabLoadingOverlay(TAB_INDEX.REGIONAL)" />
+        </div>
       </TabPanel>
     </TabView>
   </div>
@@ -876,6 +927,19 @@ watch(
   position: relative; /* Referência para o overlay de loading */
   gap: 0;
   background: transparent;
+}
+
+.cnpj-tab-panel {
+  position: relative;
+  min-height: 18rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.cnpj-tab-panel > :deep(.tab-content) {
+  flex: 1;
+  min-height: 0;
 }
 
 /* Estado de acesso da rota do estabelecimento */

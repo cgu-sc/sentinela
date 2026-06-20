@@ -11,6 +11,7 @@ import RiskChart from './components/charts/RiskChart.vue';
 import BrazilMap from './components/maps/BrazilMap.vue';
 import TopUfRiskChart from './components/charts/TopUfRiskChart.vue';
 import SemesterProductionChart from './components/charts/SemesterProductionChart.vue';
+import { getAppVersionLabel } from '@/config/appInfo';
 
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
@@ -128,6 +129,8 @@ const syncText = computed(() => {
   if (!lastSync.value) return 'Aguardando primeira atualização';
   return dateFormatter.format(new Date(lastSync.value));
 });
+
+const appVersionLabel = computed(() => getAppVersionLabel());
 
 const periodText = computed(() => {
   const [start, end] = filterStore.periodo || [];
@@ -289,6 +292,10 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
             <div class="system-stat">
               <span class="system-stat__label">Atualizado</span>
               <strong class="system-stat__value">{{ syncText }}</strong>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat__label">Versão</span>
+              <strong class="system-stat__value">{{ appVersionLabel }}</strong>
             </div>
           </div>
         </article>

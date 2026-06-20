@@ -4,6 +4,9 @@ import mimetypes
 mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 
+import asyncio
+import json
+import pathlib
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -13,10 +16,33 @@ from api.router import api_router
 from fastapi.middleware.cors import CORSMiddleware
 from data_cache import load_cache
 from request_logging import configure_request_timing_logger
+from api.services.system_update import initialize_update_check, check_for_updates
+
+
+def _read_product_version() -> str:
+    """Lê a versão do produto de version.json na raiz do projeto."""
+    import sys
+    if getattr(sys, "frozen", False):
+        base = pathlib.Path(sys._MEIPASS)  # type: ignore[attr-defined]
+    else:
+        base = pathlib.Path(__file__).parent.parent
+    try:
+        data = json.loads((base / "version.json").read_text(encoding="utf-8"))
+        return str(data["version"])
+    except Exception:
+        return "0.0.0"
+
+
+_PRODUCT_VERSION = _read_product_version()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_cache(engine)
+    # Carrega cache local de atualização imediatamente (sem rede)
+    initialize_update_check()
+    # Consulta remota em background — não bloqueia o boot
+    asyncio.get_event_loop().run_in_executor(None, check_for_updates)
     yield
 
 # =============================================================================
@@ -25,7 +51,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Sentinela API",
     description="Backend oficial para o Projeto Sentinela (Web/Desktop)",
-    version="0.1.0",
+    version=_PRODUCT_VERSION,
     lifespan=lifespan
 )
 

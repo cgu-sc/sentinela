@@ -84,5 +84,7 @@ export const API_ENDPOINTS = {
   preferencesUi: `${BASE_URL}/api/v1/preferences/ui`,
   preferencesNotaTecnica: `${BASE_URL}/api/v1/preferences/nota-tecnica`,
   preferencesMetodologia: `${BASE_URL}/api/v1/preferences/metodologia`,
+  systemUpdateStatus: `${BASE_URL}/api/v1/system/update-status`,
+  systemCheckUpdate:  `${BASE_URL}/api/v1/system/check-update`,
 };
 

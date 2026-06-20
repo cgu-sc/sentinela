@@ -127,6 +127,15 @@ function onNavSelect(event) {
           </template>
         </AutoComplete>
       </div>
+      <a
+        href="https://cgu-sc.github.io/sentinela/"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="docs-nav-btn"
+        v-tooltip.bottom="'Documentação do sistema'"
+      >
+        <i class="pi pi-book" />
+      </a>
       <ThemeSelector />
       <Button
         icon="pi pi-cog"
@@ -449,6 +458,33 @@ function onNavSelect(event) {
   font-size: 0.65rem;
   color: var(--primary-color);
   opacity: 0.75;
+}
+
+.docs-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.docs-nav-btn:hover {
+  background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
+  color: var(--text-color-85);
+}
+
+.docs-nav-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-color-85) 16%, transparent);
+}
+
+.docs-nav-btn i {
+  font-size: 1rem;
 }
 
 .lists-nav-btn {

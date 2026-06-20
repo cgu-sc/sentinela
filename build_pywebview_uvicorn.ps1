@@ -44,6 +44,8 @@ Write-Host "`n[3/3] Gerando executavel..." -ForegroundColor Yellow
     --paths "backend" `
     --add-data "frontend/dist;frontend/dist" `
     --add-data "backend;backend" `
+    --add-data "version.json;." `
+    --add-data "backend/data/update_manifest_public_key.pem;backend/data" `
     --hidden-import "pyodbc" `
     --hidden-import "uvicorn" `
     --hidden-import "uvicorn.logging" `
@@ -54,6 +56,9 @@ Write-Host "`n[3/3] Gerando executavel..." -ForegroundColor Yellow
     --hidden-import "uvicorn.protocols.http.auto" `
     --hidden-import "webview" `
     --hidden-import "clr" `
+    --hidden-import "cryptography" `
+    --hidden-import "httpx" `
+    --hidden-import "packaging" `
     desktop_uvicorn.py
 
 if ($LASTEXITCODE -ne 0) {

@@ -7,12 +7,15 @@ import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
+import { useSystemUpdateStore } from '@/stores/systemUpdate';
 import Toast from 'primevue/toast';
 import { openDownloadedFile } from '@/utils/download';
+import UpdateBlocker from '@/views/components/UpdateBlocker.vue';
 
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
 const themeStore = useThemeStore();
+const updateStore = useSystemUpdateStore();
 const { getApiParams } = useFilterParameters();
 const isAppLoading = ref(true);
 const syncProgress = ref(0);
@@ -128,6 +131,8 @@ const retryConnection = () => {
 onMounted(() => {
   themeStore.initTheme();
   initializeApp();
+  // Consulta status de atualização em paralelo — não bloqueia o boot
+  updateStore.fetchUpdateStatus();
 });
 
 onBeforeUnmount(() => {
@@ -236,6 +241,9 @@ const openToastFile = async (message) => {
 
   <!-- O RouterView só aparece quando tudo está pronto -->
   <router-view v-else />
+
+  <!-- Bloqueio de versão incompatível — sobrepõe tudo, sem fechar -->
+  <UpdateBlocker v-if="updateStore.isBlocked" />
 </template>
 
 <style scoped>

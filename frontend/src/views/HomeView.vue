@@ -12,6 +12,7 @@ import BrazilMap from './components/maps/BrazilMap.vue';
 import TopUfRiskChart from './components/charts/TopUfRiskChart.vue';
 import SemesterProductionChart from './components/charts/SemesterProductionChart.vue';
 import { getAppVersionLabel } from '@/config/appInfo';
+import { useSystemUpdateStore } from '@/stores/systemUpdate';
 
 const analyticsStore = useAnalyticsStore();
 const filterStore = useFilterStore();
@@ -131,6 +132,8 @@ const syncText = computed(() => {
 });
 
 const appVersionLabel = computed(() => getAppVersionLabel());
+
+const updateStore = useSystemUpdateStore();
 
 const periodText = computed(() => {
   const [start, end] = filterStore.periodo || [];
@@ -290,12 +293,21 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
               </strong>
             </div>
             <div class="system-stat">
-              <span class="system-stat__label">Atualizado</span>
-              <strong class="system-stat__value">{{ syncText }}</strong>
-            </div>
-            <div class="system-stat">
               <span class="system-stat__label">Versão</span>
               <strong class="system-stat__value">{{ appVersionLabel }}</strong>
+            </div>
+            <div
+              class="system-stat system-stat--update"
+              :class="`system-stat--update-${updateStore.statusTone}`"
+              v-tooltip.left="updateStore.checkedAtFormatted
+                ? `Última verificação: ${updateStore.checkedAtFormatted}`
+                : updateStore.message || 'Verificação pendente'"
+            >
+              <span class="system-stat__label">Atualização</span>
+              <strong class="system-stat__value system-stat__value--update"
+                :class="`system-stat__value--update-${updateStore.statusTone}`">
+                {{ updateStore.statusLabel || '—' }}
+              </strong>
             </div>
           </div>
         </article>
@@ -882,6 +894,11 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 .system-stat__value--loading {
   color: var(--primary-color);
 }
+
+.system-stat__value--update-ok       { color: var(--status-success); }
+.system-stat__value--update-warn      { color: var(--risk-medium); }
+.system-stat__value--update-critical  { color: var(--status-danger, #ef4444); }
+.system-stat__value--update-muted     { color: var(--text-muted); }
 
 .priority-card--alerts {
   --priority-color: var(--risk-medium);

@@ -645,6 +645,7 @@ const pdfTooltip = computed(() => {
       <div class="list-actions list-actions--vertical">
           <button
             class="list-btn list-btn--icon-only list-btn--export"
+            :class="{ 'list-btn--loading': isExporting || isPreparingPdf }"
             @click="emit('export')"
             :disabled="isPdfButtonDisabled"
             v-tooltip.bottom="pdfTooltip"
@@ -653,6 +654,7 @@ const pdfTooltip = computed(() => {
           </button>
           <button
             class="list-btn list-btn--icon-only list-btn--note"
+            :class="{ 'list-btn--loading': isGeneratingNote || isPreparingNote }"
             @click="emit('generateNote')"
             :disabled="isNoteButtonDisabled"
             v-tooltip.bottom="noteTooltip"
@@ -877,6 +879,39 @@ const pdfTooltip = computed(() => {
 .list-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Efeito de carregamento ativo para os botões de relatório/nota */
+.list-btn--loading:disabled {
+  opacity: 1 !important;
+  cursor: wait !important;
+}
+
+.list-btn--export.list-btn--loading {
+  --btn-glow-color: var(--primary-color);
+  animation: list-btn-glow-pulse 1.8s infinite ease-in-out;
+  border-color: var(--primary-color) !important;
+}
+
+.list-btn--note.list-btn--loading {
+  --btn-glow-color: var(--btn-note-color, #a855f7);
+  animation: list-btn-glow-pulse 1.8s infinite ease-in-out;
+  border-color: var(--btn-note-color, #a855f7) !important;
+}
+
+@keyframes list-btn-glow-pulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 4px color-mix(in srgb, var(--btn-glow-color) 40%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--btn-glow-color) 30%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 
+      0 0 12px color-mix(in srgb, var(--btn-glow-color) 70%, transparent),
+      0 0 0 8px color-mix(in srgb, var(--btn-glow-color) 0%, transparent);
+    transform: scale(1.04);
+  }
 }
 
 .list-btn--note {

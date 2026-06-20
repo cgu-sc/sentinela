@@ -4,6 +4,17 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
+## [1.1.2] - 2026-06-20
+
+### Corrigido
+- Falha ao gerar Nota Técnica em modo Desktop (Frozen/EXE) causada por caminho de resolução incorreto para o GeoJSON `brasil-uf.json` na geração dos mapas.
+
+## [1.1.1] - 2026-06-20
+
+### Adicionado
+- Comportamento clicável no card de atualização (HomeView) quando o sistema não está atualizado, redirecionando para a página oficial do GitHub Pages para baixar a nova versão.
+- Efeito de carregamento visual premium (brilho pulsante com animação de respiração scale e onda de expansão ripple) nos botões de "Gerar Relatório PDF" e "Gerar Nota Técnica" durante a compilação/exportação dos dados.
+
 ## [1.1.0] - 2026-06-20
 
 ### Adicionado

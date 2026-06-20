@@ -233,6 +233,13 @@ const displayAlertasPanorama = computed(() => {
 
 const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !displayAlertasPanorama.value);
 
+function handleUpdateClick() {
+  if (updateStore.status && !updateStore.isCurrent) {
+    const url = updateStore.downloadUrl || 'https://cgu-sc.github.io/sentinela/';
+    window.open(url, '_blank');
+  }
+}
+
 </script>
 
 <template>
@@ -298,7 +305,14 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
             </div>
             <div
               class="system-stat system-stat--update"
-              :class="`system-stat--update-${updateStore.statusTone}`"
+              :class="[
+                `system-stat--update-${updateStore.statusTone}`,
+                { 'system-stat--update-clickable': updateStore.status && !updateStore.isCurrent }
+              ]"
+              :tabindex="updateStore.status && !updateStore.isCurrent ? '0' : undefined"
+              @click="handleUpdateClick"
+              @keydown.enter="handleUpdateClick"
+              @keydown.space.prevent="handleUpdateClick"
               v-tooltip.left="updateStore.checkedAtFormatted
                 ? `Última verificação: ${updateStore.checkedAtFormatted}`
                 : updateStore.message || 'Verificação pendente'"
@@ -899,6 +913,17 @@ const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !disp
 .system-stat__value--update-warn      { color: var(--risk-medium); }
 .system-stat__value--update-critical  { color: var(--status-danger, #ef4444); }
 .system-stat__value--update-muted     { color: var(--text-muted); }
+
+.system-stat--update-clickable {
+  cursor: pointer;
+}
+
+.system-stat--update-clickable:hover,
+.system-stat--update-clickable:focus-visible {
+  border-color: color-mix(in srgb, var(--priority-color) 30%, transparent);
+  background: color-mix(in srgb, var(--priority-color) 9%, transparent);
+  outline: none;
+}
 
 .priority-card--alerts {
   --priority-color: var(--risk-medium);

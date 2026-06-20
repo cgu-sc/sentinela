@@ -60,6 +60,10 @@ def _svg_to_png_stream(svg: str) -> io.BytesIO:
 
 
 def _brasil_uf_geojson_path() -> Path:
+    import sys
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # Em modo executável congelado (PyInstaller), os assets estão na pasta temporária frontend/dist
+        return Path(sys._MEIPASS) / "frontend" / "dist" / "geo" / "brasil-uf.json"
     return Path(__file__).resolve().parents[4] / "frontend" / "public" / "geo" / "brasil-uf.json"
 
 

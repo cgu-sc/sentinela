@@ -1,6 +1,6 @@
-import packageInfo from '../../package.json';
+import versionInfo from '../../../version.json';
 
-export const APP_VERSION = packageInfo.version;
+export const APP_VERSION = versionInfo.version;
 
 export const APP_RUNTIME = {
   WEB: 'Web',

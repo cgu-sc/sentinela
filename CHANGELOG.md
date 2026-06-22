@@ -4,103 +4,83 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
-
-## [1.1.22] - 2026-06-22
-
-### Alterado
-- Versão de teste para validação do script PowerShell de atualização automática e ajustes visuais do card Sistema.
-
-## [1.1.21] - 2026-06-22
-
-### Alterado
-- Versão de teste para validação do script PowerShell de atualização automática e ajustes visuais do card Sistema.
-
-## [1.1.20] - 2026-06-22
+## [1.1.12] - 2026-06-22
 
 ### Corrigido
-- Script de atualização automática substituído de `.bat` para PowerShell (`.ps1`): aguarda encerramento dos processos, verifica liberação das portas 8002–8010 antes de copiar o exe e lançar a nova versão, com log detalhado em `sentinela_update.log`.
-- Versão exibida no card Sistema agora vem da API em tempo de execução (`currentVersion`) em vez do valor estático compilado no bundle JS, garantindo exibição correta após atualização automática.
+- Refinamento da limpeza de ambiente no PowerShell para garantir que variáveis internas do PyInstaller sejam totalmente removidas nativamente no processo do Windows.
+- Otimização do rótulo do botão de cancelamento para "Cancelar".
 
-## [1.1.19] - 2026-06-22
+## [1.1.11] - 2026-06-22
 
-### Alterado
-- Versão de teste para validação do fluxo completo de atualização automática.
+### Corrigido
+- Exibição de progresso no script PowerShell `sentinela_update.ps1` (removido `$ErrorActionPreference = 'SilentlyContinue'` silencioso e adicionados tratamentos robustos de erro).
+- Falha de cache do PyInstaller ao reiniciar: agora a variável de ambiente `_MEIPASS` é limpa no PowerShell antes da reinicialização, garantindo que o novo executável carregue a versão correta.
+- Ajustado o tamanho visual do botão "Cancelar atualização" na tela de progresso.
+- Título do card de produção semestral alterado para "VALOR SEM COMPROVAÇÃO E % SEM COMPROVAÇÃO POR SEMESTRE".
 
-## [1.1.18] - 2026-06-22
+## [1.1.10] - 2026-06-20
 
 ### Adicionado
-- Modal de atualização exibe contagem regressiva de 10 segundos após o download concluir, com botão "Cancelar atualização" para interromper o processo antes de fechar.
+- Sistema de verificação automática de atualizações com assinatura Ed25519 e manifesto público no GitHub Pages.
+- Tela de bloqueio profissional exibida quando a versão instalada está abaixo da versão mínima suportada.
+- Cache local offline do manifesto validado em `%LOCALAPPDATA%\Sentinela\updates\` com proteção anti-downgrade.
+- Card Sistema expandido com linha de status de atualização (Atualizado, Atualização disponível, Verificação offline, Não verificado) e tooltip com data da última verificação.
+- Link para documentação do sistema (`https://cgu-sc.github.io/sentinela/`) na barra de navegação.
+- Endpoints `GET /api/v1/system/update-status` e `POST /api/v1/system/check-update`.
+- Fonte única de versão do produto em `version.json` na raiz do projeto.
 
-## [1.1.17] - 2026-06-22
-
-### Alterado
-- Versão de teste para validação do fluxo completo de atualização automática.
-
-## [1.1.16] - 2026-06-22
-
-### Corrigido
-- Atualização automática não reabrindo o aplicativo: bat gerado agora salvo na pasta do exe e lançado com `CREATE_NEW_CONSOLE` em vez de `DETACHED_PROCESS`, garantindo sessão de desktop para o `start` funcionar corretamente.
-
-## [1.1.15] - 2026-06-21
-
-### Alterado
-- Versão de teste para validação do fluxo completo de atualização automática.
-
-## [1.1.14] - 2026-06-21
-
-### Alterado
-- Versão de teste para validação do fluxo completo de atualização automática.
-
-## [1.1.13] - 2026-06-21
-
-### Alterado
-- Versão de teste para validação do fluxo completo de atualização automática.
-
-## [1.1.12] - 2026-06-21
-
-### Corrigido
-- Atualização automática simplificada: removidas tentativas de `explorer.exe` e `powershell`; o `update.bat` aguarda ambos os processos (servidor e janela) encerrarem via kill explícito antes de copiar o exe e reabrir com `start`.
-
-## [1.1.11] - 2026-06-21
-
-### Corrigido
-- Aplicativo não reabrindo após atualização automática: substituído `explorer.exe` por `powershell Start-Process` no `update.bat`, que executa o novo executável corretamente a partir de um processo desvinculado.
-
-## [1.1.10] - 2026-06-21
-
-### Corrigido
-- Aplicativo não reabrindo após atualização automática: o `update.bat` agora usa `explorer.exe` para lançar o novo executável, garantindo acesso à sessão de desktop quando iniciado a partir de um processo desvinculado.
-
-## [1.1.9] - 2026-06-21
-
-### Corrigido
-- Atualização automática não reiniciava o aplicativo: o script `update.bat` agora aguarda tanto o processo servidor (FastAPI) quanto o processo janela (PyWebView) encerrarem antes de substituir o executável, e o servidor encerra o processo janela programaticamente antes de sair.
-- Barra de progresso travada em 0% ao tentar baixar uma atualização pela segunda vez na mesma sessão.
-
-## [1.1.8] - 2026-06-21
 
 ### Adicionado
-- Versão de teste para validação do modal de download automático.
+- Sistema de verificação automática de atualizações com assinatura Ed25519 e manifesto público no GitHub Pages.
+- Tela de bloqueio profissional exibida quando a versão instalada está abaixo da versão mínima suportada.
+- Cache local offline do manifesto validado em `%LOCALAPPDATA%\Sentinela\updates\` com proteção anti-downgrade.
+- Card Sistema expandido com linha de status de atualização (Atualizado, Atualização disponível, Verificação offline, Não verificado) e tooltip com data da última verificação.
+- Link para documentação do sistema (`https://cgu-sc.github.io/sentinela/`) na barra de navegação.
+- Endpoints `GET /api/v1/system/update-status` e `POST /api/v1/system/check-update`.
+- Fonte única de versão do produto em `version.json` na raiz do projeto.
 
-## [1.1.7] - 2026-06-21
+
+
+
+
+
+
+
+
+
+
+
+## [1.1.9] - 2026-06-22
+
+### Adicionado
+- Teste de funcionalidade de atualização automática do aplicativo desktop via release.ps1 (versão 1.1.9 para teste de update da 1.1.8).
+
+## [1.1.8] - 2026-06-22
+
+### Adicionado
+- Teste de funcionalidade de atualização automática do aplicativo desktop via release.ps1.
+
+## [1.1.7] - 2026-06-22
+
+### Adicionado
+- Teste de funcionalidade de atualização automática do aplicativo desktop via release.ps1.
+
+## [1.1.6] - 2026-06-22
 
 ### Corrigido
-- Falha ao gerar `update.bat` com `UnicodeEncodeError` causada por caractere em dash (`—`) no comentário do script, impedindo a aplicação da atualização automática após o download.
+- Gráfico "Repasses por Semestre" sem destaque visual ao clicar: barras agora aplicam opacidade reduzida nos semestres não selecionados, igual ao comportamento do "Volume de Vendas por Semestre".
+- Gráfico "Histórico Mensal de Repasses" sem destaque dos meses do semestre selecionado: agora aplica opacidade reduzida nos meses fora do semestre clicado.
+- Coluna "Programa" na tabela de detalhamento mensal de repasses exibia texto em caixa baixa; agora é formatada em TitleCase via `formatTitleCase`.
 
-## [1.1.6] - 2026-06-20
+## [1.1.5] - 2026-06-22
 
 ### Corrigido
-- Verificação de atualização retornava "Verificação offline" por campo `release_notes_url` ausente no manifesto, causando falha de validação do schema Pydantic.
-- Modal de progresso de download não aparecia ao iniciar atualização a partir de telas fora da Home (`UpdateDialog` movido para `App.vue`).
+- Gráfico "Repasses por Semestre" sem destaque visual ao clicar: barras agora aplicam opacidade reduzida nos semestres não selecionados, igual ao comportamento do "Volume de Vendas por Semestre".
+- Gráfico "Histórico Mensal de Repasses" sem destaque dos meses do semestre selecionado: agora aplica opacidade reduzida nos meses fora do semestre clicado.
+- Coluna "Programa" na tabela de detalhamento mensal de repasses exibia texto em caixa baixa; agora é formatada em TitleCase via `formatTitleCase`.
 
-### Alterado
-- Executável renomeado de `sentinela_server1.exe` para `Sentinela.exe` em todos os scripts de build e release.
-- Card Sistema exibe link discreto para a release no GitHub quando há atualização disponível ou obrigatória, permitindo download manual caso a atualização automática falhe.
-
-## [1.1.5] - 2026-06-20
-
-### Alterado
-- Ajustado o rótulo do alerta de integridade de sócio falecido para "Sócio Ativo Falecido".
+### Adicionado
+- Badge no header do card "Histórico Mensal de Repasses" exibindo o semestre atualmente selecionado.
 
 ## [1.1.4] - 2026-06-20
 

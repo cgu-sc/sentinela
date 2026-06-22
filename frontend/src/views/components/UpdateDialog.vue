@@ -94,9 +94,10 @@ const headerIconClass = computed(() => {
       <div class="update-dialog__footer">
         <Button
           v-if="updateStore.downloadDone"
-          label="Cancelar atualização"
+          label="Cancelar"
           icon="pi pi-times"
           severity="secondary"
+          class="p-button-sm"
           @click="updateStore.cancelUpdate"
         />
         <Button
@@ -299,6 +300,11 @@ const headerIconClass = computed(() => {
   align-items: center;
   gap: 0.5rem;
   min-height: 2.5rem;
+}
+
+:deep(.p-dialog.update-dialog .p-button-sm) {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.75rem;
 }
 
 /* ─── Shimmer animation ────────────────────────────────────────────────────── */

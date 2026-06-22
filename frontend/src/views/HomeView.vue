@@ -330,20 +330,22 @@ function handleUpdateClick() {
                 : updateStore.message || 'Verificação pendente'"
             >
               <span class="system-stat__label">Atualização</span>
-              <strong class="system-stat__value system-stat__value--update"
-                :class="`system-stat__value--update-${updateStore.statusTone}`">
-                {{ updateStore.statusLabel || '—' }}
-              </strong>
-              <a
-                v-if="(updateStore.hasUpdate || updateStore.isBlocked) && updateStore.releaseNotesUrl"
-                :href="updateStore.releaseNotesUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="system-stat__release-link"
-                @click.stop
-              >
-                <i class="pi pi-external-link" /> v{{ updateStore.latestVersion }}
-              </a>
+              <div class="system-stat__value-container">
+                <strong class="system-stat__value system-stat__value--update"
+                  :class="`system-stat__value--update-${updateStore.statusTone}`">
+                  {{ updateStore.statusLabel || '—' }}
+                </strong>
+                <a
+                  v-if="(updateStore.hasUpdate || updateStore.isBlocked) && updateStore.releaseNotesUrl"
+                  :href="updateStore.releaseNotesUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="system-stat__release-link"
+                  @click.stop
+                >
+                  <i class="pi pi-external-link" /> v{{ updateStore.latestVersion }}
+                </a>
+              </div>
             </div>
           </div>
         </article>
@@ -917,6 +919,13 @@ function handleUpdateClick() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.system-stat__value-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
 }
 
 .system-stat__value--success {

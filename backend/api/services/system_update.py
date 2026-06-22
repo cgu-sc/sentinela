@@ -7,16 +7,14 @@ Fluxo de verificação:
   3. Valida schema (schema_version==1, product=="sentinela", channel=="stable").
   4. Compara versões com packaging.version.Version (SemVer rigoroso).
   5. Grava cache local atomicamente apenas se a validação passar.
-  6. Proteção anti-downgrade: rejeita manifesto com minimum_supported_version
-     menor que o do cache anterior ou published_at anterior.
-  7. Política offline: usa cache válido ou retorna verification_unavailable.
+  6. Política offline: usa cache válido ou retorna verification_unavailable.
 
 Fluxo de download automático (apenas sys.frozen):
   1. POST /download-update → dispara download assíncrono do novo .exe via HTTPX stream.
   2. Progresso (0.0–1.0) disponível em GET /download-progress.
-  3. Ao terminar, gera update.bat temporário e o lança desvinculado (Popen).
+  3. Ao terminar, gera update.ps1 temporário e o lança desvinculado (Popen).
   4. Backend chama sys.exit(0), fechando o processo.
-  5. update.bat aguarda o PID original sair, substitui o .exe e reinicia.
+  5. update.ps1 aguarda o PID original sair, substitui o .exe e reinicia.
 """
 
 from __future__ import annotations
@@ -153,34 +151,6 @@ def _validate_manifest(raw: bytes) -> UpdateManifest:
             raise ValueError(f"{field} não é SemVer válido: {raw_ver!r}")
 
     return UpdateManifest.model_validate(data)
-
-
-# ---------------------------------------------------------------------------
-# Proteção anti-downgrade
-# ---------------------------------------------------------------------------
-
-def _check_anti_downgrade(new: UpdateManifest, cached_raw: bytes | None) -> None:
-    """Rejeita manifesto remoto que regride minimum_supported_version ou published_at."""
-    if cached_raw is None:
-        return
-    try:
-        cached_data = json.loads(cached_raw)
-        cached_min = Version(cached_data.get("minimum_supported_version", "0.0.0"))
-        new_min = Version(new.minimum_supported_version)
-        if new_min < cached_min:
-            raise ValueError(
-                f"Manifesto remoto regride minimum_supported_version "
-                f"({new.minimum_supported_version} < {cached_data['minimum_supported_version']}). "
-                "Rejeitado por política anti-downgrade."
-            )
-        cached_pub = cached_data.get("published_at")
-        if cached_pub and new.published_at < datetime.fromisoformat(cached_pub):
-            raise ValueError(
-                "Manifesto remoto tem published_at anterior ao cache. Rejeitado."
-            )
-    except (json.JSONDecodeError, InvalidVersion, KeyError):
-        # Cache corrompido — não bloqueia o manifesto novo
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +316,6 @@ def check_for_updates(force_remote: bool = False) -> UpdateStatusResponse:
         manifest_bytes, sig_bytes = _fetch_remote()
         _verify_signature(manifest_bytes, sig_bytes)
         manifest = _validate_manifest(manifest_bytes)
-        _check_anti_downgrade(manifest, cached_manifest_bytes)
         _write_cache_atomic(manifest_bytes, sig_bytes)
 
         status = _compare_versions(
@@ -581,18 +550,22 @@ def _write_update_ps1(exe_path: Path, tmp_path: Path) -> Path:
 
     proc_name = exe_name.replace(".exe", "")
     script = f"""
-$ErrorActionPreference = 'SilentlyContinue'
+Write-Host "=== Iniciando atualização do Sentinela ==="
 
 # 1. Encerra todos os processos Sentinela
-Get-Process -Name '{proc_name}' | Stop-Process -Force
+Write-Host "Encerrando processos '{proc_name}'..."
+Get-Process -Name '{proc_name}' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 # 2. Aguarda processos encerrarem (max 15s)
+Write-Host "Aguardando processos finalizarem..."
 $deadline = (Get-Date).AddSeconds(15)
 while ((Get-Process -Name '{proc_name}' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{
     Start-Sleep -Milliseconds 300
 }}
+Write-Host "Processos encerrados."
 
 # 3. Aguarda portas 8002-8010 liberarem (max 15s)
+Write-Host "Aguardando portas liberarem..."
 $deadline = (Get-Date).AddSeconds(15)
 while ((Get-Date) -lt $deadline) {{
     $ocupadas = 8002..8010 | Where-Object {{
@@ -601,23 +574,47 @@ while ((Get-Date) -lt $deadline) {{
     if ($ocupadas.Count -eq 0) {{ break }}
     Start-Sleep -Milliseconds 300
 }}
+Write-Host "Portas liberadas."
 
 # 4. Substitui o exe (max 10s)
+Write-Host "Substituindo executável..."
 $deadline = (Get-Date).AddSeconds(10)
-while ((Test-Path '{exe_path}') -and (Get-Date) -lt $deadline) {{
-    try {{ Remove-Item '{exe_path}' -Force; break }} catch {{ Start-Sleep -Milliseconds 300 }}
+$replaced = $false
+while ((Get-Date) -lt $deadline) {{
+    try {{
+        if (Test-Path '{exe_path}') {{
+            Remove-Item '{exe_path}' -Force -ErrorAction Stop
+        }}
+        Copy-Item '{tmp_path}' '{exe_path}' -Force -ErrorAction Stop
+        $replaced = $true
+        break
+    }} catch {{
+        Write-Host "Aguardando liberação do arquivo..."
+        Start-Sleep -Milliseconds 500
+    }}
 }}
-Copy-Item '{tmp_path}' '{exe_path}' -Force
+
+if (-not $replaced) {{
+    Write-Error "Falha crítica: Não foi possível substituir o executável."
+    Start-Sleep -Seconds 5
+    exit 1
+}}
+Write-Host "Executável substituído com sucesso."
 
 # 5. Abre o novo exe
+Write-Host "Iniciando novo Sentinela..."
+[System.Environment]::SetEnvironmentVariable('_MEIPASS', $null, 'Process')
+[System.Environment]::SetEnvironmentVariable('MEIPASS', $null, 'Process')
 Start-Process '{exe_path}'
 
 # 6. Limpeza
+Write-Host "Limpando arquivos temporários..."
 Start-Sleep -Seconds 2
 Remove-Item '{tmp_path}' -Force -ErrorAction SilentlyContinue
 Remove-Item $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
+Write-Host "Atualização concluída."
 """
-    ps1_path.write_text(script, encoding="utf-8")
+    ps1_path.write_text(script, encoding="utf-8-sig")
     return ps1_path
 
 
@@ -705,7 +702,7 @@ def apply_update() -> None:
     logger.info("[auto-update] Aplicando atualização. ps1: %s", ps1_path)
 
     subprocess.Popen(
-        ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
+        ["powershell.exe", "-WindowStyle", "Normal", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
         creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )

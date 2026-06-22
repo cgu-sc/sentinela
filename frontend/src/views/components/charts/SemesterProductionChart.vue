@@ -236,7 +236,7 @@ const chartOption = computed(() => {
       <div class="header-left">
         <i class="pi pi-chart-bar"></i>
         <div>
-          <h3>SEM COMPROVAÇÃO E % NÃO COMPROVAÇÃO POR SEMESTRE</h3>
+          <h3>VALOR SEM COMPROVAÇÃO E % SEM COMPROVAÇÃO POR SEMESTRE</h3>
           <span>Painel superior mostra valor sem comprovação; painel inferior mostra o percentual de não comprovação</span>
         </div>
       </div>

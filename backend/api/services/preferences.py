@@ -5,7 +5,17 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
-def _project_preferences_dir() -> Path:
+def _persistent_preferences_dir() -> Path:
+    import sys
+    if getattr(sys, "frozen", False):
+        # Em modo executável congelado (Desktop), persistimos os dados no AppData local do usuário
+        local_app_data = os.getenv("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "Sentinela" / "preferences"
+        # Fallback seguro caso LOCALAPPDATA não esteja disponível
+        return Path(sys.executable).parent / "preferences"
+    
+    # Desenvolvimento local
     project_root = Path(__file__).resolve().parents[3]
     return project_root / "modules" / "user_preferences"
 
@@ -17,7 +27,7 @@ def _preference_dir_candidates() -> List[Path]:
     if override:
         candidates.append(Path(override))
 
-    candidates.append(_project_preferences_dir())
+    candidates.append(_persistent_preferences_dir())
 
     unique_candidates: List[Path] = []
     seen = set()

@@ -87,6 +87,17 @@ def _crm_raiox_tx_global_schema() -> dict:
     }
 
 
+def _pagamentos_consolidados_farmacia_popular_schema() -> dict:
+    return {
+        "id_cnpj": pl.Int32,
+        "data_pagamento": pl.Utf8,
+        "programa_acao": pl.Utf8,
+        "numero_ordem_bancaria": pl.Utf8,
+        "valor_pago": pl.Float64,
+        "_pagamentos_consolidados_farmacia_popular_cache_version": pl.Int32,
+    }
+
+
 def _geografico_global_schema() -> dict:
     """Schema do parquet global de alertas geográficos CRM (sem id_cnpj; filtro por cnpj_a/cnpj_b)."""
     return {
@@ -425,6 +436,12 @@ GLOBAL_CACHE_DEFINITIONS = (
     CacheDefinition("crm_timeline_hora_global", CRM_TIMELINE_HORA_GLOBAL_PARQUET, "global", _crm_timeline_hora_global_schema()),
     CacheDefinition("crm_timeline_eventos_global", CRM_TIMELINE_EVENTOS_GLOBAL_PARQUET, "global", _crm_timeline_eventos_global_schema()),
     CacheDefinition("movimentacao_mensal_gtin_global", cache_files.MOVIMENTACAO_MENSAL_GTIN_GLOBAL_PARQUET, "global", _movimentacao_mensal_gtin_global_schema()),
+    CacheDefinition(
+        "pagamentos_consolidados_farmacia_popular",
+        cache_files.PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET,
+        "global",
+        _pagamentos_consolidados_farmacia_popular_schema(),
+    ),
 )
 
 

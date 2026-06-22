@@ -86,5 +86,9 @@ export const API_ENDPOINTS = {
   preferencesMetodologia: `${BASE_URL}/api/v1/preferences/metodologia`,
   systemUpdateStatus: `${BASE_URL}/api/v1/system/update-status`,
   systemCheckUpdate:  `${BASE_URL}/api/v1/system/check-update`,
+  systemDownloadUpdate:   `${BASE_URL}/api/v1/system/download-update`,
+  systemDownloadProgress: `${BASE_URL}/api/v1/system/download-progress`,
+  systemApplyUpdate:      `${BASE_URL}/api/v1/system/apply-update`,
+  systemCancelUpdate:     `${BASE_URL}/api/v1/system/cancel-update`,
 };
 

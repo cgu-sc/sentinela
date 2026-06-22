@@ -11,6 +11,7 @@ import { useSystemUpdateStore } from '@/stores/systemUpdate';
 import Toast from 'primevue/toast';
 import { openDownloadedFile } from '@/utils/download';
 import UpdateBlocker from '@/views/components/UpdateBlocker.vue';
+import UpdateDialog from '@/views/components/UpdateDialog.vue';
 
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
@@ -244,6 +245,7 @@ const openToastFile = async (message) => {
 
   <!-- Bloqueio de versão incompatível — sobrepõe tudo, sem fechar -->
   <UpdateBlocker v-if="updateStore.isBlocked" />
+  <UpdateDialog />
 </template>
 
 <style scoped>

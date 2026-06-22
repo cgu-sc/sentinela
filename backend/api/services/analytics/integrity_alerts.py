@@ -225,7 +225,7 @@ def get_integrity_alerts(
                     entidade_id=socio.cpf_cnpj_socio,
                     entidade_nome=entidade_nome,
                     severidade="critico",
-                    titulo="Sócio falecido",
+                    titulo="Sócio Ativo Falecido",
                     fonte="Base unificada de óbitos",
                     data_referencia=socios_response.data_processamento,
                     aba_destino="socios",

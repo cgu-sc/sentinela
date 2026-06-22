@@ -11,7 +11,7 @@ import RiskChart from './components/charts/RiskChart.vue';
 import BrazilMap from './components/maps/BrazilMap.vue';
 import TopUfRiskChart from './components/charts/TopUfRiskChart.vue';
 import SemesterProductionChart from './components/charts/SemesterProductionChart.vue';
-import { getAppVersionLabel } from '@/config/appInfo';
+import { getAppVersionLabel, APP_RUNTIME, getAppRuntimeLabel } from '@/config/appInfo';
 import { useSystemUpdateStore } from '@/stores/systemUpdate';
 
 const analyticsStore = useAnalyticsStore();
@@ -131,9 +131,13 @@ const syncText = computed(() => {
   return dateFormatter.format(new Date(lastSync.value));
 });
 
-const appVersionLabel = computed(() => getAppVersionLabel());
-
 const updateStore = useSystemUpdateStore();
+
+const appVersionLabel = computed(() => {
+  const runtime = getAppRuntimeLabel();
+  const version = updateStore.currentVersion ?? APP_VERSION;
+  return `${runtime} v${version}`;
+});
 
 const periodText = computed(() => {
   const [start, end] = filterStore.periodo || [];
@@ -233,11 +237,19 @@ const displayAlertasPanorama = computed(() => {
 
 const showAlertasSkeleton = computed(() => alertasPanoramaLoading.value && !displayAlertasPanorama.value);
 
+
 function handleUpdateClick() {
-  if (updateStore.status && !updateStore.isCurrent) {
-    const url = updateStore.downloadUrl || 'https://cgu-sc.github.io/sentinela/';
-    window.open(url, '_blank');
+  if (!updateStore.status || updateStore.isCurrent) return;
+
+  // Modo Desktop: usa download automático via backend
+  if (getAppRuntimeLabel() === APP_RUNTIME.DESKTOP) {
+    updateStore.startDownload();
+    return;
   }
+
+  // Modo Web: abre página de downloads no navegador
+  const url = updateStore.downloadUrl || 'https://cgu-sc.github.io/sentinela/';
+  window.open(url, '_blank');
 }
 
 </script>
@@ -322,6 +334,16 @@ function handleUpdateClick() {
                 :class="`system-stat__value--update-${updateStore.statusTone}`">
                 {{ updateStore.statusLabel || '—' }}
               </strong>
+              <a
+                v-if="(updateStore.hasUpdate || updateStore.isBlocked) && updateStore.releaseNotesUrl"
+                :href="updateStore.releaseNotesUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="system-stat__release-link"
+                @click.stop
+              >
+                <i class="pi pi-external-link" /> v{{ updateStore.latestVersion }}
+              </a>
             </div>
           </div>
         </article>
@@ -471,7 +493,7 @@ function handleUpdateClick() {
 
 .priority-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.62fr) minmax(0, 0.9fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
 }
@@ -908,6 +930,21 @@ function handleUpdateClick() {
 .system-stat__value--loading {
   color: var(--primary-color);
 }
+
+
+.system-stat__release-link {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.system-stat__release-link:hover { opacity: 1; color: var(--primary-color); }
+.system-stat__release-link .pi { font-size: 0.65rem; }
 
 .system-stat__value--update-ok       { color: var(--status-success); }
 .system-stat__value--update-warn      { color: var(--risk-medium); }

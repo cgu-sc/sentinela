@@ -10,6 +10,7 @@ from cache_files import (
     CRM_PRESCRITORES_CACHE_VERSION,
     CRM_RAIOX_TX_CACHE_VERSION,
     MEMORIA_CALCULO_CACHE_VERSION,
+    PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_CACHE_VERSION,
 )
 from datetime import date
 from pathlib import Path
@@ -165,6 +166,14 @@ _ON_DEMAND_GLOBAL_REQUIRED_COLUMNS = {
         "id_medico",
         "valor_pago",
         "_crm_raiox_tx_cache_version",
+    },
+    "pagamentos_consolidados_farmacia_popular": {
+        "id_cnpj",
+        "data_pagamento",
+        "programa_acao",
+        "numero_ordem_bancaria",
+        "valor_pago",
+        "_pagamentos_consolidados_farmacia_popular_cache_version",
     },
     "crm_prescritores_global": {
         "id_cnpj",
@@ -404,6 +413,9 @@ _DADOS_MEDICO_PARQUET_PATH = _global_cache_path("dados_medico")
 _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH = _global_cache_path("crm_prescritores_global")
 _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH = _global_cache_path("memoria_calculo_global")
 _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH = _global_cache_path("crm_raiox_tx_global")
+_PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET_PATH = _global_cache_path(
+    "pagamentos_consolidados_farmacia_popular"
+)
 _DADOS_FARMACIA_PARQUET_PATH = _global_cache_path("dados_farmacia")
 _DADOS_FARMACIA_CNAES_SECUNDARIOS_PARQUET_PATH = _global_cache_path(
     "dados_farmacia_cnaes_secundarios"
@@ -868,7 +880,7 @@ def _sync_crm_prescritores_global(engine, progress_callback=None):
     manifest_path = parts_dir / "manifest.json"
 
     def competencia_key(value: int) -> str:
-        return str(int(value))
+        return str((value))
 
     def part_path(key: str) -> Path:
         return parts_dir / f"{key}.smod.part"
@@ -1034,7 +1046,7 @@ def _sync_memoria_calculo_global(engine, progress_callback=None):
     manifest_path = parts_dir / "manifest.json"
 
     def prefix_key(value: str) -> str:
-        return str(value).zfill(2)
+        return (value).zfill(2)
 
     def part_path(key: str) -> Path:
         return parts_dir / f"{key}.smod.part"
@@ -1328,7 +1340,7 @@ def _sync_crm_timeline_dia_global(engine, progress_callback=None):
             month_starts.append(cursor)
             cursor = next_month(cursor)
 
-        manifest = read_manifest()
+        manifest: dict[str, Any] = read_manifest()
         manifest_valid = (
             manifest.get("cache_key") == "crm_timeline_dia_global"
             and manifest.get("start_month") == month_key(start_month)
@@ -1528,7 +1540,7 @@ def _sync_movimentacao_mensal_gtin_global(engine, progress_callback=None):
             month_starts.append(cursor)
             cursor = next_month(cursor)
 
-        manifest = read_manifest()
+        manifest: dict[str, Any] = read_manifest()
         manifest_valid = (
             manifest.get("cache_key") == "movimentacao_mensal_gtin_global"
             and manifest.get("start_month") == month_key(start_month)
@@ -1838,6 +1850,170 @@ def _sync_crm_raiox_tx_global(engine, progress_callback=None):
     manifest["final_file"] = os.path.basename(final_path)
     write_manifest(manifest)
     _mark_on_demand_global_cache_ready("crm_raiox_tx_global", final_path)
+    if progress_callback:
+        progress_callback(100)
+
+
+def _sync_pagamentos_consolidados_farmacia_popular(engine, progress_callback=None):
+    """Sincroniza pagamentos consolidados da Farmacia Popular em partes mensais retomaveis."""
+    print("Sincronizando pagamentos consolidados Farmacia Popular global...")
+    schema = _GLOBAL_PARQUET_SCHEMAS["pagamentos_consolidados_farmacia_popular"]
+    final_path = _PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET_PATH
+    parts_dir = Path(_CACHE_DIR) / ".parts" / "pagamentos_consolidados_farmacia_popular"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = parts_dir / "manifest.json"
+
+    def month_floor(value) -> date:
+        value_date = value.date() if hasattr(value, "date") else value
+        return date(value_date.year, value_date.month, 1)
+
+    def next_month(value: date) -> date:
+        if value.month == 12:
+            return date(value.year + 1, 1, 1)
+        return date(value.year, value.month + 1, 1)
+
+    def month_key(value: date) -> str:
+        return f"{value.year:04d}-{value.month:02d}"
+
+    def part_path(key: str) -> Path:
+        return parts_dir / f"{key}.smod.part"
+
+    def read_manifest() -> dict[str, Any]:
+        if not manifest_path.exists():
+            return {}
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def write_manifest(data: dict[str, Any]) -> None:
+        tmp_path = manifest_path.with_suffix(".json.tmp")
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        os.replace(tmp_path, manifest_path)
+
+    with engine.connect() as conn:
+        bounds = conn.execute(text("""
+            SELECT MIN(P.data_pagamento) AS dt_min, MAX(P.data_pagamento) AS dt_max
+            FROM temp_CGUSC.fp.pagamentos_consolidados_farmacia_popular P
+        """)).mappings().first()
+
+        if not bounds or bounds["dt_min"] is None or bounds["dt_max"] is None:
+            raise RuntimeError(
+                "A fonte temp_CGUSC.fp.pagamentos_consolidados_farmacia_popular nao possui "
+                "periodos para gerar o cache global de pagamentos."
+            )
+
+        start_month = month_floor(bounds["dt_min"])
+        end_month = month_floor(bounds["dt_max"])
+        end_exclusive = next_month(end_month)
+        month_starts: list[date] = []
+        cursor = start_month
+        while cursor < end_exclusive:
+            month_starts.append(cursor)
+            cursor = next_month(cursor)
+
+        manifest = read_manifest()
+        manifest_valid = (
+            manifest.get("cache_key") == "pagamentos_consolidados_farmacia_popular"
+            and manifest.get("version") == PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_CACHE_VERSION
+            and manifest.get("start_month") == month_key(start_month)
+            and manifest.get("end_month") == month_key(end_month)
+            and manifest.get("status") != "done"
+        )
+        if not manifest_valid:
+            manifest = {
+                "cache_key": "pagamentos_consolidados_farmacia_popular",
+                "version": PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_CACHE_VERSION,
+                "start_month": month_key(start_month),
+                "end_month": month_key(end_month),
+                "parts": {},
+            }
+            write_manifest(manifest)
+        parts = manifest["parts"]
+        if not isinstance(parts, dict):
+            raise RuntimeError(
+                "manifesto de pagamentos consolidados Farmacia Popular com campo parts invalido"
+            )
+
+        query = text("""
+            SELECT
+                P.id_farmacia AS id_cnpj,
+                P.data_pagamento,
+                P.programa_acao,
+                P.numero_ordem_bancaria,
+                P.valor_pago
+            FROM temp_CGUSC.fp.pagamentos_consolidados_farmacia_popular P
+            WHERE P.data_pagamento >= :dt_inicio
+              AND P.data_pagamento < :dt_fim
+            ORDER BY P.id_farmacia, P.data_pagamento, P.numero_ordem_bancaria
+        """)
+
+        total_parts = len(month_starts)
+        for index, dt_inicio in enumerate(month_starts, 1):
+            dt_fim = next_month(dt_inicio)
+            key = month_key(dt_inicio)
+            output_path = part_path(key)
+            info = parts.get(key, {})
+            if info.get("status") == "done" and output_path.exists():
+                if progress_callback:
+                    progress_callback(int((index / total_parts) * 90))
+                continue
+
+            print(f"   -> Pagamentos FP global parte {index}/{total_parts}: {key}")
+            pdf = pd.read_sql(query, conn, params={"dt_inicio": dt_inicio, "dt_fim": dt_fim})
+            if pdf.empty:
+                df_part = pl.DataFrame(schema=schema)
+            else:
+                df_part = pl.from_pandas(pdf).with_columns([
+                    pl.col("id_cnpj").cast(pl.Int32),
+                    pl.col("data_pagamento").cast(pl.Utf8),
+                    pl.col("programa_acao").cast(pl.Utf8),
+                    pl.col("numero_ordem_bancaria").cast(pl.Utf8),
+                    pl.col("valor_pago").cast(pl.Float64),
+                    pl.lit(PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_CACHE_VERSION).alias(
+                        "_pagamentos_consolidados_farmacia_popular_cache_version"
+                    ),
+                ])
+            df_part = df_part.select(list(schema.keys()))
+
+            tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+            df_part.write_parquet(tmp_path, compression="zstd")
+            os.replace(tmp_path, output_path)
+
+            parts[key] = {
+                "status": "done",
+                "rows": df_part.height,
+                "file": output_path.name,
+            }
+            write_manifest(manifest)
+
+            if progress_callback:
+                progress_callback(int((index / total_parts) * 90))
+
+    part_paths = [part_path(month_key(dt_inicio)) for dt_inicio in month_starts]
+    missing_parts = [path.name for path in part_paths if not path.exists()]
+    if missing_parts:
+        raise RuntimeError(
+            "Partes pendentes para consolidar pagamentos_consolidados_farmacia_popular: "
+            + ", ".join(missing_parts)
+        )
+
+    print("   -> Consolidando pagamentos consolidados Farmacia Popular global...")
+    final_scan = (
+        pl.scan_parquet([str(path) for path in part_paths])
+        .select(list(schema.keys()))
+    )
+    tmp_final = final_path + ".tmp"
+    final_scan.sink_parquet(tmp_final, compression="zstd")
+    os.replace(tmp_final, final_path)
+
+    manifest["status"] = "done"
+    manifest["final_rows"] = sum(
+        int(info.get("rows", 0))
+        for info in parts.values()
+    )
+    manifest["final_file"] = os.path.basename(final_path)
+    write_manifest(manifest)
+    _mark_on_demand_global_cache_ready("pagamentos_consolidados_farmacia_popular", final_path)
     if progress_callback:
         progress_callback(100)
 
@@ -3855,6 +4031,14 @@ def load_cache(engine, force_refresh: bool = False) -> None:
                 "valor_pago",
                 "_crm_raiox_tx_cache_version",
             },
+            "pagamentos_consolidados_farmacia_popular": {
+                "id_cnpj",
+                "data_pagamento",
+                "programa_acao",
+                "numero_ordem_bancaria",
+                "valor_pago",
+                "_pagamentos_consolidados_farmacia_popular_cache_version",
+            },
             "crm_prescritores_global": {
                 "id_cnpj",
                 "id_medico",
@@ -4078,6 +4262,10 @@ def load_cache(engine, force_refresh: bool = False) -> None:
         _try_mark_on_demand("memoria_calculo_global", _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("geografico_origem_uf", _GEOGRAFICO_ORIGEM_UF_PARQUET_PATH)
         _try_mark_on_demand("crm_raiox_tx_global", _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH)
+        _try_mark_on_demand(
+            "pagamentos_consolidados_farmacia_popular",
+            _PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET_PATH,
+        )
         _try_mark_on_demand("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("crm_concentracao_unico_alertas_global", _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH)
         _try_mark_on_demand("crm_concentracao_multiplo_alertas_global", _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH)
@@ -4350,6 +4538,14 @@ def scan_crm_raiox_tx_global() -> pl.LazyFrame:
         _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH,
     )
 
+
+def scan_pagamentos_consolidados_farmacia_popular() -> pl.LazyFrame:
+    return _scan_on_demand_global_parquet(
+        "pagamentos_consolidados_farmacia_popular",
+        _PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET_PATH,
+    )
+
+
 def scan_crm_prescritores_global() -> pl.LazyFrame:
     return _scan_on_demand_global_parquet(
         "crm_prescritores_global",
@@ -4402,6 +4598,7 @@ def get_cache_status() -> dict:
         "crm_prescritores_global",
         "memoria_calculo_global",
         "crm_raiox_tx_global",
+        "pagamentos_consolidados_farmacia_popular",
         "crm_timeline_dia_global",
         "crm_timeline_hora_global",
         "crm_timeline_eventos_global",
@@ -4422,6 +4619,14 @@ def get_cache_status() -> dict:
         "crm_prescritores_global": {"label": "CRM Prescritores Global", "path": _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_prescritores_global", _CRM_PRESCRITORES_GLOBAL_PARQUET_PATH)},
         "memoria_calculo_global": {"label": "Memoria Calculo Global", "path": _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("memoria_calculo_global", _MEMORIA_CALCULO_GLOBAL_PARQUET_PATH)},
         "crm_raiox_tx_global": {"label": "CRM Raio-X Global", "path": _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_raiox_tx_global", _CRM_RAIOX_TX_GLOBAL_PARQUET_PATH)},
+        "pagamentos_consolidados_farmacia_popular": {
+            "label": "Pagamentos FP Global",
+            "path": _PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET_PATH,
+            "loaded": _is_on_demand_global_cache_ready(
+                "pagamentos_consolidados_farmacia_popular",
+                _PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET_PATH,
+            ),
+        },
         "geografico_global": {"label": "CRM Geografico Global", "path": _GEOGRAFICO_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("geografico_global", _GEOGRAFICO_GLOBAL_PARQUET_PATH)},
         "crm_concentracao_unico_alertas_global": {"label": "CRM Concentracao Unico Global", "path": _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_concentracao_unico_alertas_global", _CRM_CONCENTRACAO_UNICO_ALERTAS_GLOBAL_PARQUET_PATH)},
         "crm_concentracao_multiplo_alertas_global": {"label": "CRM Concentracao Multiplo Global", "path": _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH, "loaded": _is_on_demand_global_cache_ready("crm_concentracao_multiplo_alertas_global", _CRM_CONCENTRACAO_MULTIPLO_ALERTAS_GLOBAL_PARQUET_PATH)},

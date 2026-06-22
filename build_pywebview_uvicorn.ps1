@@ -39,7 +39,7 @@ Set-Location $ROOT
 Write-Host "`n[3/3] Gerando executavel..." -ForegroundColor Yellow
 
 & $PY -m PyInstaller --noconfirm --onefile --console `
-    --name "sentinela_server1" `
+    --name "Sentinela" `
     --icon "frontend/public/img/icon.ico" `
     --paths "backend" `
     --add-data "frontend/dist;frontend/dist" `
@@ -66,14 +66,14 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-if (!(Test-Path "dist/sentinela_server1.exe")) {
-    Write-Host "Erro: dist/sentinela_server1.exe nao foi gerado." -ForegroundColor Red
+if (!(Test-Path "dist/Sentinela.exe")) {
+    Write-Host "Erro: dist/Sentinela.exe nao foi gerado." -ForegroundColor Red
     exit 1
 }
 
 Write-Host "`nBUILD CONCLUIDO!" -ForegroundColor Green
-Write-Host "Executavel em: dist/sentinela_server1.exe" -ForegroundColor Yellow
+Write-Host "Executavel em: dist/Sentinela.exe" -ForegroundColor Yellow
 
 # Mostrar tamanho
-$size = [math]::Round((Get-Item "dist/sentinela_server1.exe").Length / 1MB, 1)
+$size = [math]::Round((Get-Item "dist/Sentinela.exe").Length / 1MB, 1)
 Write-Host "Tamanho: $size MB" -ForegroundColor Gray

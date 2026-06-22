@@ -135,18 +135,18 @@ def _build_posicionamento_regional_context(
     if not regional.farmacias:
         raise RuntimeError("Benchmarking regional sem farmacias para Figura de Posicionamento Regional.")
 
-    cnpj_norm = "".join(ch for ch in str(cnpj) if ch.isdigit())
+    cnpj_norm = "".join(ch for ch in (cnpj) if ch.isdigit())
     rows: list[dict[str, Any]] = []
     current_row: dict[str, Any] | None = None
     for farmacia in regional.farmacias:
-        farmacia_cnpj = "".join(ch for ch in str(farmacia.cnpj or "") if ch.isdigit())
+        farmacia_cnpj = "".join(ch for ch in (farmacia.cnpj or "") if ch.isdigit())
         row = {
             "cnpj": farmacia_cnpj,
             "razao_social": farmacia.razao_social or "",
             "municipio": farmacia.municipio or "",
-            "total_mov": float(farmacia.totalMov or 0.0),
-            "pct_sem_comprovacao": min(float(farmacia.percValSemComp or 0.0), 100.0),
-            "score_risco": float(farmacia.score_risco or 0.0),
+            "total_mov": (farmacia.totalMov or 0.0),
+            "pct_sem_comprovacao": min((farmacia.percValSemComp or 0.0), 100.0),
+            "score_risco": (farmacia.score_risco or 0.0),
             "is_current": farmacia_cnpj == cnpj_norm,
         }
         rows.append(row)
@@ -433,8 +433,8 @@ def _model_to_dict(model: Any) -> dict[str, Any]:
 
 
 def _semestre_fmt_from_key(chave_semestre: int) -> str:
-    ano = int(chave_semestre) // 100
-    semestre = int(chave_semestre) % 100
+    ano = (chave_semestre) // 100
+    semestre = (chave_semestre) % 100
     return _format_semestre_pt(f"{semestre}S/{ano}")
 
 
@@ -537,8 +537,8 @@ def _build_medicamentos_aumento_atipico_context(
         for gtin in gtins:
             atual = valores.get((chave, gtin), {})
             anterior = valores.get((chave_anterior, gtin), {})
-            valor_atual = float(atual.get("valor_vendas") or 0.0)
-            valor_anterior = float(anterior.get("valor_vendas") or 0.0)
+            valor_atual = (atual.get("valor_vendas") or 0.0)
+            valor_anterior = (anterior.get("valor_vendas") or 0.0)
             aumento = valor_atual - valor_anterior
             if aumento <= 0:
                 continue
@@ -557,7 +557,7 @@ def _build_medicamentos_aumento_atipico_context(
                 "valor_atual": round(valor_atual, 2),
                 "aumento_valor": round(aumento, 2),
                 "aumento_relativo_pct": round(aumento / valor_anterior * 100, 1) if valor_anterior > 1.0 else None,
-                "valor_sem_comprovacao": round(float(atual.get("valor_sem_comprovacao") or 0.0), 2),
+                "valor_sem_comprovacao": round((atual.get("valor_sem_comprovacao") or 0.0), 2),
             })
 
         if not candidatos:
@@ -598,7 +598,7 @@ def _build_medicamentos_aumento_atipico_context(
                 "semestre": semestre.get("semestre"),
                 "semestre_fmt": semestre.get("semestre_fmt") or _semestre_fmt_from_key(chave),
                 "semestre_anterior_fmt": _semestre_fmt_from_key(chave_anterior),
-                "gtin": f'{int(demais["qtd_gtins"])} {gtins_txt}',
+                "gtin": f'{(demais["qtd_gtins"])} {gtins_txt}',
                 "descricao": "GTINs com participacao individual menor ou igual a 0,1%",
                 "valor_anterior": round(demais["valor_anterior"], 2),
                 "valor_atual": round(demais["valor_atual"], 2),
@@ -661,7 +661,7 @@ def _build_esocial_context(
     data_fim: Optional[date],
 ) -> dict[str, Any]:
     """Monta o contexto trabalhista anual do eSocial para a Nota Tecnica."""
-    cnpj_norm = "".join(ch for ch in str(cnpj or "") if ch.isdigit())
+    cnpj_norm = "".join(ch for ch in (cnpj or "") if ch.isdigit())
     if len(cnpj_norm) != 14:
         raise RuntimeError("CNPJ invalido para montar contexto eSocial da Nota Tecnica.")
 
@@ -962,9 +962,9 @@ def _build_esocial_context(
             ),
             "ultimo_mes_trabalhador_ativo": alert_row.get("ultimo_mes_trabalhador_ativo"),
             "ultimo_mes_trabalhador_ativo_txt": (
-                _format_date_month_year_long_pt(alert_row.get("ultimo_mes_trabalhador_ativo"))
-                if hasattr(alert_row.get("ultimo_mes_trabalhador_ativo"), "year")
-                else str(alert_row.get("ultimo_mes_trabalhador_ativo"))
+                _format_date_month_year_long_pt(alert_row.get("ultimo_mes_trabalhador_ativo"))  # type: ignore
+                if isinstance(alert_row.get("ultimo_mes_trabalhador_ativo"), date)
+                else str(alert_row.get("ultimo_mes_trabalhador_ativo") or "")
             ),
             "dt_inicio_periodo_sem_funcionario": alert_row.get("dt_inicio_periodo_sem_funcionario"),
             "dt_inicio_periodo_sem_funcionario_txt": _format_date_iso(

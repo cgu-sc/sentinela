@@ -823,6 +823,132 @@ ON
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---------------------------------------------------------------------------------------------------------------
+-- Gerar Tabela com pagamentos realizados para as farmácias.
+----------------------------------------------------------------------------------------------------------------
+
+
+USE db_dw_portal_siafi;
+GO
+
+-- =========================================================================
+-- PASSO 1: Isolar e Indexar a Classificação Orçamentária Única
+-- =========================================================================
+IF OBJECT_ID('tempdb..#Orcamento_Blindado') IS NOT NULL DROP TABLE #Orcamento_Blindado;
+
+SELECT 
+    fob.skordembancaria,
+    CONVERT(VARCHAR(4), prog.codacao) AS Codigo_Acao,
+    CONVERT(VARCHAR(12), 
+        CASE 
+            WHEN prog.codacao = '20YR' THEN 'gratuidade'
+            WHEN prog.codacao = '20YS' THEN 'co-pagamento'
+            ELSE NULL 
+        END
+    ) AS Programa_Acao
+INTO #Orcamento_Blindado
+FROM dbo.fatordembancaria fob
+INNER JOIN dbo.dimempenho emp ON fob.skempenho = emp.skempenho
+INNER JOIN dbo.dimptres pt ON emp.codptres = pt.codptres 
+INNER JOIN dbo.dimfuncionalprogramaticaresumida prog 
+    ON pt.codfuncao = prog.codfuncao 
+    AND pt.codsubfuncao = prog.codsubfuncao
+    AND pt.codprograma = prog.codprograma 
+    AND pt.codacao = prog.codacao
+    AND pt.numano = prog.numano
+WHERE prog.codacao IN ('20YR', '20YS'); 
+
+CREATE CLUSTERED INDEX IX_OB_Orcamento ON #Orcamento_Blindado (skordembancaria);
+
+
+-- =========================================================================
+-- PASSO 3: Processar e Salvar os Dados na Tabela Física Final
+-- =========================================================================
+-- Se a tabela já existir de rodadas anteriores, removemos para evitar erro de tabela duplicada
+IF OBJECT_ID('temp_CGUSC.fp.pagamentos_consolidados_farmacia_popular') IS NOT NULL 
+    DROP TABLE temp_CGUSC.fp.pagamentos_consolidados_farmacia_popular;
+
+SELECT 
+    -- Transforma '20161229' no tipo profissional DATE (2016-12-29)
+    CONVERT(DATE, CAST(flc.skdattransacao AS VARCHAR(8)), 112) AS data_pagamento,
+    df.id AS id_farmacia, -- <-- Alterado: Salvando o ID (INT) ao invés do CNPJ (CHAR) para economizar espaço
+    orc.Codigo_Acao AS codigo_acao,
+    orc.Programa_Acao AS programa_acao,
+    ob.coddocumento AS numero_ordem_bancaria,
+    CONVERT(DECIMAL(11,2), SUM(flc.vallancamento)) AS valor_pago
+    
+INTO temp_CGUSC.fp.pagamentos_consolidados_farmacia_popular -- <-- Cria e joga o resultado direto aqui!
+
+FROM dbo.fatlistacredores flc
+INNER JOIN dbo.dimfavorecido fav ON flc.skfavorecido = fav.skfavorecido
+INNER JOIN dbo.dimordembancaria ob ON flc.skordembancaria = ob.skordembancaria
+INNER JOIN dbo.dimunidadegestora ug ON flc.skug = ug.skug
+LEFT JOIN #Orcamento_Blindado orc ON flc.skordembancaria = orc.skordembancaria 
+INNER JOIN temp_CGUSC.fp.dados_farmacia df ON fav.codfavorecido = df.cnpj -- <-- Alterado para a nova tabela
+
+GROUP BY 
+    flc.skdattransacao,
+    df.id, -- <-- Agrupando pelo ID agora
+    ob.coddocumento,
+    orc.Codigo_Acao,
+    orc.Programa_Acao;
+
+
+-- =========================================================================
+-- PASSO 4: Limpeza de Memória e Validação Inicial
+-- =========================================================================
+DROP TABLE #Orcamento_Blindado;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 --------------------------------------------------------------
 -- ETAPA 2: Dicionário de CPFs
 --------------------------------------------------------------

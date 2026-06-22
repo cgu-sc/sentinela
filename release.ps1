@@ -49,7 +49,7 @@ Write-Host "CHANGELOG.md contem a versao v$version"
 $tagExists = git tag -l "v$version" 2>$null
 
 $releaseTitle = "Sentinela v$version"
-$exePath = "dist/sentinela_server1.exe"
+$exePath = "dist/Sentinela.exe"
 
 # Step 1: Build frontend
 Write-Host "[1/5] Building frontend (npm run build)..."
@@ -107,9 +107,31 @@ if ($tagExists) {
     $ErrorActionPreference = $oldEAP
 }
 
+# Extrai apenas a seção da versão atual do CHANGELOG
+$changelogLines = Get-Content $changelogFile
+$inSection = $false
+$sectionLines = @()
+foreach ($line in $changelogLines) {
+    if ($line -match "^## \[$version\]") {
+        $inSection = $true
+        continue
+    }
+    if ($inSection -and $line -match "^## \[") {
+        break
+    }
+    if ($inSection) {
+        $sectionLines += $line
+    }
+}
+$releaseNotes = ($sectionLines | Out-String).Trim()
+$tmpNotes = [System.IO.Path]::GetTempFileName()
+[System.IO.File]::WriteAllText($tmpNotes, $releaseNotes, [System.Text.Encoding]::UTF8)
+
 gh release create "v$version" $exePath `
     --title $releaseTitle `
-    --notes-file CHANGELOG.md
+    --notes-file $tmpNotes
+
+Remove-Item $tmpNotes -Force -ErrorAction SilentlyContinue
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Falha ao criar release no GitHub."

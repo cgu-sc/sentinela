@@ -4,6 +4,7 @@ import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 
 export const useSystemUpdateStore = defineStore('systemUpdate', () => {
+  // ─── Estado de verificação ──────────────────────────────────────────────────
   const status = ref(null);       // 'current' | 'update_available' | 'update_required' | 'offline_cached' | 'verification_unavailable'
   const currentVersion = ref(null);
   const latestVersion = ref(null);
@@ -15,6 +16,16 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
   const message = ref('');
   const loading = ref(false);
 
+  // ─── Estado de download automático ──────────────────────────────────────────
+  const downloadStatus = ref('idle');   // idle | downloading | applying | done | error
+  const downloadProgress = ref(0);      // 0–100 (percentual inteiro para a barra)
+  const downloadError = ref(null);
+  const downloadDialogVisible = ref(false);
+  const countdown = ref(0);
+  let _progressInterval = null;
+  let _countdownInterval = null;
+
+  // ─── Computed de verificação ─────────────────────────────────────────────────
   const isBlocked = computed(() => status.value === 'update_required');
   const hasUpdate = computed(() => status.value === 'update_available');
   const isOffline = computed(() => status.value === 'offline_cached');
@@ -55,6 +66,25 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
     }
   });
 
+  // ─── Computed de download ────────────────────────────────────────────────────
+  const isDownloading = computed(() =>
+    downloadStatus.value === 'downloading' || downloadStatus.value === 'applying'
+  );
+  const downloadDone = computed(() => downloadStatus.value === 'done');
+  const downloadFailed = computed(() => downloadStatus.value === 'error');
+
+  const downloadStatusLabel = computed(() => {
+    switch (downloadStatus.value) {
+      case 'idle':        return 'Aguardando';
+      case 'downloading': return `Baixando... ${downloadProgress.value}%`;
+      case 'applying':    return 'Preparando arquivos...';
+      case 'done':        return `Aplicativo fechará em ${countdown.value}s...`;
+      case 'error':       return 'Falha no download';
+      default:            return '';
+    }
+  });
+
+  // ─── Ações de verificação ────────────────────────────────────────────────────
   function _applyResponse(data) {
     status.value          = data.status;
     currentVersion.value  = data.current_version;
@@ -93,11 +123,119 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
     }
   }
 
+  // ─── Ações de download automático ────────────────────────────────────────────
+
+  function _startCountdown() {
+    countdown.value = 10;
+    _countdownInterval = setInterval(() => {
+      countdown.value -= 1;
+      if (countdown.value <= 0) {
+        _stopCountdown();
+        applyUpdate();
+      }
+    }, 1000);
+  }
+
+  function _stopCountdown() {
+    if (_countdownInterval) {
+      clearInterval(_countdownInterval);
+      _countdownInterval = null;
+    }
+  }
+
+  function _startProgressPolling() {
+    if (_progressInterval) return;
+    _progressInterval = setInterval(async () => {
+      try {
+        const { data } = await axios.get(API_ENDPOINTS.systemDownloadProgress);
+        downloadStatus.value   = data.status;
+        downloadProgress.value = Math.round((data.progress ?? 0) * 100);
+        downloadError.value    = data.error ?? null;
+
+        if (data.status === 'done') {
+          _stopProgressPolling();
+          _startCountdown();
+        } else if (data.status === 'error') {
+          _stopProgressPolling();
+        }
+      } catch (err) {
+        console.warn('[systemUpdate] Erro ao consultar progresso:', err);
+      }
+    }, 800);
+  }
+
+  function _stopProgressPolling() {
+    if (_progressInterval) {
+      clearInterval(_progressInterval);
+      _progressInterval = null;
+    }
+  }
+
+  async function applyUpdate() {
+    try {
+      await axios.post(API_ENDPOINTS.systemApplyUpdate);
+    } catch (err) {
+      console.warn('[systemUpdate] Erro ao aplicar atualização:', err);
+    }
+  }
+
+  async function cancelUpdate() {
+    _stopCountdown();
+    try {
+      await axios.post(API_ENDPOINTS.systemCancelUpdate);
+    } catch (err) {
+      console.warn('[systemUpdate] Erro ao cancelar atualização:', err);
+    }
+    downloadDialogVisible.value = false;
+    downloadStatus.value   = 'idle';
+    downloadProgress.value = 0;
+    downloadError.value    = null;
+    countdown.value        = 0;
+  }
+
+  async function startDownload(overrideUrl = null) {
+    downloadStatus.value   = 'downloading';
+    downloadProgress.value = 0;
+    downloadError.value    = null;
+    downloadDialogVisible.value = true;
+
+    try {
+      await axios.post(API_ENDPOINTS.systemDownloadUpdate, overrideUrl ? { download_url: overrideUrl } : undefined);
+      _startProgressPolling();
+    } catch (err) {
+      const detail = err?.response?.data?.detail ?? err?.message ?? 'Erro desconhecido.';
+      downloadStatus.value  = 'error';
+      downloadError.value   = detail;
+      console.error('[systemUpdate] Falha ao iniciar download:', detail);
+    }
+  }
+
+  function openDownloadDialog() {
+    downloadDialogVisible.value = true;
+  }
+
+  function closeDownloadDialog() {
+    if (isDownloading.value) return; // bloqueia fechar durante download
+    downloadDialogVisible.value = false;
+    if (downloadStatus.value === 'done' || downloadStatus.value === 'error') {
+      downloadStatus.value   = 'idle';
+      downloadProgress.value = 0;
+      downloadError.value    = null;
+    }
+  }
+
   return {
+    // verificação
     status, currentVersion, latestVersion, minimumVersion,
     downloadUrl, releaseNotesUrl, checkedAt, source, message, loading,
     isBlocked, hasUpdate, isOffline, isUnavailable, isCurrent,
     statusLabel, statusTone, checkedAtFormatted,
     fetchUpdateStatus, forceCheckUpdate,
+    // download automático
+    downloadStatus, downloadProgress, downloadError, downloadDialogVisible,
+    isDownloading, downloadDone, downloadFailed, downloadStatusLabel,
+    countdown,
+    startDownload, openDownloadDialog, closeDownloadDialog,
+    applyUpdate, cancelUpdate,
   };
 });

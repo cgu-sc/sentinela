@@ -1,7 +1,7 @@
 """
-Serviço de verificação de atualizações do Sentinela.
+Serviço de verificação e download automático de atualizações do Sentinela.
 
-Fluxo:
+Fluxo de verificação:
   1. Tenta buscar manifest.json e manifest.sig remotamente (timeout 4 s).
   2. Valida Ed25519 sobre os bytes exatos do manifesto.
   3. Valida schema (schema_version==1, product=="sentinela", channel=="stable").
@@ -10,6 +10,13 @@ Fluxo:
   6. Proteção anti-downgrade: rejeita manifesto com minimum_supported_version
      menor que o do cache anterior ou published_at anterior.
   7. Política offline: usa cache válido ou retorna verification_unavailable.
+
+Fluxo de download automático (apenas sys.frozen):
+  1. POST /download-update → dispara download assíncrono do novo .exe via HTTPX stream.
+  2. Progresso (0.0–1.0) disponível em GET /download-progress.
+  3. Ao terminar, gera update.bat temporário e o lança desvinculado (Popen).
+  4. Backend chama sys.exit(0), fechando o processo.
+  5. update.bat aguarda o PID original sair, substitui o .exe e reinicia.
 """
 
 from __future__ import annotations
@@ -18,8 +25,10 @@ import base64
 import json
 import logging
 import os
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -475,3 +484,247 @@ def initialize_update_check() -> None:
         checked_at=None,
         message="Verificação de atualização pendente.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Estado global de download
+# ---------------------------------------------------------------------------
+
+class _DownloadState:
+    """Estado thread-safe do processo de download automático."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.status: str = "idle"   # idle | downloading | applying | done | error
+        self.progress: float = 0.0  # 0.0 – 1.0
+        self.error: str | None = None
+
+    def update(self, status: str, progress: float = 0.0, error: str | None = None) -> None:
+        with self._lock:
+            self.status = status
+            self.progress = progress
+            self.error = error
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {
+                "status": self.status,
+                "progress": round(self.progress, 4),
+                "error": self.error,
+            }
+
+
+_download_state = _DownloadState()
+
+
+def get_download_state() -> dict:
+    """Retorna snapshot thread-safe do estado de download para o endpoint de progresso."""
+    return _download_state.snapshot()
+
+
+# ---------------------------------------------------------------------------
+# Download e aplicação do update
+# ---------------------------------------------------------------------------
+
+DOWNLOAD_CHUNK_SIZE = 1024 * 64   # 64 KB
+DOWNLOAD_TIMEOUT = 300.0          # 5 minutos — EXE pode ser grande
+
+
+def _current_exe_path() -> Path:
+    """Caminho do executável em execução (frozen) ou lança erro."""
+    if not getattr(sys, "frozen", False):
+        raise RuntimeError(
+            "Auto-update via download não é suportado fora do modo Desktop (sys.frozen=False)."
+        )
+    return Path(sys.executable)
+
+
+def _updates_tmp_dir() -> Path:
+    """Pasta temporária persistente para o download do .exe."""
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sentinela" / "updates"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _resolve_github_download_url(manifest_download_url: str) -> str:
+    """
+    Recebe a URL da release do GitHub (tag page) e retorna a URL direta
+    para o asset sentinela_server1.exe dentro dessa release.
+
+    Exemplo de entrada:
+      https://github.com/cgu-sc/sentinela/releases/tag/v1.1.4
+    Exemplo de saída:
+      https://github.com/cgu-sc/sentinela/releases/download/v1.1.4/sentinela_server1.exe
+    """
+    # Converte /tag/vX.Y.Z → /download/vX.Y.Z/sentinela_server1.exe
+    if "/releases/tag/" in manifest_download_url:
+        tag = manifest_download_url.split("/releases/tag/")[-1].strip("/")
+        return (
+            f"https://github.com/cgu-sc/sentinela/releases/download/"
+            f"{tag}/Sentinela.exe"
+        )
+    # Se já for URL direta (ex: download/), usa como está
+    return manifest_download_url
+
+
+def _write_update_ps1(exe_path: Path, tmp_path: Path) -> Path:
+    """
+    Gera um script PowerShell que:
+      1. Encerra todos os processos Sentinela.
+      2. Aguarda a porta do servidor liberar.
+      3. Substitui o exe.
+      4. Abre o novo exe.
+      5. Remove os arquivos temporários.
+    """
+    ps1_path = exe_path.parent / "sentinela_update.ps1"
+    exe_name = exe_path.name
+
+    proc_name = exe_name.replace(".exe", "")
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+
+# 1. Encerra todos os processos Sentinela
+Get-Process -Name '{proc_name}' | Stop-Process -Force
+
+# 2. Aguarda processos encerrarem (max 15s)
+$deadline = (Get-Date).AddSeconds(15)
+while ((Get-Process -Name '{proc_name}' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{
+    Start-Sleep -Milliseconds 300
+}}
+
+# 3. Aguarda portas 8002-8010 liberarem (max 15s)
+$deadline = (Get-Date).AddSeconds(15)
+while ((Get-Date) -lt $deadline) {{
+    $ocupadas = 8002..8010 | Where-Object {{
+        (Get-NetTCPConnection -LocalPort $_ -State Listen -ErrorAction SilentlyContinue) -ne $null
+    }}
+    if ($ocupadas.Count -eq 0) {{ break }}
+    Start-Sleep -Milliseconds 300
+}}
+
+# 4. Substitui o exe (max 10s)
+$deadline = (Get-Date).AddSeconds(10)
+while ((Test-Path '{exe_path}') -and (Get-Date) -lt $deadline) {{
+    try {{ Remove-Item '{exe_path}' -Force; break }} catch {{ Start-Sleep -Milliseconds 300 }}
+}}
+Copy-Item '{tmp_path}' '{exe_path}' -Force
+
+# 5. Abre o novo exe
+Start-Process '{exe_path}'
+
+# 6. Limpeza
+Start-Sleep -Seconds 2
+Remove-Item '{tmp_path}' -Force -ErrorAction SilentlyContinue
+Remove-Item $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
+"""
+    ps1_path.write_text(script, encoding="utf-8")
+    return ps1_path
+
+
+def _do_download_and_apply(download_url: str) -> None:
+    """
+    Executa em thread separada:
+      - Download via HTTPX stream com atualização de progresso.
+      - Gera update.bat, lança desvinculado e chama sys.exit(0).
+    """
+    exe_path = _current_exe_path()
+    tmp_path = exe_path.parent / "sentinela_update.exe.tmp"
+
+    try:
+        direct_url = _resolve_github_download_url(download_url)
+        logger.info("[auto-update] Iniciando download de: %s", direct_url)
+        _download_state.update("downloading", progress=0.0)
+
+        with httpx.Client(timeout=DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
+            with client.stream("GET", direct_url) as response:
+                response.raise_for_status()
+                total = int(response.headers.get("content-length", 0))
+                downloaded = 0
+                with open(tmp_path, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            _download_state.update("downloading", progress=downloaded / total)
+
+        logger.info("[auto-update] Download concluído (%d bytes). Aguardando confirmação do frontend.", downloaded)
+        _download_state.update("done", progress=1.0)
+
+    except Exception as exc:
+        logger.error("[auto-update] Falha no download/aplicação: %s", exc, exc_info=True)
+        _download_state.update("error", progress=0.0, error=str(exc))
+        tmp_path.unlink(missing_ok=True)
+
+
+def download_and_apply_update(download_url: str) -> None:
+    """
+    Ponto de entrada público. Valida modo frozen, verifica se já há download
+    em andamento e dispara a thread de download.
+
+    Lança RuntimeError se:
+      - Não está em modo frozen (sys.frozen == False).
+      - Já existe um download em andamento.
+    """
+    if not getattr(sys, "frozen", False):
+        raise RuntimeError(
+            "Auto-update via download não é suportado fora do modo Desktop (sys.frozen=False). "
+            "Execute o aplicativo empacotado (.exe)."
+        )
+
+    state = _download_state.snapshot()
+    if state["status"] in ("downloading", "applying"):
+        raise RuntimeError(
+            f"Download já em andamento (status atual: {state['status']}). Aguarde."
+        )
+
+    # Reseta estado para permitir re-download após done/error
+    _download_state.update("idle", progress=0.0)
+
+    logger.info("[auto-update] Disparando thread de download para: %s", download_url)
+    t = threading.Thread(
+        target=_do_download_and_apply,
+        args=(download_url,),
+        daemon=True,
+        name="sentinela-auto-update",
+    )
+    t.start()
+
+
+def apply_update() -> None:
+    """
+    Chamado pelo frontend após contagem regressiva.
+    Gera o bat, lança-o e encerra o servidor.
+    """
+    exe_path = _current_exe_path()
+    tmp_path = exe_path.parent / "sentinela_update.exe.tmp"
+
+    if not tmp_path.exists():
+        raise RuntimeError("Arquivo de atualização não encontrado. Faça o download novamente.")
+
+    ps1_path = _write_update_ps1(exe_path, tmp_path)
+    logger.info("[auto-update] Aplicando atualização. ps1: %s", ps1_path)
+
+    subprocess.Popen(
+        ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
+        creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+
+    time.sleep(0.5)
+    sys.exit(0)
+
+
+def cancel_update() -> None:
+    """
+    Chamado pelo frontend ao cancelar a contagem regressiva.
+    Deleta o .tmp e reseta o estado.
+    """
+    exe_path = _current_exe_path()
+    tmp_path = exe_path.parent / "sentinela_update.exe.tmp"
+    tmp_path.unlink(missing_ok=True)
+
+    bat_path = exe_path.parent / "sentinela_update.ps1"
+    bat_path.unlink(missing_ok=True)
+
+    _download_state.update("idle", progress=0.0)
+    logger.info("[auto-update] Atualização cancelada pelo usuário.")

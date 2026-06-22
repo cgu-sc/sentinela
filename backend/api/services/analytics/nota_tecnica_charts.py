@@ -256,7 +256,7 @@ def _build_mapa_geografico_origem_uf(dispersao_comp: dict[str, Any]) -> io.Bytes
     sm = ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, fraction=0.032, pad=0.018)
-    cbar.outline.set_visible(False)
+    cbar.outline.set_visible(False)  # type: ignore
     cbar.ax.tick_params(labelsize=6.5, colors="#475569", length=0)
     cbar.set_label("% do valor autorizado total", fontsize=7, color="#334155", labelpad=6)
 
@@ -1100,7 +1100,7 @@ def _build_posicionamento_regional_chart_svg(posicionamento_comp: dict[str, Any]
 
 
 def _svg_int_label(value: Any) -> str:
-    return _svg_escape(f"{int(round(float(value or 0))):,}".replace(",", "."))
+    return _svg_escape(f"{(round(float(value or 0))):,}".replace(",", "."))
 
 
 _PARKINSON_CHART_TITLE_SIZE = 20

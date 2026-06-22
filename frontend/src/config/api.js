@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
   analyticsCnpjBootstrap: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/bootstrap`,
   analyticsEvolucao:    (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao`,
   analyticsEvolucaoMensalGtin: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/evolucao-mensal-gtin`,
+  analyticsRepasses: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/repasses`,
   analyticsGtinDetalhamentoMensal: (cnpj, periodo) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/gtin-detalhamento-mensal?periodo=${periodo}`,
   analyticsIndicadores: (cnpj) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores`,
   analyticsIndicadorBenchmarkLocal: (cnpj, indicador) => `${BASE_URL}/api/v1/analytics/cnpj/${cnpj}/indicadores/${indicador}/benchmark-local`,

@@ -37,6 +37,7 @@ from .financeiro import (
     get_evolucao_financeira,
     get_evolucao_mensal_gtin,
     get_gtin_ranking_periodo,
+    get_cnpj_repasses,
 )
 from .indicator_config import (
     INDICATOR_MAPPING,
@@ -79,6 +80,7 @@ class AnalyticsService:
     get_rede_por_cnpj_raiz = staticmethod(get_rede_por_cnpj_raiz)
     get_evolucao_financeira = staticmethod(get_evolucao_financeira)
     get_evolucao_mensal_gtin = staticmethod(get_evolucao_mensal_gtin)
+    get_cnpj_repasses = staticmethod(get_cnpj_repasses)
     get_gtin_ranking_periodo = staticmethod(get_gtin_ranking_periodo)
     get_indicadores = staticmethod(get_indicadores)
     get_indicadores_analise = staticmethod(get_indicadores_analise)

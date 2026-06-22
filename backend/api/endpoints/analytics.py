@@ -12,7 +12,7 @@ from ..schemas.analytics import (
     IndicadorCnpjPageResponse,
     PercentilesAnimationResponse, CrmTimelineDatasetResponse,
     CrmMedicoAlertasResponse, CrmRaioXResponse,
-    EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse,
+    EvolucaoMensalGtinResponse, GtinDetalhamentoMensalResponse, RepassesResponse,
     SociosResponse, IntegrityAlertsResponse, NetworkResponse,
     CnpjBootstrapResponse,
     GeograficoOrigemUfResponse,
@@ -351,6 +351,15 @@ def get_evolucao_mensal_gtin(
 ):
     """Retorna a série mensal de quantidades e valores (agregados por GTIN) para um CNPJ."""
     return AnalyticsService.get_evolucao_mensal_gtin(cnpj, data_inicio, data_fim)
+
+@router.get("/cnpj/{cnpj}/repasses", response_model=RepassesResponse)
+def get_cnpj_repasses(
+    cnpj: str,
+    data_inicio: Optional[date] = Query(None),
+    data_fim: Optional[date] = Query(None),
+):
+    """Retorna repasses consolidados do Programa Farmacia Popular para um CNPJ."""
+    return AnalyticsService.get_cnpj_repasses(cnpj, data_inicio, data_fim)
 
 @router.get("/cnpj/{cnpj}/gtin-detalhamento-mensal", response_model=GtinDetalhamentoMensalResponse)
 def get_gtin_ranking(

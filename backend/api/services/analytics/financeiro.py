@@ -10,7 +10,19 @@ import json
 import copy
 from decimal import Decimal, ROUND_HALF_UP
 from cache_files import MOVIMENTACAO_MENSAL_GTIN_PARQUET
-from data_cache import get_df, get_rede_df, get_localidades_df, get_df_bench_crm_regiao, get_df_bench_crm_br, get_df_dados_farmacia, get_df_perfil_estabelecimento, get_cache_dir, get_df_volume_atipico_semestral
+from cache_files import PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET
+from data_cache import (
+    get_df,
+    get_rede_df,
+    get_localidades_df,
+    get_df_bench_crm_regiao,
+    get_df_bench_crm_br,
+    get_df_dados_farmacia,
+    get_df_perfil_estabelecimento,
+    get_cache_dir,
+    get_df_volume_atipico_semestral,
+    scan_pagamentos_consolidados_farmacia_popular,
+)
 from ...schemas.analytics import (
     AnalyticsKPISchema,
     ResultadoSentinelaUFSchema,
@@ -46,6 +58,10 @@ from ...schemas.analytics import (
     IndicadorAnaliseResponse,
     MesMensalGtinItem,
     EvolucaoMensalGtinResponse,
+    RepassesResponse,
+    RepassesResumoSchema,
+    RepasseMensalItemSchema,
+    RepassePagamentoItemSchema,
     GtinDetalhamentoMensalResponse,
     GtinDetalhamentoMensalSummary,
     GtinDetalhamentoMensalItem,
@@ -446,6 +462,131 @@ def get_gtin_ranking_periodo(cnpj: str, periodo: str) -> GtinDetalhamentoMensalR
         ranking=ranking,
         from_cache=True,
         read_time_ms=read_time
+    )
+
+
+def _empty_repasses_resumo() -> RepassesResumoSchema:
+    return RepassesResumoSchema(
+        total_repassado=0.0,
+        qtd_ordens=0,
+        maior_repasse=0.0,
+        ultimo_repasse_data=None,
+        ultimo_repasse_valor=None,
+    )
+
+
+def get_cnpj_repasses(cnpj: str, data_inicio=None, data_fim=None) -> RepassesResponse:
+    """
+    Retorna repasses consolidados do Programa Farmacia Popular para um CNPJ.
+
+    Fonte: cache global pagamentos_consolidados_farmacia_popular (escopo total FP).
+    Nao deve ser comparado com a movimentacao auditada pelo Sentinela.
+    """
+    cache_path = os.path.join(get_cache_dir(), PAGAMENTOS_CONSOLIDADOS_FARMACIA_POPULAR_PARQUET)
+    if not os.path.exists(cache_path):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Cache global de repasses indisponivel. "
+                "Sincronize o modulo pagamentos_consolidados_farmacia_popular."
+            ),
+        )
+
+    perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
+    if perfil.is_empty():
+        return RepassesResponse(
+            cnpj=cnpj,
+            resumo=_empty_repasses_resumo(),
+            mensal=[],
+            pagamentos=[],
+        )
+
+    id_cnpj = int(perfil.item(0, 0))
+    df = (
+        scan_pagamentos_consolidados_farmacia_popular()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .with_columns(
+            pl.col("data_pagamento").str.to_date("%Y-%m-%d", strict=True).alias("dt_pagamento"),
+            pl.col("programa_acao").cast(pl.Utf8).alias("programa_acao"),
+            pl.col("numero_ordem_bancaria").cast(pl.Utf8).alias("numero_ordem_bancaria"),
+            pl.col("valor_pago").cast(pl.Float64).alias("valor_pago"),
+        )
+        .collect()
+    )
+
+    if df.is_empty():
+        return RepassesResponse(
+            cnpj=cnpj,
+            resumo=_empty_repasses_resumo(),
+            mensal=[],
+            pagamentos=[],
+        )
+
+    if data_inicio:
+        df = df.filter(pl.col("dt_pagamento") >= pl.lit(data_inicio).cast(pl.Date))
+    if data_fim:
+        df = df.filter(pl.col("dt_pagamento") <= pl.lit(data_fim).cast(pl.Date))
+
+    if df.is_empty():
+        return RepassesResponse(
+            cnpj=cnpj,
+            resumo=_empty_repasses_resumo(),
+            mensal=[],
+            pagamentos=[],
+        )
+
+    total_repassado = float(df["valor_pago"].sum() or 0.0)
+    qtd_ordens = int(df["numero_ordem_bancaria"].n_unique())
+    maior_repasse = float(df["valor_pago"].max() or 0.0)
+
+    ultimo = (
+        df.sort("dt_pagamento", descending=True)
+        .select(["dt_pagamento", "valor_pago"])
+        .head(1)
+    )
+    ultimo_repasse_data = ultimo.item(0, 0) if ultimo.height else None
+    ultimo_repasse_valor = float(ultimo.item(0, 1)) if ultimo.height else None
+
+    mensal_agg = (
+        df.with_columns(pl.col("dt_pagamento").dt.strftime("%Y-%m").alias("mes"))
+        .group_by("mes")
+        .agg([
+            pl.sum("valor_pago").alias("valor_repassado"),
+            pl.col("numero_ordem_bancaria").n_unique().alias("qtd_ordens"),
+        ])
+        .sort("mes")
+    )
+    mensal = [
+        RepasseMensalItemSchema(
+            mes=str(row["mes"]),
+            valor_repassado=round(float(row["valor_repassado"] or 0.0), 2),
+            qtd_ordens=int(row["qtd_ordens"] or 0),
+        )
+        for row in mensal_agg.iter_rows(named=True)
+    ]
+
+    pagamentos_rows = df.sort(["dt_pagamento", "numero_ordem_bancaria"], descending=[True, False])
+    pagamentos = [
+        RepassePagamentoItemSchema(
+            data_pagamento=row["dt_pagamento"],
+            programa_acao=str(row["programa_acao"] or "").strip(),
+            numero_ordem_bancaria=str(row["numero_ordem_bancaria"] or "").strip(),
+            valor_pago=round(float(row["valor_pago"] or 0.0), 2),
+        )
+        for row in pagamentos_rows.iter_rows(named=True)
+    ]
+
+    return RepassesResponse(
+        cnpj=cnpj,
+        resumo=RepassesResumoSchema(
+            total_repassado=round(total_repassado, 2),
+            qtd_ordens=qtd_ordens,
+            maior_repasse=round(maior_repasse, 2),
+            ultimo_repasse_data=ultimo_repasse_data,
+            ultimo_repasse_valor=round(ultimo_repasse_valor, 2) if ultimo_repasse_valor is not None else None,
+        ),
+        mensal=mensal,
+        pagamentos=pagamentos,
     )
 
 

@@ -6,7 +6,7 @@ import { storeToRefs } from 'pinia';
 import { useStableTabState } from '@/composables/useStableTabState';
 import { useFormatting } from '@/composables/useFormatting';
 import { useChartTheme } from '@/config/chartTheme';
-import { RISK_THRESHOLDS } from '@/config/riskConfig';
+import { RISK_THRESHOLDS, AUDIT_THRESHOLDS } from '@/config/riskConfig';
 import { useFilterStore } from '@/stores/filters';
 
 import VChart from 'vue-echarts';
@@ -29,7 +29,7 @@ use([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomCompone
 const route = useRoute();
 const cnpj = computed(() => route.params.cnpj);
 
-const { formatCurrencyFull, formatarData, toLocalISO } = useFormatting();
+const { formatCurrencyFull, formatarData, toLocalISO, formatTitleCase } = useFormatting();
 const filterStore = useFilterStore();
 
 const formattedPeriod = computed(() => {
@@ -37,16 +37,130 @@ const formattedPeriod = computed(() => {
   if (!start || !end) return null;
   return { start: formatarData(toLocalISO(start)), end: formatarData(toLocalISO(end)) };
 });
-const { chartTheme, chartDataColors } = useChartTheme();
+const { chartTheme, chartDataColors, chartUFAccents } = useChartTheme();
 
 const cnpjDetailStore = useCnpjDetailStore();
-const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError, evolucaoMensalGtin, evolucaoMensalGtinLoading } = storeToRefs(cnpjDetailStore);
+const { evolucaoFinanceira: evolucaoData, evolucaoLoading, evolucaoLoaded, evolucaoError, evolucaoMensalGtin, evolucaoMensalGtinLoading, repassesData, repassesLoading, repassesLoaded, repassesError } = storeToRefs(cnpjDetailStore);
 
 // ── Cache de Dados para Transição Suave (Flicker-Free) ──────────────────
 const {
   cachedData: cachedEvolucaoData,
   isRefreshing,
 } = useStableTabState(evolucaoData, evolucaoLoading, evolucaoError);
+
+const {
+  cachedData: cachedRepassesData,
+  isRefreshing: isRepassesRefreshing,
+} = useStableTabState(repassesData, repassesLoading, repassesError);
+
+const auditHighValue = AUDIT_THRESHOLDS.HIGH_VALUE;
+const hoveredSemestreRepasses = ref(null);
+const selectedSemestreRepasses = ref(null);
+
+const REPASSES_SCOPE_TOOLTIP =
+  'Repasses consolidados do Programa Farmácia Popular (escopo total). '
+  + 'Não correspondem à movimentação analisada pelo Sentinela, que exclui itens como fraldas e absorventes. '
+  + 'Os pagamentos costumam ocorrer com defasagem em relação à produção.';
+
+const repassesResumo = computed(() => cachedRepassesData.value?.resumo ?? null);
+const repassesMensal = computed(() => cachedRepassesData.value?.mensal ?? []);
+const repassesPagamentos = computed(() => cachedRepassesData.value?.pagamentos ?? []);
+
+function semestreFromMes(mesStr) {
+  if (!mesStr) return '';
+  const [year, month] = mesStr.split('-').map(Number);
+  return `${month <= 6 ? 1 : 2}S/${year}`;
+}
+
+function semestreFromDataPagamento(dateStr) {
+  if (!dateStr) return '';
+  const iso = String(dateStr).slice(0, 10);
+  const [year, month] = iso.split('-').map(Number);
+  return `${month <= 6 ? 1 : 2}S/${year}`;
+}
+
+const repassesSemestres = computed(() => {
+  const buckets = new Map();
+
+  for (const row of repassesPagamentos.value) {
+    const semestre = semestreFromDataPagamento(row.data_pagamento);
+    if (!semestre) continue;
+
+    if (!buckets.has(semestre)) {
+      buckets.set(semestre, {
+        semestre,
+        valor_repassado: 0,
+        ordens: new Set(),
+        meses: new Set(),
+      });
+    }
+
+    const bucket = buckets.get(semestre);
+    bucket.valor_repassado += row.valor_pago ?? 0;
+    if (row.numero_ordem_bancaria) bucket.ordens.add(row.numero_ordem_bancaria);
+    bucket.meses.add(String(row.data_pagamento).slice(0, 7));
+  }
+
+  return [...buckets.values()]
+    .map((bucket) => {
+      const mesesOrdenados = [...bucket.meses].sort();
+      return {
+        semestre: bucket.semestre,
+        valor_repassado: parseFloat(bucket.valor_repassado.toFixed(2)),
+        qtd_ordens: bucket.ordens.size,
+        mes_inicio: mesesOrdenados[0] ?? null,
+        mes_fim: mesesOrdenados.at(-1) ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const parseSemestre = (semestre) => {
+        const [semPart, yearPart] = semestre.split('S/');
+        return [Number(yearPart), Number(semPart)];
+      };
+      const [yearA, semA] = parseSemestre(a.semestre);
+      const [yearB, semB] = parseSemestre(b.semestre);
+      if (yearA !== yearB) return yearA - yearB;
+      return semA - semB;
+    });
+});
+
+const repassesMensalComSemestre = computed(() =>
+  repassesMensal.value.map((item) => ({
+    ...item,
+    semestre: semestreFromMes(item.mes),
+  })),
+);
+
+function onRepassesSemestreAxisPointerUpdate(event) {
+  if (event.axesInfo?.[0]) {
+    const idx = event.axesInfo[0].value;
+    const semestres = repassesSemestres.value;
+    if (semestres[idx]) {
+      hoveredSemestreRepasses.value = semestres[idx].semestre;
+    }
+  }
+}
+
+function onRepassesSemestreChartMouseOut() {
+  hoveredSemestreRepasses.value = null;
+}
+
+function onRepassesSemestreClick() {
+  const semestre = hoveredSemestreRepasses.value;
+  if (!semestre) return;
+  selectedSemestreRepasses.value = selectedSemestreRepasses.value === semestre ? null : semestre;
+}
+
+function limparFiltroRepasses() {
+  selectedSemestreRepasses.value = null;
+}
+
+const repassesPagamentosFiltrados = computed(() => {
+  if (!selectedSemestreRepasses.value) return [];
+  return repassesPagamentos.value.filter(
+    row => semestreFromDataPagamento(row.data_pagamento) === selectedSemestreRepasses.value,
+  );
+});
 
 const chartRef = ref(null);
 
@@ -69,7 +183,6 @@ function formatMesRange(mesInicio, mesFim) {
 const isMonthlyChartExpanded = ref(false);
 const hoveredSemestre = ref(null);
 
-const expandedRows = ref([]);
 const selectedSemestre = ref(null);
 
 // Todos os meses de todos os semestres (exibição global no card permanente)
@@ -85,22 +198,6 @@ const isMesSelecionado = (semestre) => !selectedSemestre.value || semestre === s
 
 function limparFiltro() {
   selectedSemestre.value = null;
-  expandedRows.value = [];
-}
-
-/**
- * Alterna a expansão da linha ao clicar em qualquer célula da linha pai.
- */
-function toggleRow(event) {
-  const row = event.data;
-  const key = row.semestre;
-  const current = { ...expandedRows.value };
-  if (current[key]) {
-    delete current[key];
-  } else {
-    current[key] = row;
-  }
-  expandedRows.value = current;
 }
 
 /**
@@ -581,6 +678,251 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   };
 }
 
+function chartOptionRepassesSemestre() {
+  const c = C.value;
+  const accents = chartUFAccents.value;
+  const semestres = repassesSemestres.value;
+  const labels = semestres.map((item) => item.semestre);
+
+  const isSemestreSelecionado = (semestre) => !selectedSemestreRepasses.value || semestre === selectedSemestreRepasses.value;
+
+  const valores = semestres.map((item) => ({
+    value: parseFloat((item.valor_repassado ?? 0).toFixed(2)),
+    itemStyle: {
+      opacity: hoveredSemestreRepasses.value
+        ? (item.semestre === hoveredSemestreRepasses.value ? 1 : 0.35)
+        : (isSemestreSelecionado(item.semestre) ? 1 : 0.35),
+    },
+    emphasis: {
+      itemStyle: {
+        opacity: isSemestreSelecionado(item.semestre) ? 1 : 0.35,
+      },
+    },
+  }));
+
+  return {
+    backgroundColor: c.bg,
+    animation: true,
+    animationDuration: 900,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
+
+    legend: {
+      top: 6,
+      left: 'center',
+      textStyle: { color: c.muted, fontSize: 12, fontWeight: 600 },
+      itemGap: 24,
+      itemWidth: 14,
+      itemHeight: 8,
+    },
+
+    grid: { top: 44, left: 80, right: 24, bottom: 32, containLabel: false },
+
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      padding: [12, 16],
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      formatter: (params) => {
+        const idx = params[0]?.dataIndex ?? 0;
+        const item = semestres[idx];
+        if (!item) return '';
+        const mesRange = formatMesRange(item.mes_inicio, item.mes_fim);
+        return `
+          <div style="color:${c.tooltipText}">
+            <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${formatSemestreLabel(item.semestre)}</div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Valor repassado</span>
+              <strong>${formatCurrencyFull(item.valor_repassado)}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Ordens bancárias</span>
+              <strong>${item.qtd_ordens ?? 0}</strong>
+            </div>
+            ${mesRange ? `<div style="font-size:11px;opacity:.65;margin-top:6px;">Meses com pagamento: ${mesRange}</div>` : ''}
+          </div>`;
+      },
+    },
+
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: c.grid } },
+      axisTick: { show: false },
+      axisLabel: { color: c.muted, fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif' },
+    },
+
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
+      axisLabel: { color: c.muted, fontSize: 10, formatter: (v) => formatCurrencyFull(v) },
+    },
+
+    series: [
+      {
+        name: 'Repasses',
+        type: 'bar',
+        barMaxWidth: 56,
+        data: valores,
+itemStyle: {
+           borderRadius: [6, 6, 0, 0],
+           color: {
+             type: 'linear',
+             x: 0,
+             y: 0,
+             x2: 0,
+             y2: 1,
+             colorStops: [
+               { offset: 0, color: accents.bar1 },
+               { offset: 1, color: accents.bar1Grad },
+             ],
+           },
+         },
+         emphasis: { disabled: false },
+       },
+    ],
+  };
+}
+
+function chartOptionRepassesMensal(showZoom = false) {
+  const c = C.value;
+  const accents = chartUFAccents.value;
+  const meses = repassesMensalComSemestre.value;
+  const labels = meses.map((item) => item.mes);
+
+  const isMesSelecionadoRepasse = (semestre) => !selectedSemestreRepasses.value || semestre === selectedSemestreRepasses.value;
+
+  const valores = meses.map((item) => ({
+    value: parseFloat((item.valor_repassado ?? 0).toFixed(2)),
+    itemStyle: {
+      opacity: hoveredSemestreRepasses.value
+        ? (item.semestre === hoveredSemestreRepasses.value ? 1 : 0.25)
+        : (isMesSelecionadoRepasse(item.semestre) ? 1 : 0.25),
+    },
+  }));
+
+  return {
+    backgroundColor: 'transparent',
+    animation: !hoveredSemestreRepasses.value,
+    animationDuration: 600,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Inter, sans-serif' },
+
+    legend: {
+      top: 4,
+      left: 'center',
+      textStyle: { color: c.muted, fontSize: 11, fontWeight: 600 },
+      itemGap: 20,
+      itemWidth: 12,
+      itemHeight: 7,
+    },
+
+    grid: { top: 36, left: 64, right: 16, bottom: showZoom ? 52 : 32, containLabel: false },
+
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
+      backgroundColor: c.tooltip,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      padding: [10, 14],
+      textStyle: { color: c.tooltipText, fontFamily: 'Inter, sans-serif', fontSize: 12 },
+      formatter: (params) => {
+        const idx = params[0]?.dataIndex ?? 0;
+        const item = meses[idx];
+        if (!item) return '';
+        return `
+          <div style="color:${c.tooltipText}">
+            <div style="font-weight:600;font-size:13px;margin-bottom:8px;">
+              ${formatMesLabel(item.mes)}
+              <span style="opacity:0.5;font-size:11px;">(${formatSemestreLabel(item.semestre)})</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;margin-bottom:4px;">
+              <span style="opacity:.68;">Valor repassado</span>
+              <strong>${formatCurrencyFull(item.valor_repassado)}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:18px;font-size:12px;">
+              <span style="opacity:.68;">Ordens bancárias</span>
+              <strong>${item.qtd_ordens ?? 0}</strong>
+            </div>
+          </div>`;
+      },
+    },
+
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: c.grid } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: c.muted,
+        fontSize: 10,
+        fontFamily: 'Inter, sans-serif',
+        formatter: formatMesLabel,
+        interval: 'auto',
+        rotate: 30,
+      },
+    },
+
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: c.grid, type: 'dashed' } },
+      axisLabel: { color: c.muted, fontSize: 9, formatter: (v) => formatCurrencyFull(v) },
+    },
+
+    dataZoom: showZoom ? [
+      { type: 'inside', start: 0, end: 100, zoomLock: false },
+      {
+        type: 'slider',
+        start: 0,
+        end: 100,
+        height: 14,
+        bottom: 4,
+        borderColor: c.grid,
+        fillerColor: c.axisShadow,
+        handleStyle: { color: c.muted },
+        textStyle: { color: 'transparent' },
+      },
+    ] : [],
+
+    series: [
+      {
+        name: 'Repasses',
+        type: 'bar',
+        barMaxWidth: 40,
+        data: valores,
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: accents.bar1 },
+              { offset: 1, color: accents.bar1Grad },
+            ],
+          },
+        },
+        emphasis: { focus: 'series' },
+      },
+    ],
+  };
+}
+
+const repassesSemestreChartOption = computed(() => chartOptionRepassesSemestre());
+const repassesMensalChartOption = computed(() => chartOptionRepassesMensal(false));
+
 </script>
 
 <template>
@@ -611,11 +953,11 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
     </TabPlaceholder>
 
     <template v-else-if="cachedEvolucaoData">
-      <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
+      <div class="evolucao-card evolucao-card-highlight repasses-section" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
           <div class="header-title">
             <i class="pi pi-chart-bar" />
-            <span>Volume Financeiro por Semestre</span>
+            <span>Volume de Vendas por Semestre</span>
           </div>
           <div class="header-actions">
             <Button 
@@ -641,12 +983,12 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         </div>
       </div>
 
-      <!-- Card permanente: Histórico Mensal de Movimentação -->
-      <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
+      <!-- Card permanente: Volume de Vendas Mensal -->
+      <div class="evolucao-card evolucao-card-highlight repasses-section" :class="{ 'is-refreshing': isRefreshing }">
         <div class="evolucao-card-header">
           <div class="header-title">
             <i class="pi pi-chart-bar" />
-            <span>Histórico Mensal de Movimentação</span>
+            <span>Volume de Vendas Mensal</span>
           </div>
           <div class="header-actions">
             <span v-if="selectedSemestre" class="sem-badge">
@@ -753,182 +1095,13 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         </div>
       </Transition>
 
-      <div class="evolucao-card evolucao-card-highlight" :class="{ 'is-refreshing': isRefreshing }">
-        <div class="evolucao-card-header">
-          <div class="header-title">
-            <i class="pi pi-table" />
-            <span>Detalhamento Semestral</span>
-          </div>
-        </div>
-        <div class="evolucao-table-wrap">
-          <DataTable 
-            :value="cachedEvolucaoData.semestres" 
-            v-model:expandedRows="expandedRows" 
-            dataKey="semestre" 
-            class="evolucao-table"
-            @row-click="toggleRow"
-          >
 
-            <Column field="semestre" header="Semestre" style="width: 15%">
-              <template #body="slotProps">
-                <div class="sem-label">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <i class="pi" :class="expandedRows[slotProps.data.semestre] ? 'pi-chevron-down' : 'pi-chevron-right'" style="font-size: 0.70rem; color: var(--text-muted); opacity: 0.8;"></i>
-                    <span class="sem-badge"><i class="pi pi-calendar" /> {{ formatSemestreLabel(slotProps.data.semestre) }}</span>
-                  </div>
-                  <span v-if="formatMesRange(slotProps.data.mes_inicio, slotProps.data.mes_fim)" class="sem-months" style="margin-left: 20px;">
-                    {{ formatMesRange(slotProps.data.mes_inicio, slotProps.data.mes_fim) }}
-                  </span>
-                </div>
-              </template>
-            </Column>
-
-            <Column field="total" header="Total Movimentado" style="width: 18%">
-              <template #body="{ data }">
-                {{ formatCurrencyFull(data.total) }}
-              </template>
-            </Column>
-
-            <Column field="regular" header="Total Regular" style="width: 18%">
-              <template #body="{ data }">
-                {{ formatCurrencyFull(data.regular) }}
-              </template>
-            </Column>
-
-            <Column field="irregular" header="Sem Comprovação" style="width: 18%">
-              <template #body="{ data }">
-                <span class="col-irregular">{{ formatCurrencyFull(data.irregular) }}</span>
-              </template>
-            </Column>
-
-            <Column field="pct_irregular" header="% S/ Comp" style="width: 18%">
-              <template #body="{ data }">
-                <div class="pct-cell" style="text-align: right; padding: 0;">
-                  <div class="pct-bar-wrap">
-                    <div
-                      class="pct-bar"
-                      :style="{
-                        width: Math.min(data.pct_irregular, 100) + '%',
-                        background: data.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
-                                  : data.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
-                                  : data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
-                                  : 'var(--risk-low)'
-                      }"
-                    />
-                  </div>
-                  <span class="pct-value" :class="{
-                    'pct-critical': data.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                    'pct-high':     data.pct_irregular >= RISK_THRESHOLDS.HIGH     && data.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                    'pct-medium':   data.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && data.pct_irregular < RISK_THRESHOLDS.HIGH,
-                    'pct-low':      data.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                  }">{{ data.pct_irregular.toFixed(1) }}%</span>
-                </div>
-              </template>
-            </Column>
-
-            <Column header="Tendência" style="width: 13%">
-              <template #body="{ data, index }">
-                <div class="trend-cell">
-                  <template v-if="index === 0">
-                    <span class="trend-neutral">—</span>
-                  </template>
-                  <template v-else>
-                    <span
-                      v-if="data.pct_irregular > cachedEvolucaoData.semestres[index-1].pct_irregular"
-                      class="trend-up"
-                      :title="`+${(data.pct_irregular - cachedEvolucaoData.semestres[index-1].pct_irregular).toFixed(1)}pp`"
-                    >▲ {{ (data.pct_irregular - cachedEvolucaoData.semestres[index-1].pct_irregular).toFixed(1) }}pp</span>
-                    <span
-                      v-else-if="data.pct_irregular < cachedEvolucaoData.semestres[index-1].pct_irregular"
-                      class="trend-down"
-                      :title="`-${(cachedEvolucaoData.semestres[index-1].pct_irregular - data.pct_irregular).toFixed(1)}pp`"
-                    >▼ {{ (cachedEvolucaoData.semestres[index-1].pct_irregular - data.pct_irregular).toFixed(1) }}pp</span>
-                    <span v-else class="trend-neutral">= 0pp</span>
-                  </template>
-                </div>
-              </template>
-            </Column>
-
-            <template #expansion="{ data: sem }">
-              <div class="meses-expansion-box">
-                <DataTable 
-                  :value="sem.meses ?? []" 
-                  class="sanfona-table p-datatable-sm" 
-                  :show-gridlines="false"
-                  @row-click="(e) => abrirInfratores(e.data.mes)"
-                >
-                  <Column field="mes" header="Mês" style="width: 20%">
-                    <template #body="{ data: m }">{{ formatMonth(m.mes) }}</template>
-                  </Column>
-                  <Column field="total" header="Total Movimentado" style="width: 20%">
-                    <template #body="{ data: m }">{{ formatCurrencyFull(m.total) }}</template>
-                  </Column>
-                  <Column field="regular" header="Total Regular" style="width: 20%">
-                    <template #body="{ data: m }">
-                      {{ formatCurrencyFull(m.total - m.irregular) }}
-                    </template>
-                  </Column>
-                  <Column field="irregular" header="Sem Comprovação" style="width: 20%">
-                    <template #body="{ data: m }">
-                      <span class="col-irregular">{{ formatCurrencyFull(m.irregular) }}</span>
-                    </template>
-                  </Column>
-                  <Column field="pct_irregular" header="% S/ Comp" style="width: 20%">
-                    <template #body="{ data: m }">
-                      <div class="pct-cell" style="text-align: right; padding: 0;">
-                        <div class="pct-bar-wrap">
-                          <div
-                            class="pct-bar"
-                            :style="{
-                              width: Math.min(m.pct_irregular, 100) + '%',
-                              background: m.pct_irregular >= RISK_THRESHOLDS.CRITICAL ? 'var(--risk-critical)'
-                                        : m.pct_irregular >= RISK_THRESHOLDS.HIGH     ? 'var(--risk-high)'
-                                        : m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   ? 'var(--risk-medium)'
-                                        : 'var(--risk-low)'
-                            }"
-                          />
-                        </div>
-                        <span class="pct-value" :class="{
-                          'pct-critical': m.pct_irregular >= RISK_THRESHOLDS.CRITICAL,
-                          'pct-high':     m.pct_irregular >= RISK_THRESHOLDS.HIGH     && m.pct_irregular < RISK_THRESHOLDS.CRITICAL,
-                          'pct-medium':   m.pct_irregular >= RISK_THRESHOLDS.MEDIUM   && m.pct_irregular < RISK_THRESHOLDS.HIGH,
-                          'pct-low':      m.pct_irregular < RISK_THRESHOLDS.MEDIUM,
-                        }">{{ m.pct_irregular.toFixed(1) }}%</span>
-                      </div>
-                    </template>
-                  </Column>
-                  <Column style="width: 5%">
-                    <template #body="{ data: m }">
-                      <Button
-                        icon="pi pi-search-plus"
-                        class="p-button-text p-button-sm p-button-rounded p-button-danger btn-insight"
-                        v-tooltip.left="'Ver mais detalhes'"
-                        @click="abrirInfratores(m.mes)"
-                      />
-                    </template>
-                  </Column>
-                </DataTable>
-              </div>
-            </template>
-
-            <ColumnGroup type="footer">
-              <Row>
-                <Column footer="TOTAL" footerStyle="text-align: left; font-weight: 600;" />
-                <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.total, 0))" />
-                <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.regular, 0))" />
-                <Column :footer="formatCurrencyFull(cachedEvolucaoData.semestres.reduce((a, s) => a + s.irregular, 0))" footerStyle="color: var(--risk-high)" />
-                <Column :colspan="2" />
-              </Row>
-            </ColumnGroup>
-          </DataTable>
-        </div>
-      </div>
 
       <!-- Modal de Zoom do Histórico Mensal -->
       <Dialog 
         v-model:visible="isMonthlyChartExpanded" 
         modal 
-        header="Histórico Mensal de Movimentação (Detalhamento)" 
+        header="Volume de Vendas Mensal (Detalhamento)" 
         :style="{ width: '90vw', maxWidth: '1400px' }"
         :breakpoints="{ '960px': '95vw' }"
         class="evolucao-zoom-dialog"
@@ -954,6 +1127,187 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
         </template>
       </Dialog>
     </template>
+
+    <!-- Repasses: bloco autônomo, sem comparativo com movimentação -->
+    <div v-if="repassesLoading || repassesLoaded" class="repasses-block">
+      <p class="repasses-scope-note">
+        <i class="pi pi-wallet repasses-scope-leading-icon" />
+        Repasses consolidados do Tesouro (escopo total do Programa).
+        <i
+          class="pi pi-info-circle repasses-scope-icon"
+          v-tooltip.bottom="REPASSES_SCOPE_TOOLTIP"
+        />
+      </p>
+
+      <TabPlaceholder
+        v-if="repassesError"
+        variant="error"
+        icon="pi-exclamation-circle"
+        title="Repasses indisponíveis"
+        :description="repassesError"
+      />
+
+      <TabPlaceholder
+        v-else-if="repassesLoaded && !repassesMensal.length"
+        variant="info"
+        icon="pi-wallet"
+        title="Sem repasses no período"
+      >
+        <template #description>
+          Não foram encontrados repasses para este CNPJ entre
+          <u>{{ formattedPeriod?.start }}</u> e <u>{{ formattedPeriod?.end }}</u>.
+        </template>
+      </TabPlaceholder>
+
+      <template v-else-if="repassesResumo">
+        <div class="repasses-kpi-grid">
+          <div class="repasses-kpi-item">
+            <span class="repasses-kpi-label">Total repassado</span>
+            <span class="repasses-kpi-value">{{ formatCurrencyFull(repassesResumo.total_repassado) }}</span>
+          </div>
+          <div class="repasses-kpi-item">
+            <span class="repasses-kpi-label">Ordens bancárias</span>
+            <span class="repasses-kpi-value">{{ repassesResumo.qtd_ordens ?? 0 }}</span>
+          </div>
+          <div class="repasses-kpi-item">
+            <span class="repasses-kpi-label">Maior repasse</span>
+            <span
+              class="repasses-kpi-value"
+              :class="{ 'high-value-audit': (repassesResumo.maior_repasse ?? 0) >= auditHighValue }"
+            >
+              {{ formatCurrencyFull(repassesResumo.maior_repasse) }}
+            </span>
+          </div>
+          <div class="repasses-kpi-item">
+            <span class="repasses-kpi-label">Último repasse</span>
+            <span class="repasses-kpi-value repasses-kpi-last">
+              <template v-if="repassesResumo.ultimo_repasse_data">
+                {{ formatarData(repassesResumo.ultimo_repasse_data) }}
+                ·
+                {{ formatCurrencyFull(repassesResumo.ultimo_repasse_valor) }}
+              </template>
+              <template v-else>—</template>
+            </span>
+          </div>
+        </div>
+
+        <div
+          class="evolucao-card evolucao-card-highlight repasses-section"
+          :class="{ 'is-refreshing': isRepassesRefreshing }"
+        >
+          <div class="evolucao-card-header">
+            <div class="header-title">
+              <i class="pi pi-wallet" />
+              <span>Repasses por Semestre</span>
+            </div>
+            <div class="header-actions">
+              <i v-if="repassesLoading" class="pi pi-spin pi-spinner refresh-spinner" />
+            </div>
+          </div>
+          <div
+            v-if="repassesSemestres.length"
+            class="evolucao-chart-wrap"
+            :class="{ 'is-hovering-axis': hoveredSemestreRepasses }"
+            @mouseleave="onRepassesSemestreChartMouseOut"
+          >
+            <VChart
+              :option="repassesSemestreChartOption"
+              :update-options="{ notMerge: false, lazyUpdate: true }"
+              autoresize
+              class="evolucao-chart"
+              @updateAxisPointer="onRepassesSemestreAxisPointerUpdate"
+              @zr:click="onRepassesSemestreClick"
+            />
+          </div>
+        </div>
+
+        <div
+          class="evolucao-card evolucao-card-highlight repasses-section"
+          :class="{ 'is-refreshing': isRepassesRefreshing }"
+        >
+<div class="evolucao-card-header">
+             <div class="header-title">
+               <i class="pi pi-wallet" />
+               <span>Histórico Mensal de Repasses</span>
+             </div>
+             <div class="header-actions">
+               <span v-if="selectedSemestreRepasses" class="sem-badge">
+                 <i class="pi pi-star-fill" />
+                 {{ formatSemestreLabel(selectedSemestreRepasses) }}
+               </span>
+               <Button
+                 v-if="selectedSemestreRepasses"
+                 icon="pi pi-filter-slash"
+                 label="Limpar Filtro"
+                 class="p-button-text p-button-sm btn-clear-filter"
+                 @click="limparFiltroRepasses"
+               />
+               <i v-if="repassesLoading" class="pi pi-spin pi-spinner refresh-spinner" />
+             </div>
+           </div>
+          <div v-if="repassesMensal.length" class="evolucao-chart-wrap">
+            <VChart
+              :option="repassesMensalChartOption"
+              :update-options="{ notMerge: false, lazyUpdate: true }"
+              autoresize
+              class="evolucao-chart"
+            />
+          </div>
+        </div>
+
+        <!-- Painel contextual: ordens bancárias do semestre selecionado -->
+        <Transition name="context-slide">
+          <div v-if="selectedSemestreRepasses" class="evolucao-card evolucao-card-highlight context-detail-card repasses-section">
+            <div class="evolucao-card-header">
+              <div class="header-title">
+                <i class="pi pi-calendar-clock" />
+                <span>{{ formatSemestreLabel(selectedSemestreRepasses) }} — Detalhamento Mensal de Repasses</span>
+              </div>
+              <div class="header-actions">
+                <button class="btn-close-context" @click="limparFiltroRepasses" title="Fechar">
+                  <i class="pi pi-times" />
+                </button>
+              </div>
+            </div>
+            <DataTable
+              :value="repassesPagamentosFiltrados"
+              class="evolucao-table repasses-table"
+              :show-gridlines="false"
+            >
+              <Column field="data_pagamento" header="Data Pagamento" style="width: 18%">
+                <template #body="{ data: row }">
+                  {{ formatarData(row.data_pagamento) }}
+                </template>
+              </Column>
+<Column field="programa_acao" header="Programa" style="width: 14%">
+                 <template #body="{ data: row }">
+                   {{ row.programa_acao ? formatTitleCase(row.programa_acao) : '—' }}
+                 </template>
+               </Column>
+              <Column field="numero_ordem_bancaria" header="Ordem Bancária" style="width: 38%">
+                <template #body="{ data: row }">
+                  {{ formatTitleCase(row.numero_ordem_bancaria) }}
+                </template>
+              </Column>
+              <Column field="valor_pago" header="Valor Pago" style="width: 30%">
+                <template #body="{ data: row }">
+                  <span :class="{ 'high-value-audit': row.valor_pago >= auditHighValue }">
+                    {{ formatCurrencyFull(row.valor_pago) }}
+                  </span>
+                </template>
+              </Column>
+              <ColumnGroup type="footer">
+                <Row>
+                  <Column footer="TOTAL" footerStyle="text-align: left; font-weight: 600;" :colspan="3" />
+                  <Column :footer="formatCurrencyFull(repassesPagamentosFiltrados.reduce((a, r) => a + (r.valor_pago ?? 0), 0))" />
+                </Row>
+              </ColumnGroup>
+            </DataTable>
+          </div>
+        </Transition>
+      </template>
+    </div>
+
     <GtinDetalhamentoMensalSidebar
       v-model:visible="insightSidebarVisible"
       :cnpj="cnpj"
@@ -1075,7 +1429,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 }
 .evolucao-chart { width: 100%; height: 100%; }
 
-.evolucao-table-wrap { overflow-x: auto; padding-top: 0.5rem; }
 
 :deep(.p-datatable.evolucao-table) { font-size: 0.82rem; background: transparent; }
 :deep(.p-datatable.evolucao-table .p-datatable-wrapper) { background: transparent; }
@@ -1105,20 +1458,8 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   transition: background 0.2s ease;
   background: transparent;
 }
-:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr:not(.p-datatable-row-expansion)) {
-  cursor: pointer;
-}
-:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr:not(.p-datatable-row-expansion):hover > td) {
+:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr:hover > td) {
   background: var(--table-hover);
-}
-/* Linha de expansão: sem hover, sem cursor, sem background diferente */
-:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr.p-datatable-row-expansion) {
-  cursor: default;
-}
-:deep(.p-datatable.evolucao-table .p-datatable-tbody > tr.p-datatable-row-expansion > td) {
-  background: color-mix(in srgb, var(--primary-color) 4%, var(--card-bg)) !important;
-  padding: 0 !important;
-  border-bottom: 2px solid var(--tabs-border);
 }
 :deep(.p-datatable.evolucao-table .p-datatable-tfoot > tr > td) {
   text-align: right; 
@@ -1160,10 +1501,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   background: color-mix(in srgb, var(--card-bg) 95%, var(--text-color-85) 5%);
 }
 
-.meses-expansion-box {
-  border-left: 3px solid var(--primary-color);
-  padding: 0.75rem 1.5rem;
-}
 
 :deep(.sanfona-table.p-datatable) { background: transparent; }
 :deep(.sanfona-table.p-datatable .p-datatable-tbody > tr) { 
@@ -1197,21 +1534,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
   text-align: left !important;
 }
 
-.sem-label {
-  font-weight: 600;
-  color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sem-months {
-  font-size: 0.68rem;
-  font-weight: 400;
-  color: var(--text-muted);
-  opacity: 0.7;
-  letter-spacing: 0.01em;
-}
 
 .sem-badge {
   font-size: 0.7rem;
@@ -1229,31 +1551,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 }
 .sem-badge i { font-size: 0.6rem !important; }
 
-/* Label de semestre clicável dentro da tabela mensal */
-.mes-sem-label {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 99px;
-  cursor: pointer;
-  color: var(--text-muted);
-  border: 1px solid transparent;
-  transition: all 0.2s ease;
-  opacity: 0.55;
-}
-.mes-sem-label:hover {
-  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-  color: var(--primary-color);
-  opacity: 1;
-}
-.mes-sem-selected {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-  color: var(--primary-color) !important;
-  border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
-  opacity: 1 !important;
-}
 .col-regular { color: var(--risk-low); }
 .col-irregular { color: var(--risk-high); }
 
@@ -1267,10 +1564,6 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 .pct-medium   { color: var(--risk-medium); }
 .pct-low      { color: var(--risk-low); }
 
-.trend-cell { text-align: center; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
-.trend-up      { color: var(--risk-high); }
-.trend-down    { color: var(--risk-low); }
-.trend-neutral { color: var(--text-muted); font-weight: 400; }
 
 .mensal-gtin-chart-wrapper {
   margin-bottom: 1.25rem;
@@ -1367,6 +1660,171 @@ function chartOptionMensalGtin(semestre, showZoom = false) {
 .mensal-chart-clickable :deep(canvas) {
   cursor: pointer !important;
 }
+
+.repasses-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 0.5rem;
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--tabs-border);
+}
+
+.repasses-section {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0.9rem;
+}
+
+.repasses-scope-leading-icon {
+  margin-right: 0.45rem;
+  color: var(--primary-color);
+  font-size: 0.85rem;
+}
+
+.repasses-table-dialog-body {
+  height: 65vh;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.repasses-table-dialog :deep(.p-dialog-content) {
+  overflow: hidden;
+  background: var(--card-bg);
+}
+
+.repasses-scope-icon {
+  font-size: 0.85rem !important;
+  color: var(--text-muted);
+  cursor: help;
+  opacity: 0.75;
+}
+
+.repasses-scope-note {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.repasses-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.repasses-kpi-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--tabs-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-bg) 96%, var(--primary-color) 4%);
+}
+
+.repasses-kpi-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.repasses-kpi-value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-color-85);
+}
+
+.repasses-kpi-last {
+  font-size: 0.82rem;
+}
+
+.repasses-table-wrap {
+  margin-top: 1rem;
+}
+
+.high-value-audit {
+  color: var(--risk-high);
+  background: color-mix(in srgb, var(--risk-high) 10%, transparent);
+  border-left: 3px solid var(--risk-high);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+:deep(.p-datatable.repasses-table) {
+  font-size: 0.82rem;
+  background: transparent;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-wrapper),
+:deep(.p-datatable.repasses-table .p-datatable-scrollable-header),
+:deep(.p-datatable.repasses-table .p-datatable-scrollable-header-box),
+:deep(.p-datatable.repasses-table .p-datatable-scrollable-footer) {
+  background: transparent;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-thead > tr > th) {
+  text-align: right;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--tabs-border);
+  opacity: 0.85;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-tbody > tr > td) {
+  text-align: right;
+  padding: 0.65rem 1rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--tabs-border);
+  background: transparent;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-tbody > tr:hover > td) {
+  background: var(--table-hover);
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-tfoot > tr > td) {
+  text-align: right;
+  border-top: 2px solid var(--tabs-border) !important;
+  border-bottom: none !important;
+  background: color-mix(in srgb, var(--tabs-bg) 95%, var(--text-color-85) 5%);
+  font-weight: 600;
+  color: var(--text-color-85);
+  padding: 0.85rem 1rem;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-thead > tr > th:nth-child(1)),
+:deep(.p-datatable.repasses-table .p-datatable-tbody > tr > td:nth-child(1)),
+:deep(.p-datatable.repasses-table .p-datatable-thead > tr > th:nth-child(3)),
+:deep(.p-datatable.repasses-table .p-datatable-tbody > tr > td:nth-child(3)) {
+  text-align: left !important;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-thead > tr > th:nth-child(1) .p-column-header-content),
+:deep(.p-datatable.repasses-table .p-datatable-thead > tr > th:nth-child(3) .p-column-header-content) {
+  justify-content: flex-start;
+}
+
+:deep(.p-datatable.repasses-table .p-datatable-thead > tr > th .p-column-header-content) {
+  justify-content: flex-end;
+}
+
+.repasses-table-dialog :deep(.p-dialog-header),
+.repasses-table-dialog :deep(.p-dialog-footer) {
+  background: var(--card-bg);
+  border-color: var(--tabs-border);
+}
+
 /* Remover borda branca de foco nos botões */
 :deep(.p-button:focus) {
   box-shadow: none !important;

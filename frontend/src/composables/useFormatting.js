@@ -73,10 +73,10 @@ export function useFormatting() {
    * Ex: 'SÃO PAULO' -> 'São Paulo' | 'ESTABELECIMENTO LTDA' -> 'Estabelecimento Ltda'
    * @param {string} str - Texto a ser formatado
    */
-  const formatTitleCase = (str) => {
-    if (!str || typeof str !== 'string') return '';
-    return str.toLowerCase().replace(/(?:^|\s|-|\/)\S/g, (match) => match.toUpperCase());
-  };
+const formatTitleCase = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.toLowerCase().replace(/(?:^|\s|-|\/)\S/g, (match) => match.toUpperCase());
+};
 
   /**
    * Formata um CNPJ bruto (14 dígitos) no padrão XX.XXX.XXX/XXXX-XX.

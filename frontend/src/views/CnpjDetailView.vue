@@ -129,6 +129,7 @@ const tabLoadingByIndex = computed(() => ({
   [TAB_INDEX.EVOLUTION]:
     cnpjDetailStore.evolucaoLoading ||
     cnpjDetailStore.evolucaoMensalGtinLoading ||
+    cnpjDetailStore.repassesLoading ||
     cnpjDetailStore.gtinDetalhamentoMensalLoading,
   [TAB_INDEX.DIAGNOSIS]: cnpjDetailStore.metricPercentilesLoading,
   [TAB_INDEX.MOVEMENT]: cnpjDetailStore.movimentacaoLoading,

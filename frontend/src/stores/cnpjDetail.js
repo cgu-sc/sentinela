@@ -229,6 +229,21 @@ function assertCrmMedicoAlertas(data) {
   });
 }
 
+function assertRepasses(data) {
+  if (!data || typeof data.cnpj !== 'string') {
+    throw new Error('Contrato invalido em repasses: cnpj obrigatorio.');
+  }
+  if (!data.resumo || typeof data.resumo.total_repassado !== 'number') {
+    throw new Error('Contrato invalido em repasses: resumo.total_repassado obrigatorio.');
+  }
+  if (!Array.isArray(data.mensal)) {
+    throw new Error('Contrato invalido em repasses: mensal obrigatorio.');
+  }
+  if (!Array.isArray(data.pagamentos)) {
+    throw new Error('Contrato invalido em repasses: pagamentos obrigatorio.');
+  }
+}
+
 export const useCnpjDetailStore = defineStore('cnpjDetail', {
   state: () => ({
     // ── Cadastro ──────────────────────────────────────────────────────────────
@@ -337,6 +352,14 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
     evolucaoMensalGtinLoading: false,
     evolucaoMensalGtinKey:     null,
     evolucaoMensalGtinRequestKey: null,
+
+    // ── Repasses Farmácia Popular ─────────────────────────────────────────────
+    repassesData:        null,
+    repassesLoading:     false,
+    repassesLoaded:      false,
+    repassesError:       null,
+    repassesKey:         null,
+    repassesRequestKey:  null,
 
     // ── Navegação Deep-Link (Timeline) ──────────────────────────────────────
     selectedTimelineEvent: null, // { date: 'YYYY-MM-DD', hour: number | 'all' }
@@ -546,6 +569,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         await Promise.all([
           this.fetchEvolucaoFinanceira(cnpj, inicio, fim, volumeAtipicoPercentual),
           this.fetchEvolucaoMensalGtin(cnpj, inicio, fim),
+          this.fetchRepasses(cnpj, inicio, fim),
         ]);
         return;
       }
@@ -618,6 +642,7 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       const tasks = [
         ['movimentacao-financeira', () => this.fetchEvolucaoFinanceira(clean, inicio, fim, volumeAtipicoPercentual)],
         ['movimentacao-gtin', () => this.fetchEvolucaoMensalGtin(clean, inicio, fim)],
+        ['repasses', () => this.fetchRepasses(clean, inicio, fim)],
         ['indicadores', () => this.fetchIndicadores(clean, inicio, fim)],
         ['crm-prescritores', () => this.fetchCrmData(clean, inicio, fim)],
         ['crm-cronologia', () => this.fetchCrmTimelineDataset(clean, inicio, fim)],
@@ -727,6 +752,43 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
         if (this.evolucaoMensalGtinRequestKey === key) {
           this.evolucaoMensalGtinLoading = false;
           this.evolucaoMensalGtinRequestKey = null;
+        }
+      }
+    },
+
+    async fetchRepasses(cnpj, inicio = null, fim = null) {
+      const key = `${cnpj}|${inicio ?? ''}|${fim ?? ''}`;
+      if (this.repassesKey === key) return;
+      if (this.repassesRequestKey === key) return;
+
+      this.repassesLoading = true;
+      this.repassesRequestKey = key;
+
+      try {
+        const params = {};
+        if (inicio) params.data_inicio = inicio;
+        if (fim)    params.data_fim    = fim;
+
+        const { data } = await axios.get(API_ENDPOINTS.analyticsRepasses(cnpj), { params });
+        if (this.repassesRequestKey !== key) return;
+        assertRepasses(data);
+        this.repassesData   = data;
+        this.repassesKey    = key;
+        this.repassesLoaded = true;
+        this.repassesError  = null;
+      } catch (e) {
+        if (this.repassesRequestKey !== key) return;
+        console.error('Erro ao buscar repasses:', e);
+        const detail = e?.response?.data?.detail;
+        this.repassesError = typeof detail === 'string'
+          ? detail
+          : ERROR_MSG;
+        this.repassesData   = null;
+        this.repassesLoaded = true;
+      } finally {
+        if (this.repassesRequestKey === key) {
+          this.repassesLoading = false;
+          this.repassesRequestKey = null;
         }
       }
     },
@@ -1581,6 +1643,13 @@ export const useCnpjDetailStore = defineStore('cnpjDetail', {
       this.evolucaoMensalGtinLoading = false;
       this.evolucaoMensalGtinKey     = null;
       this.evolucaoMensalGtinRequestKey = null;
+
+      this.repassesData        = null;
+      this.repassesLoading     = false;
+      this.repassesLoaded      = false;
+      this.repassesError       = null;
+      this.repassesKey         = null;
+      this.repassesRequestKey  = null;
 
       this.gtinDetalhamentoMensalData    = null;
       this.gtinDetalhamentoMensalLoading = false;

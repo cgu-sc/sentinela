@@ -988,6 +988,34 @@ class EvolucaoMensalGtinResponse(BaseModel):
     read_time_ms: Optional[float] = None
 
 
+class RepassesResumoSchema(BaseModel):
+    total_repassado: float
+    qtd_ordens: int
+    maior_repasse: float
+    ultimo_repasse_data: Optional[date] = None
+    ultimo_repasse_valor: Optional[float] = None
+
+
+class RepasseMensalItemSchema(BaseModel):
+    mes: str
+    valor_repassado: float
+    qtd_ordens: int
+
+
+class RepassePagamentoItemSchema(BaseModel):
+    data_pagamento: date
+    programa_acao: str
+    numero_ordem_bancaria: str
+    valor_pago: float
+
+
+class RepassesResponse(BaseModel):
+    cnpj: str
+    resumo: RepassesResumoSchema
+    mensal: List[RepasseMensalItemSchema]
+    pagamentos: List[RepassePagamentoItemSchema]
+
+
 # ── Detalhamento Mensal de GTINs (Raio-X Mensal) ─────────────────────────────
 class GtinDetalhamentoMensalItem(BaseModel):
     gtin: str

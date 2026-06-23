@@ -465,13 +465,12 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         aumento_txt = f'R$ {_format_decimal_pt(item["aumento_valor"], 2)}'
         if item.get("aumento_relativo_pct") is not None:
             aumento_txt += f'\n(+{_format_decimal_pt(item["aumento_relativo_pct"], 1)}%)'
-        _run(
-            cells[5].paragraphs[0],
-            aumento_txt,
-            color=increase_color,
-            size=9,
-            bold=True,
-        )
+            _run(
+                cells[5].paragraphs[0],
+                aumento_txt,
+                color='64748B',
+                size=9,
+            )
 
     for row in table.rows:
         for cell in row.cells:
@@ -806,7 +805,7 @@ def _add_tabela_repasses_anuais(
     # cabeçalho + linhas de dados + linha de total
     table = doc.add_table(rows=len(rows_data) + 2, cols=3)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    _set_table_fixed_widths(table, [Inches(2.80), Inches(1.10), Inches(2.40)])
+    _set_table_fixed_widths(table, [Inches(3.50), Inches(1.30), Inches(2.50)])
     _set_table_open_borders(table)
     _repeat_table_header(table.rows[0])
 

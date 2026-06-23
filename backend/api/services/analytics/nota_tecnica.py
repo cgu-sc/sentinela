@@ -30,6 +30,7 @@ from .nota_tecnica_contexts import (
     _build_gtin_sem_comprovacao_context,
     _build_posicionamento_regional_context,
     _build_regional_comparison_context,
+    _build_repasses_anuais_context,
     _build_socios_volume_atipico_context,
     _build_ultimo_mes_sav_context,
 )
@@ -41,6 +42,7 @@ from .nota_tecnica_quadros import (
     _add_quadro_socios_volume_atipico,
     _add_tabela_gtins_sem_comprovacao,
     _add_tabela_medicamentos_aumento_atipico,
+    _add_tabela_repasses_anuais,
 )
 from .nota_tecnica_criticidades import (
     _SECAO5_MAP,
@@ -1147,6 +1149,8 @@ def generate_nota_tecnica(
     _run(p_gtin, '. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.', color='0F172A', size=10)
     p_42_fim1 = doc.add_paragraph()
     _run(p_42_fim1, 'Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.', color='0F172A', size=10)
+    p_42_fim1b = doc.add_paragraph()
+    _run(p_42_fim1b, 'Por fim, cabe ressaltar que o Sentinela se concentra apenas nas dispensações de medicamentos do rol do PFPB, não sendo objeto de suas análises as vendas de fraldas geriátricas e de absorventes higiênicos.', color='0F172A', size=10)
     p_42_fim2 = doc.add_paragraph()
     _run(p_42_fim2, f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.', color='0F172A', size=10)
 
@@ -1372,21 +1376,22 @@ def generate_nota_tecnica(
         _run(p_54_contexto, 'No âmbito do PFPB, espera-se que as distribuições de medicamentos para a população por parte das farmácias ocorram de forma orgânica, sem saltos repentinos e excessivos que sugiram práticas de faturamento fictício em lote.', color='0F172A', size=10)
 
         p_54_analise = doc.add_paragraph()
-        _run(p_54_analise, f'A Farmácia {razao_social} recebeu recursos provenientes do Ministério da Saúde, referentes ao PFPB, no período de ', color='0F172A', size=10)
+        _run(p_54_analise, f'A Farmácia {razao_social} emitiu notas fiscais de vendas para o Ministério da Saúde, referentes a supostas entregas de medicamentos a usuários do PFPB, num total de ', color='0F172A', size=10)
+        _run(p_54_analise, f'R$ {_format_decimal_pt(evolucao_comp["total"], 2)}', color='334155', size=10, bold=True)
+        _run(p_54_analise, ' no período de ', color='0F172A', size=10)
         _run(p_54_analise, evolucao_comp["periodo_meses"], color='0F172A', size=10)
         _run(p_54_analise, '. ', color='0F172A', size=10)
         crescimento_labels = _format_list_pt([
             (
-                f'{row["semestre_fmt"]} (+R$ {_format_decimal_pt(row["aumento_valor_semestre"], 2)}; +{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
+                f'no {row["semestre_fmt"]} (+R$ {_format_decimal_pt(row["aumento_valor_semestre"], 2)}; +{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
                 if row.get("aumento_valor_semestre") is not None and row.get("taxa_crescimento_pct") is not None
-                else f'{row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
+                else f'no {row["semestre_fmt"]} (+{_format_decimal_pt(row["taxa_crescimento_pct"], 2)}%)'
                 if row.get("taxa_crescimento_pct") is not None
-                else row["semestre_fmt"]
+                else f'no {row["semestre_fmt"]}'
             )
             for row in semestres_atipicos
         ])
-        crescimento_prefixo = 'no ' if len(semestres_atipicos) == 1 else 'nos semestres '
-        _run(p_54_analise, f'Nesse intervalo, chama a atenção o aumento expressivo das transferências {crescimento_prefixo}', color='0F172A', size=10)
+        _run(p_54_analise, 'Nesse intervalo, chama a atenção o aumento expressivo do faturamento ', color='0F172A', size=10)
         _run(p_54_analise, crescimento_labels, color='0F172A', size=10, bold=True)
         _run(p_54_analise, ', sempre em comparação ao semestre imediatamente anterior. ', color='0F172A', size=10)
 
@@ -1434,6 +1439,14 @@ def generate_nota_tecnica(
         tabela_num += 1
     _add_quadro_socios_volume_atipico(doc, socios_volume_atipico, tabela_num)
     _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=2)
+    p_ordens_bancarias_intro = doc.add_paragraph()
+    p_ordens_bancarias_intro.paragraph_format.space_before = Pt(6)
+    _run(p_ordens_bancarias_intro, f'Quanto aos valores efetivamente recebidos pela Farmácia {razao_social} do Ministério da Saúde, referentes ao PFPB, o quadro a seguir consolida o total das ordens bancárias emitidas em seu favor.', color='0F172A', size=10)
+    repasses_ctx = _build_repasses_anuais_context(cnpj, data_inicio, data_fim)
+    tabela_num += 1
+    _add_tabela_repasses_anuais(doc, razao_social, cnpj_fmt, repasses_ctx, tabela_num)
+    p_spacer_repasses = doc.add_paragraph()
+    p_spacer_repasses.paragraph_format.space_before = Pt(12)
     timing.mark("quadros e figura evolucao financeira")
 
     # Seção 7 sem rodapé herdado da seção 6.

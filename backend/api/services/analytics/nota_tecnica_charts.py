@@ -1389,7 +1389,7 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     _format_figure_title(p_title)
     _run(
         p_title,
-        f'Figura {figure_number:02d} - Evolução semestral dos recursos recebidos e das "vendas sem comprovação" da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
+        f'Figura {figure_number:02d} - Evolução semestral do faturamento e das "vendas sem comprovação" da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
         color='334155',
         size=12,
         bold=True,

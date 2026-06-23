@@ -15,6 +15,7 @@ from data_cache import (
     scan_esocial_cnpj_ano,
     scan_esocial_cnpj_trabalhador_ano,
     scan_esocial_cnpj_ultima_movimentacao,
+    scan_pagamentos_consolidados_farmacia_popular,
 )
 from ._cache import _get_cnpj_cache_dir
 from .financeiro import get_evolucao_financeira, get_evolucao_mensal_gtin
@@ -1172,3 +1173,58 @@ def _build_socios_volume_atipico_context(
                 })
 
     return sorted(matches, key=lambda item: (item["entrada"], item["distancia_semestres"], item["nome_socio"]))
+
+
+def _build_repasses_anuais_context(
+    cnpj: str,
+    data_inicio: Optional[date],
+    data_fim: Optional[date],
+) -> dict[str, Any]:
+    """
+    Agrega ordens bancárias do SIAFI por ano para o CNPJ informado.
+
+    Retorna:
+        rows: lista de {ano, valor} ordenada por ano
+        total: soma geral de valor_pago
+        periodo_fmt: string "Ano1 a AnoN" para uso no título da tabela
+    """
+    perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
+    if perfil.is_empty():
+        raise RuntimeError(f"CNPJ {cnpj} não encontrado no perfil para contexto de repasses anuais.")
+
+    id_cnpj = int(perfil.item(0, 0))
+
+    query = (
+        scan_pagamentos_consolidados_farmacia_popular()
+        .filter(pl.col("id_cnpj") == id_cnpj)
+        .with_columns(
+            pl.col("data_pagamento").str.to_date("%Y-%m-%d", strict=True).alias("dt_pagamento"),
+        )
+    )
+    if data_inicio:
+        query = query.filter(pl.col("dt_pagamento") >= pl.lit(data_inicio).cast(pl.Date))
+    if data_fim:
+        query = query.filter(pl.col("dt_pagamento") <= pl.lit(data_fim).cast(pl.Date))
+
+    df = (
+        query
+        .with_columns(pl.col("dt_pagamento").dt.year().alias("ano"))
+        .group_by("ano")
+        .agg(pl.col("valor_pago").sum().alias("valor"))
+        .sort("ano")
+        .collect()
+    )
+
+    if df.is_empty():
+        raise RuntimeError(f"Sem registros de repasses para CNPJ {cnpj} no período informado.")
+
+    rows = [{"ano": int(r["ano"]), "valor": round(float(r["valor"]), 2)} for r in df.to_dicts()]
+    total = round(sum(r["valor"] for r in rows), 2)
+    anos = [r["ano"] for r in rows]
+    periodo_fmt = str(anos[0]) if len(anos) == 1 else f"{anos[0]} a {anos[-1]}"
+
+    return {
+        "rows": rows,
+        "total": total,
+        "periodo_fmt": periodo_fmt,
+    }

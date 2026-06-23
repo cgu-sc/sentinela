@@ -309,7 +309,7 @@ def _add_quadro_evolucao_financeira(
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Tabela {tabela_num} - Evolução semestral dos recursos recebidos do Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
+        f'Tabela {tabela_num} - Evolução semestral do faturamento junto ao Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
         color='334155',
         size=12,
         bold=True,
@@ -779,3 +779,78 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_n
     _format_quadro_footnote(p_foot)
     _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=10)
     _keep_small_table_together(p_title, table, [p_foot])
+
+
+def _add_tabela_repasses_anuais(
+    doc,
+    razao_social: str,
+    cnpj_fmt: str,
+    repasses_ctx: dict[str, Any],
+    tabela_num: int,
+) -> None:
+    """Tabela de ordens bancárias do SIAFI agregadas por ano para o CNPJ."""
+    rows_data = repasses_ctx["rows"]
+    periodo_fmt = repasses_ctx["periodo_fmt"]
+
+    p_title = doc.add_paragraph()
+    _format_quadro_title(p_title)
+    _run(
+        p_title,
+        f'Tabela {tabela_num} – Valores consolidados de ordens bancárias recebidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_fmt}.',
+        color='334155',
+        size=12,
+        bold=True,
+    )
+
+    # cabeçalho + linhas de dados + linha de total
+    table = doc.add_table(rows=len(rows_data) + 2, cols=3)
+    _set_table_fixed_widths(table, [Inches(2.80), Inches(1.10), Inches(2.40)])
+    _set_table_open_borders(table)
+    _repeat_table_header(table.rows[0])
+
+    headers = ['Órgão Repassador do Recurso', 'Ano do Repasse', 'Valor total das Ordens Bancárias recebidas']
+    for idx, header in enumerate(headers):
+        para = table.rows[0].cells[idx].paragraphs[0]
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(para, header, color='0F172A', size=9, bold=True)
+        _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
+
+    for row_idx, item in enumerate(rows_data, start=1):
+        cells = table.rows[row_idx].cells
+        _run(cells[0].paragraphs[0], '36000 - MINISTÉRIO DA SAÚDE', color='0F172A', size=9)
+        cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(cells[1].paragraphs[0], str(item["ano"]), color='0F172A', size=9)
+        cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _run(cells[2].paragraphs[0], f'R$ {_format_decimal_pt(item["valor"], 2)}', color='0F172A', size=9)
+
+    total_cells = table.rows[-1].cells
+    total_cells[0].merge(total_cells[1])
+    total_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _run(total_cells[0].paragraphs[0], 'Total', color='0F172A', size=9, bold=True)
+    total_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    _run(total_cells[2].paragraphs[0], f'R$ {_format_decimal_pt(repasses_ctx["total"], 2)}', color='0F172A', size=9, bold=True)
+    for cell in total_cells:
+        _cell_bg(cell, 'F8FAFC')
+
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(2)
+
+    p_foot = doc.add_paragraph()
+    _format_quadro_footnote(p_foot)
+    _run(p_foot, 'Fonte: Sistema Integrado de Administração Financeira do Governo Federal (SIAFI).', color='64748B', size=10)
+    _keep_small_table_together(p_title, table, [p_foot])
+
+    p_atencao = doc.add_paragraph()
+    p_atencao.paragraph_format.space_before = Pt(8)
+    p_atencao.paragraph_format.space_after = Pt(4)
+    _run(p_atencao, 'ATENÇÃO: ', color='C0392B', size=10, bold=True, italic=True)
+    _run(
+        p_atencao,
+        f'Como o Sistema Sentinela se concentra apenas nos medicamentos previstos no rol do PFPB, o comportamento esperado é de que o valor total identificado pelo Sistema de faturamento da empresa junto ao MS (valor total da segunda coluna da Tabela {tabela_num - 1}) seja inferior ou no máximo igual ao valor total das ordens bancárias recebidas do MS (total do quadro anterior, que inclui pagamentos de medicamentos e também fraldas geriátricas e absorventes higiênicos). Valores totais de ordens bancárias menores do que os faturados indicam a possibilidade de glosa por parte do Ministério da Saúde e, consequentemente, de não efetivação total ou parcial de tentativas de fraude ao Programa. Neste caso, sugere-se alterar o texto padrão da "conclusão e encaminhamento" sugerido no item "8" desta Nota Técnica.',
+        color='C0392B',
+        size=10,
+        italic=True,
+    )

@@ -838,7 +838,7 @@ def generate_nota_tecnica(
         p_aviso_2,
         'A padronização aqui proposta é principalmente de estrutura da NT e de explicação de cada um dos indicadores de criticidade idealizados sobre o Programa, ficando, por óbvio, os auditores livres para estenderem seus exames e apontamentos para o robustecimento de seus achados.',
         color='DC2626',
-        size=8,
+        size=10,
         italic=True,
     )
 

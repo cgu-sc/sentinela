@@ -583,7 +583,7 @@ def _build_hhi_crm_context(
     cnpj: str,
     data_inicio: Optional[date],
     data_fim: Optional[date],
-    total_mov_quadro_02: float,
+    total_mov_quadro_02: float | None,
     crm_data: Any = None,
 ) -> dict[str, Any] | None:
     """Monta o contexto do subitem de concentração atípica de CRM."""

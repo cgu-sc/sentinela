@@ -465,12 +465,13 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         aumento_txt = f'R$ {_format_decimal_pt(item["aumento_valor"], 2)}'
         if item.get("aumento_relativo_pct") is not None:
             aumento_txt += f'\n(+{_format_decimal_pt(item["aumento_relativo_pct"], 1)}%)'
-            _run(
-                cells[5].paragraphs[0],
-                aumento_txt,
-                color='64748B',
-                size=9,
-            )
+        _run(
+            cells[5].paragraphs[0],
+            aumento_txt,
+            color=increase_color,
+            size=9,
+            bold=True,
+        )
 
     for row in table.rows:
         for cell in row.cells:

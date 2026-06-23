@@ -100,7 +100,7 @@ def _add_anexo_crm_evidencias(
     tabela_num: int,
     numero_nota_tecnica: str,
     timing: Any = None,
-    anexo_num: str = 'III',
+    anexo_num: str | None = 'III',
 ):
     """Adiciona o anexo com evidencias complementares de CRM."""
     section = doc.add_section(WD_SECTION.NEW_PAGE)

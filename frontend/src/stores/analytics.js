@@ -44,6 +44,7 @@ export function buildAnalyticsParams(filters = {}) {
     parTeia = null,
     socioBeneficio = null,
     socioEsocial = null,
+    cnaeIncompativel = false,
     volumeAtipicoEnabled = false,
     volumeAtipicoPercentual = null,
     dispersaoUfSemFronteiraEnabled = false,
@@ -70,6 +71,7 @@ export function buildAnalyticsParams(filters = {}) {
   if (parTeia) params.par_teia = parTeia;
   if (socioBeneficio) params.socio_beneficio = socioBeneficio;
   if (socioEsocial) params.socio_esocial = socioEsocial;
+  if (cnaeIncompativel) params.cnae_incompativel = cnaeIncompativel;
   if (volumeAtipicoEnabled) {
     params.volume_atipico = true;
     if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {

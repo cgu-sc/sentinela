@@ -5,6 +5,19 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.1.6] - 2026-06-23
+
+### Adicionado
+- Novo filtro **"Farmácia com CNAE Incompatível"** na sidebar do dashboard para filtrar estabelecimentos com incompatibilidade de CNAE (Classificação Nacional de Atividade Econômica).
+- Checkbox interativo com comportamento idêntico a outros filtros (Grande Rede, PAR, etc.), aplicando filtro em tempo real aos KPIs e tabelas.
+- Filtro integrado em todos os endpoints de analytics: `/resumo`, `/faixas-risco`, `/producao-semestral`, `/indicadores-analise` e `/indicadores-analise/cnpjs`.
+- Suporte completo do filtro em todas as views: Dashboard Nacional, Dashboard Regional, Estabelecimentos e Indicadores.
+- Implementação de cache do filtro em indicadores para otimizar performance.
+
+### Alterado
+- Estilos de checkbox: texto alinhado com cor e peso de fonte dos labels de filtro (`--sidebar-text`, font-weight: 400).
+- Integração do filtro CNAE em `_INDICADOR_SCOPE_FILTER_FIELDS` para recalcular cache automaticamente quando filtro muda.
+
 ## [1.1.5] - 2026-06-23
 
 ### Corrigido

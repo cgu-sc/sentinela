@@ -9,7 +9,7 @@ from data_cache import get_df, get_df_perfil_estabelecimento
 
 from ...schemas.analytics import FatorRiscoBucketSchema, FatorRiscoResponseSchema
 from ...utils.text_search import apply_token_search
-from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
+from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter, apply_cnae_incompativel_filter
 from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
@@ -41,6 +41,7 @@ def get_fator_risco_data(
     par_teia: Optional[str] = None,
     socio_beneficio: Optional[str] = None,
     socio_esocial: Optional[str] = None,
+    cnae_incompativel: bool = False,
     estabelecimento: Optional[str] = None,
 ) -> FatorRiscoResponseSchema:
     """
@@ -89,6 +90,7 @@ def get_fator_risco_data(
         perfil_filtrado = apply_par_teia_filter(perfil_filtrado, par_teia)
         perfil_filtrado = apply_socio_beneficio_filter(perfil_filtrado, socio_beneficio)
         perfil_filtrado = apply_socio_esocial_filter(perfil_filtrado, socio_esocial)
+        perfil_filtrado = apply_cnae_incompativel_filter(perfil_filtrado, cnae_incompativel)
         period_df = (
             df.filter(mov_mask)
             .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")

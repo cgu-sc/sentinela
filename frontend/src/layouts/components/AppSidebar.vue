@@ -405,6 +405,7 @@ const isFilterActive = (field) => {
     selectedParTeia: FILTER_DEFAULTS.PAR_TEIA,
     selectedSocioBeneficio: FILTER_DEFAULTS.SOCIO_BENEFICIO,
     selectedSocioEsocial: FILTER_DEFAULTS.SOCIO_ESOCIAL,
+    selectedCnaeIncompativel: FILTER_DEFAULTS.CNAE_INCOMPATIVEL,
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
@@ -489,6 +490,7 @@ const integrityFilterCount = computed(() =>
     "selectedParTeia",
     "selectedSocioBeneficio",
     "selectedSocioEsocial",
+    "selectedCnaeIncompativel",
     "dispersaoUfSemFronteiraEnabled",
   ]),
 );
@@ -938,6 +940,33 @@ onBeforeUnmount(() => {
           panelClass="sidebar-panel"
           :class="{ 'filter-active': isFilterActive('selectedParTeia') }"
         />
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Farmácia com CNAE Incompatível
+          <button
+            v-if="isFilterActive('selectedCnaeIncompativel')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedCnaeIncompativel = false"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div class="filter-checkbox-wrapper">
+          <label class="checkbox-label">
+            <input
+              v-model="filterStore.selectedCnaeIncompativel"
+              type="checkbox"
+              class="filter-checkbox"
+            />
+            <span>Mostrar apenas farmácias com CNAE incompatível</span>
+          </label>
+        </div>
       </div>
 
       <div
@@ -2382,5 +2411,47 @@ onBeforeUnmount(() => {
   color: var(--primary-color);
   opacity: 0.75;
 }
+
+/* Checkbox Filter Styles */
+.filter-checkbox-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-color);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.checkbox-label span {
+  color: var(--sidebar-text);
+  font-weight: 400;
+}
+
+.checkbox-label:hover {
+  color: var(--primary-color);
+}
+
+.filter-checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+  border-radius: 0.25rem;
+}
+
+.filter-checkbox:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
 
 </style>

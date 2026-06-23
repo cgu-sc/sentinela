@@ -89,6 +89,20 @@ def apply_socio_beneficio_filter(
     return df.filter(filter_expr)
 
 
+def apply_cnae_incompativel_filter(
+    df: pl.DataFrame,
+    cnae_incompativel: bool,
+) -> pl.DataFrame:
+    if not cnae_incompativel:
+        return df
+    if "is_cnae_incompativel_farmaceutico" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="Filtro cnae_incompativel exige coluna is_cnae_incompativel_farmaceutico no perfil do estabelecimento.",
+        )
+    return df.filter(pl.col("is_cnae_incompativel_farmaceutico") != 0)
+
+
 def apply_socio_esocial_filter(
     df: pl.DataFrame,
     socio_esocial: Optional[str],

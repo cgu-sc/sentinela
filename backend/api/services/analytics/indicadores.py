@@ -24,7 +24,7 @@ from .matriz_risco_dinamica import (
     build_dynamic_matriz_risco as _build_dynamic_matriz_risco,
 )
 from .indicator_rules import CLINICA_VALOR_MINIMO_DETALHAMENTO, get_volume_atipico_aumento_minimo
-from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter
+from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter, apply_cnae_incompativel_filter
 from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS
 from .par_teia import apply_par_teia_filter
@@ -248,6 +248,7 @@ _INDICADOR_SCOPE_FILTER_FIELDS = (
     ("par_teia", _normalize_cache_text),
     ("socio_beneficio", _normalize_cache_text),
     ("socio_esocial", _normalize_cache_text),
+    ("cnae_incompativel", _normalize_cache_bool),
     ("dispersao_uf_sem_fronteira", _normalize_cache_bool),
     ("dispersao_uf_sem_fronteira_limite", _normalize_cache_float),
     ("perc_min", _normalize_cache_float),
@@ -584,6 +585,7 @@ def _build_indicador_scope_base(
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
     socio_esocial: str | None = None,
+    cnae_incompativel: bool = False,
     dispersao_uf_sem_fronteira: bool = False,
     dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
@@ -646,6 +648,7 @@ def _build_indicador_scope_base(
     scope_base = apply_par_teia_filter(scope_base, par_teia)
     scope_base = apply_socio_beneficio_filter(scope_base, socio_beneficio)
     scope_base = apply_socio_esocial_filter(scope_base, socio_esocial)
+    scope_base = apply_cnae_incompativel_filter(scope_base, cnae_incompativel)
     if perc_min is not None:
         scope_base = scope_base.filter(pl.col("perc_val_sem_comp") >= perc_min)
     if perc_max is not None:
@@ -794,6 +797,7 @@ def _build_indicador_dataset_cached(
     par_teia: str | None = None,
     socio_beneficio: str | None = None,
     socio_esocial: str | None = None,
+    cnae_incompativel: bool = False,
     dispersao_uf_sem_fronteira: bool = False,
     dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
@@ -1278,6 +1282,7 @@ def get_indicadores_analise(
     dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
+    cnae_incompativel: bool = False,
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
@@ -1335,6 +1340,7 @@ def get_indicadores_analise(
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            cnae_incompativel=cnae_incompativel,
             dispersao_uf_sem_fronteira=dispersao_uf_sem_fronteira,
             dispersao_uf_sem_fronteira_limite=dispersao_uf_sem_fronteira_limite,
             volume_atipico=volume_atipico,
@@ -1474,6 +1480,7 @@ def get_indicadores_analise_cnpjs(
     dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
     volume_atipico_limite: float | None = None,
+    cnae_incompativel: bool = False,
     page: int = 1,
     page_size: int = 20,
     sort_field: str = "val_sem_comp",
@@ -1500,6 +1507,7 @@ def get_indicadores_analise_cnpjs(
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            cnae_incompativel=cnae_incompativel,
             dispersao_uf_sem_fronteira=dispersao_uf_sem_fronteira,
             dispersao_uf_sem_fronteira_limite=dispersao_uf_sem_fronteira_limite,
             volume_atipico=volume_atipico,

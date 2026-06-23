@@ -90,6 +90,7 @@ export const useFilterStore = defineStore('filters', () => {
   const selectedSocioEsocial = ref(
     normalizeSocioEsocialFilter(saved?.selectedSocioEsocial)
   );
+  const selectedCnaeIncompativel = ref(saved?.selectedCnaeIncompativel ?? FILTER_DEFAULTS.CNAE_INCOMPATIVEL);
   const selectedUnidadePf = ref(saved?.selectedUnidadePf ?? FILTER_ALL_VALUE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
   const hoveredMunicipioName = ref(null);
@@ -203,6 +204,7 @@ export const useFilterStore = defineStore('filters', () => {
       parTeia: selectedParTeia.value !== FILTER_ALL_VALUE ? selectedParTeia.value : null,
       socioBeneficio: selectedSocioBeneficio.value !== FILTER_ALL_VALUE ? selectedSocioBeneficio.value : null,
       socioEsocial: selectedSocioEsocial.value !== FILTER_ALL_VALUE ? selectedSocioEsocial.value : null,
+      cnaeIncompativel: selectedCnaeIncompativel.value,
     };
   });
 
@@ -269,6 +271,7 @@ export const useFilterStore = defineStore('filters', () => {
       parTeia,
       socioBeneficio,
       socioEsocial,
+      cnaeIncompativel,
       dispersaoUfSemFronteiraEnabled,
       dispersaoUfSemFronteiraPercentual,
       inicio,
@@ -295,6 +298,7 @@ export const useFilterStore = defineStore('filters', () => {
       par_teia: parTeia,
       socio_beneficio: socioBeneficio,
       socio_esocial: socioEsocial,
+      cnae_incompativel: cnaeIncompativel,
       dispersao_uf_sem_fronteira: dispersaoUfSemFronteiraEnabled,
       dispersao_uf_sem_fronteira_limite: dispersaoUfSemFronteiraPercentual,
       perc_min: percMin,
@@ -350,6 +354,8 @@ export const useFilterStore = defineStore('filters', () => {
     selectedParTeia: selectedParTeia.value,
     selectedSocioBeneficio: selectedSocioBeneficio.value,
     selectedSocioEsocial: selectedSocioEsocial.value,
+    selectedCnaeIncompativel: selectedCnaeIncompativel.value,
+    selectedCnaeIncompativel: selectedCnaeIncompativel.value,
     selectedUnidadePf: selectedUnidadePf.value,
     selectedCnpjRaiz: selectedCnpjRaiz.value,
     percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
@@ -393,6 +399,9 @@ export const useFilterStore = defineStore('filters', () => {
     }
     if ('selectedSocioEsocial' in filters) {
       selectedSocioEsocial.value = normalizeSocioEsocialFilter(filters.selectedSocioEsocial);
+    }
+    if (typeof filters.selectedCnaeIncompativel === 'boolean') {
+      selectedCnaeIncompativel.value = filters.selectedCnaeIncompativel;
     }
     if ('selectedUnidadePf' in filters) selectedUnidadePf.value = filters.selectedUnidadePf;
     if ('selectedCnpjRaiz' in filters) selectedCnpjRaiz.value = filters.selectedCnpjRaiz;
@@ -522,7 +531,7 @@ export const useFilterStore = defineStore('filters', () => {
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedSocioEsocial, selectedCnpjRaiz,
+    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedSocioEsocial, selectedCnaeIncompativel, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, volumeAtipicoEnabled, volumeAtipicoPercentual, volumeAtipicoPercentualFilter, dispersaoUfSemFronteiraEnabled, dispersaoUfSemFronteiraPercentual, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -541,6 +550,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedParTeia.value = FILTER_ALL_VALUE;
     selectedSocioBeneficio.value = FILTER_ALL_VALUE;
     selectedSocioEsocial.value = FILTER_ALL_VALUE;
+    selectedCnaeIncompativel.value = FILTER_DEFAULTS.CNAE_INCOMPATIVEL;
     selectedUnidadePf.value = FILTER_ALL_VALUE;
     selectedCnpjRaiz.value = '';
     percentualNaoComprovacaoRange.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
@@ -625,6 +635,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedParTeia,
     selectedSocioBeneficio,
     selectedSocioEsocial,
+    selectedCnaeIncompativel,
     selectedUnidadePf,
     selectedCnpjRaiz,
     percentualNaoComprovacaoRange,

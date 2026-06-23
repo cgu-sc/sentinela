@@ -51,7 +51,7 @@ export function useFetchAnalytics({ includeFatorRisco = false, includeNationalCo
 
   watch(
     () => filterStore.apiParamsKey,
-    () => {
+    (newKey) => {
       const run = () => {
         const skip = dashboardFirstRun && isFresh();
         if (isPeriodoValido()) {

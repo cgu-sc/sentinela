@@ -963,10 +963,10 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
             if col_idx == 4:
                 _cell_bg(cell, 'FEE2E2')
-                _run(para, value, color='991B1B', size=9, bold=True)
+                _run(para, value, color='991B1B', size=9)
             elif col_idx == 3:
                 _cell_bg(cell, 'FEF2F2')
-                _run(para, value, color='991B1B', size=9, bold=True)
+                _run(para, value, color='991B1B', size=9)
             else:
                 _cell_bg(cell, fill)
                 if col_idx == 0 and row.get("bookmark"):
@@ -976,11 +976,10 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
                         row["bookmark"],
                         color='1D4ED8',
                         size=9,
-                        bold=True,
                         underline=False,
                     )
                 else:
-                    _run(para, value, color='0F172A', size=9, bold=col_idx == 1)
+                    _run(para, value, color='0F172A', size=9)
 
     for row in table.rows:
         for cell in row.cells:

@@ -4,6 +4,42 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
+## [1.1.19] - 2026-06-22
+
+### Alterado
+- Remoção do contador regressivo e botão de cancelar no diálogo de atualização — atualização é aplicada automaticamente ao término do download.
+
+## [1.1.18] - 2026-06-22
+
+### Adicionado
+- Novo atualizador gráfico (SentinelaUpdater.exe) com interface PyWebView mostrando progresso das etapas de instalação.
+
+## [1.1.17] - 2026-06-22
+
+### Corrigido
+- Ajuste fino adicional na rotina de verificação e download do novo executável.
+
+## [1.1.16] - 2026-06-22
+
+### Corrigido
+- Ajustes finos adicionais na liberação de processos no auto-update.
+
+## [1.1.15] - 2026-06-22
+
+### Corrigido
+- Uso do ProcessStartInfo do .NET no PowerShell para remoção forçada e explícita do _MEIPASS do bloco de ambiente no reinício do executável.
+
+## [1.1.14] - 2026-06-22
+
+### Corrigido
+- Implementação de inicialização desvinculada (ShellExecute/explorer.exe) no PowerShell para prevenir herança indesejada de processos e ambientes no reinício automático do aplicativo.
+- Otimização do rótulo do botão de cancelamento para "Cancelar".
+
+## [1.1.13] - 2026-06-22
+
+### Corrigido
+- Implementação de inicialização desvinculada (ShellExecute/explorer.exe) no PowerShell para prevenir herança indesejada de processos e ambientes no reinício automático do aplicativo.
+
 ## [1.1.12] - 2026-06-22
 
 ### Corrigido

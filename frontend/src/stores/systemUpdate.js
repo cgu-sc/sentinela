@@ -21,9 +21,7 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
   const downloadProgress = ref(0);      // 0–100 (percentual inteiro para a barra)
   const downloadError = ref(null);
   const downloadDialogVisible = ref(false);
-  const countdown = ref(0);
   let _progressInterval = null;
-  let _countdownInterval = null;
 
   // ─── Computed de verificação ─────────────────────────────────────────────────
   const isBlocked = computed(() => status.value === 'update_required');
@@ -78,7 +76,7 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
       case 'idle':        return 'Aguardando';
       case 'downloading': return `Baixando... ${downloadProgress.value}%`;
       case 'applying':    return 'Preparando arquivos...';
-      case 'done':        return `Aplicativo fechará em ${countdown.value}s...`;
+      case 'done':        return 'Aguarde, iniciando a atualização...';
       case 'error':       return 'Falha no download';
       default:            return '';
     }
@@ -125,24 +123,6 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
 
   // ─── Ações de download automático ────────────────────────────────────────────
 
-  function _startCountdown() {
-    countdown.value = 10;
-    _countdownInterval = setInterval(() => {
-      countdown.value -= 1;
-      if (countdown.value <= 0) {
-        _stopCountdown();
-        applyUpdate();
-      }
-    }, 1000);
-  }
-
-  function _stopCountdown() {
-    if (_countdownInterval) {
-      clearInterval(_countdownInterval);
-      _countdownInterval = null;
-    }
-  }
-
   function _startProgressPolling() {
     if (_progressInterval) return;
     _progressInterval = setInterval(async () => {
@@ -154,7 +134,7 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
 
         if (data.status === 'done') {
           _stopProgressPolling();
-          _startCountdown();
+          applyUpdate();
         } else if (data.status === 'error') {
           _stopProgressPolling();
         }
@@ -177,20 +157,6 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
     } catch (err) {
       console.warn('[systemUpdate] Erro ao aplicar atualização:', err);
     }
-  }
-
-  async function cancelUpdate() {
-    _stopCountdown();
-    try {
-      await axios.post(API_ENDPOINTS.systemCancelUpdate);
-    } catch (err) {
-      console.warn('[systemUpdate] Erro ao cancelar atualização:', err);
-    }
-    downloadDialogVisible.value = false;
-    downloadStatus.value   = 'idle';
-    downloadProgress.value = 0;
-    downloadError.value    = null;
-    countdown.value        = 0;
   }
 
   async function startDownload(overrideUrl = null) {
@@ -234,8 +200,7 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
     // download automático
     downloadStatus, downloadProgress, downloadError, downloadDialogVisible,
     isDownloading, downloadDone, downloadFailed, downloadStatusLabel,
-    countdown,
     startDownload, openDownloadDialog, closeDownloadDialog,
-    applyUpdate, cancelUpdate,
+    applyUpdate,
   };
 });

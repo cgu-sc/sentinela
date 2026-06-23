@@ -73,49 +73,38 @@ const headerIconClass = computed(() => {
         <span class="update-progress-bar__pct">{{ updateStore.downloadProgress }}%</span>
       </div>
 
-      <!-- Status / countdown / erro numa única linha de status -->
+      <!-- Status / erro numa única linha -->
       <div class="update-dialog__status-row">
         <template v-if="updateStore.downloadFailed">
           <i class="pi pi-exclamation-triangle update-dialog__status-icon update-dialog__status-icon--error" />
           <span class="update-dialog__status-text update-dialog__status-text--error">{{ updateStore.downloadError }}</span>
         </template>
-        <template v-else-if="updateStore.downloadDone">
-          <span class="update-dialog__countdown-badge">{{ updateStore.countdown }}s</span>
-          <span class="update-dialog__status-text">O aplicativo fechará e reabrirá automaticamente.</span>
-        </template>
         <template v-else>
-          <i v-if="updateStore.isDownloading" class="pi pi-spin pi-spinner update-dialog__status-icon" />
+          <i class="pi pi-spin pi-spinner update-dialog__status-icon" />
           <span class="update-dialog__status-text">{{ updateStore.downloadStatusLabel }}</span>
         </template>
       </div>
-    </div>
 
-    <template #footer>
-      <div class="update-dialog__footer">
+      <!-- Área de ações: apenas para estado de erro -->
+      <div class="update-dialog__actions">
         <Button
-          v-if="updateStore.downloadDone"
-          label="Cancelar"
-          icon="pi pi-times"
-          severity="secondary"
-          class="p-button-sm"
-          @click="updateStore.cancelUpdate"
-        />
-        <Button
-          v-if="updateStore.downloadFailed"
+          v-show="updateStore.downloadFailed"
           label="Fechar"
           icon="pi pi-times"
           severity="secondary"
+          class="p-button-sm"
           @click="updateStore.closeDownloadDialog"
         />
         <Button
-          v-if="updateStore.downloadFailed"
+          v-show="updateStore.downloadFailed"
           label="Tentar novamente"
           icon="pi pi-refresh"
           severity="warning"
+          class="p-button-sm"
           @click="updateStore.startDownload"
         />
       </div>
-    </template>
+    </div>
   </Dialog>
 </template>
 
@@ -142,9 +131,7 @@ const headerIconClass = computed(() => {
 }
 
 :deep(.p-dialog.update-dialog .p-dialog-footer) {
-  background: transparent;
-  padding: 0 1.5rem 1.5rem;
-  border-top: none;
+  display: none;
 }
 
 /* ─── Header ───────────────────────────────────────────────────────────────── */
@@ -280,26 +267,14 @@ const headerIconClass = computed(() => {
   color: #fc8181;
 }
 
-.update-dialog__countdown-badge {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #48bb78;
-  background: rgba(72, 187, 120, 0.12);
-  border: 1px solid rgba(72, 187, 120, 0.3);
-  border-radius: 6px;
-  padding: 0.1rem 0.45rem;
-  flex-shrink: 0;
-  min-width: 2.4rem;
-  text-align: center;
-}
 
-/* ─── Footer ───────────────────────────────────────────────────────────────── */
-.update-dialog__footer {
+/* ─── Actions (dentro do body, altura fixa para não causar reflow) ─────────── */
+.update-dialog__actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
-  min-height: 2.5rem;
+  height: 2.5rem;
 }
 
 :deep(.p-dialog.update-dialog .p-button-sm) {

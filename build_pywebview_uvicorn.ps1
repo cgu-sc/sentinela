@@ -13,7 +13,7 @@ if (!(Test-Path $PY)) {
 }
 
 # 1. INSTALAR DEPENDENCIAS DESKTOP
-Write-Host "`n[1/3] Instalando dependencias desktop..." -ForegroundColor Yellow
+Write-Host "`n[1/4] Instalando dependencias desktop..." -ForegroundColor Yellow
 & $PY -m pip install uvicorn pywebview pyinstaller --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Erro ao instalar dependencias desktop." -ForegroundColor Red
@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 2. BUILD DO FRONTEND
-Write-Host "`n[2/3] Construindo o Frontend Vue..." -ForegroundColor Yellow
+Write-Host "`n[2/4] Construindo o Frontend Vue..." -ForegroundColor Yellow
 Set-Location "$ROOT/frontend"
 npm install --silent
 if ($LASTEXITCODE -ne 0) {
@@ -35,34 +35,25 @@ if ($LASTEXITCODE -ne 0) {
 }
 Set-Location $ROOT
 
-# 3. BUILD DO EXECUTAVEL
-Write-Host "`n[3/3] Gerando executavel..." -ForegroundColor Yellow
-
-& $PY -m PyInstaller --noconfirm --onefile --console `
-    --name "Sentinela" `
-    --icon "frontend/public/img/icon.ico" `
-    --paths "backend" `
-    --add-data "frontend/dist;frontend/dist" `
-    --add-data "backend;backend" `
-    --add-data "version.json;." `
-    --add-data "backend/data/update_manifest_public_key.pem;backend/data" `
-    --hidden-import "pyodbc" `
-    --hidden-import "uvicorn" `
-    --hidden-import "uvicorn.logging" `
-    --hidden-import "uvicorn.loops" `
-    --hidden-import "uvicorn.loops.auto" `
-    --hidden-import "uvicorn.protocols" `
-    --hidden-import "uvicorn.protocols.http" `
-    --hidden-import "uvicorn.protocols.http.auto" `
-    --hidden-import "webview" `
-    --hidden-import "clr" `
-    --hidden-import "cryptography" `
-    --hidden-import "httpx" `
-    --hidden-import "packaging" `
-    desktop_uvicorn.py
-
+# 3. BUILD DO SENTINELA UPDATER (deve preceder o Sentinela.exe, que o embute)
+Write-Host "`n[3/4] Gerando SentinelaUpdater.exe..." -ForegroundColor Yellow
+& $PY -m PyInstaller --noconfirm SentinelaUpdater.spec
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Erro ao gerar executavel." -ForegroundColor Red
+    Write-Host "Erro ao gerar SentinelaUpdater.exe." -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+if (!(Test-Path "dist/SentinelaUpdater.exe")) {
+    Write-Host "Erro: dist/SentinelaUpdater.exe nao foi gerado." -ForegroundColor Red
+    exit 1
+}
+$sizeU = [math]::Round((Get-Item "dist/SentinelaUpdater.exe").Length / 1MB, 1)
+Write-Host "SentinelaUpdater.exe gerado: $sizeU MB" -ForegroundColor Gray
+
+# 4. BUILD DO EXECUTAVEL PRINCIPAL (embute SentinelaUpdater.exe via Sentinela.spec)
+Write-Host "`n[4/4] Gerando Sentinela.exe..." -ForegroundColor Yellow
+& $PY -m PyInstaller --noconfirm Sentinela.spec
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Erro ao gerar Sentinela.exe." -ForegroundColor Red
     exit $LASTEXITCODE
 }
 
@@ -72,8 +63,8 @@ if (!(Test-Path "dist/Sentinela.exe")) {
 }
 
 Write-Host "`nBUILD CONCLUIDO!" -ForegroundColor Green
-Write-Host "Executavel em: dist/Sentinela.exe" -ForegroundColor Yellow
+Write-Host "Executaveis em: dist/" -ForegroundColor Yellow
 
-# Mostrar tamanho
 $size = [math]::Round((Get-Item "dist/Sentinela.exe").Length / 1MB, 1)
-Write-Host "Tamanho: $size MB" -ForegroundColor Gray
+Write-Host "  Sentinela.exe      : $size MB" -ForegroundColor Gray
+Write-Host "  SentinelaUpdater.exe: $sizeU MB" -ForegroundColor Gray

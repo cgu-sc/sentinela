@@ -23,6 +23,7 @@ import base64
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -550,22 +551,41 @@ def _write_update_ps1(exe_path: Path, tmp_path: Path) -> Path:
 
     proc_name = exe_name.replace(".exe", "")
     script = f"""
-Write-Host "=== Iniciando atualização do Sentinela ==="
+# Set console title
+$host.UI.RawUI.WindowTitle = "Sentinela - Atualizador de Sistema"
 
-# 1. Encerra todos os processos Sentinela
-Write-Host "Encerrando processos '{proc_name}'..."
-Get-Process -Name '{proc_name}' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Clear screen
+Clear-Host
 
-# 2. Aguarda processos encerrarem (max 15s)
-Write-Host "Aguardando processos finalizarem..."
-$deadline = (Get-Date).AddSeconds(15)
-while ((Get-Process -Name '{proc_name}' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{
-    Start-Sleep -Milliseconds 300
-}}
-Write-Host "Processos encerrados."
+# Define colors
+$cyan = "Cyan"
+$green = "Green"
+$yellow = "Yellow"
+$white = "White"
+$red = "Red"
 
-# 3. Aguarda portas 8002-8010 liberarem (max 15s)
-Write-Host "Aguardando portas liberarem..."
+# Print Banner
+Write-Host ""
+Write-Host "  ____             _   _             _       " -ForegroundColor $cyan
+Write-Host " / ___|  ___ _ __ | |_(_)_ __   ___| | __ _ " -ForegroundColor $cyan
+Write-Host " \\___ \\ / _ \\ '_ \\| __| | '_ \\ / _ \\ |/ _\` |" -ForegroundColor $cyan
+Write-Host "  ___) |  __/ | | | |_| | | | |  __/ | (_| |" -ForegroundColor $cyan
+Write-Host " |____/ \\___|_| |_|\\__|_|_| |_|\\___|_|\\__,_|" -ForegroundColor $cyan
+Write-Host ""
+Write-Host " =====================================================" -ForegroundColor $cyan
+Write-Host "          ATUALIZACAO DO SISTEMA SENTINELA            " -ForegroundColor $white -BackgroundColor "DarkCyan"
+Write-Host " =====================================================" -ForegroundColor $cyan
+Write-Host ""
+
+# Step 1: Encerrando processos
+Write-Host "[1/5] Encerrando processos do Sentinela..." -ForegroundColor $white
+$proc_name = '{proc_name}'
+Get-Process -Name $proc_name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+Write-Host "   [OK] Processos finalizados." -ForegroundColor $green
+
+# Step 2: Aguardando portas
+Write-Host "[2/5] Aguardando liberacao de conexoes..." -ForegroundColor $white
 $deadline = (Get-Date).AddSeconds(15)
 while ((Get-Date) -lt $deadline) {{
     $ocupadas = 8002..8010 | Where-Object {{
@@ -574,45 +594,63 @@ while ((Get-Date) -lt $deadline) {{
     if ($ocupadas.Count -eq 0) {{ break }}
     Start-Sleep -Milliseconds 300
 }}
-Write-Host "Portas liberadas."
+Write-Host "   [OK] Conexoes de rede liberadas." -ForegroundColor $green
 
-# 4. Substitui o exe (max 10s)
-Write-Host "Substituindo executável..."
-$deadline = (Get-Date).AddSeconds(10)
-$replaced = $false
-while ((Get-Date) -lt $deadline) {{
-    try {{
-        if (Test-Path '{exe_path}') {{
-            Remove-Item '{exe_path}' -Force -ErrorAction Stop
+# Step 3: Substituicao do executavel
+Write-Host "[3/5] Substituindo o executavel do Sentinela..." -ForegroundColor $white
+if (-not (Test-Path '{tmp_path}')) {{
+    Write-Host "   [X] Erro: Arquivo de atualizacao nao encontrado ('{tmp_path}')." -ForegroundColor $red
+    $replaced = $false
+}} else {{
+    $deadline = (Get-Date).AddSeconds(10)
+    $replaced = $false
+    while ((Get-Date) -lt $deadline) {{
+        try {{
+            if (Test-Path '{exe_path}') {{
+                Remove-Item '{exe_path}' -Force -ErrorAction Stop
+            }}
+            Copy-Item '{tmp_path}' '{exe_path}' -Force -ErrorAction Stop
+            $replaced = $true
+            break
+        }} catch {{
+            Write-Host "   [i] Arquivo ocupado ou bloqueado. Tentando novamente..." -ForegroundColor $yellow
+            Start-Sleep -Milliseconds 500
         }}
-        Copy-Item '{tmp_path}' '{exe_path}' -Force -ErrorAction Stop
-        $replaced = $true
-        break
-    }} catch {{
-        Write-Host "Aguardando liberação do arquivo..."
-        Start-Sleep -Milliseconds 500
     }}
 }}
 
 if (-not $replaced) {{
-    Write-Error "Falha crítica: Não foi possível substituir o executável."
-    Start-Sleep -Seconds 5
+    Write-Host ""
+    Write-Host " [X] ERRO CRITICO: Nao foi possivel substituir o executavel." -ForegroundColor $red
+    Write-Host " Pressione qualquer tecla para sair..." -ForegroundColor $white
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }}
-Write-Host "Executável substituído com sucesso."
+Write-Host "   [OK] Executavel atualizado com sucesso." -ForegroundColor $green
 
-# 5. Abre o novo exe
-Write-Host "Iniciando novo Sentinela..."
-[System.Environment]::SetEnvironmentVariable('_MEIPASS', $null, 'Process')
-[System.Environment]::SetEnvironmentVariable('MEIPASS', $null, 'Process')
-Start-Process '{exe_path}'
-
-# 6. Limpeza
-Write-Host "Limpando arquivos temporários..."
-Start-Sleep -Seconds 2
+# Step 4: Limpeza
+Write-Host "[4/5] Limpando arquivos temporarios..." -ForegroundColor $white
 Remove-Item '{tmp_path}' -Force -ErrorAction SilentlyContinue
+Write-Host "   [OK] Arquivos temporarios removidos." -ForegroundColor $green
+
+# Step 5: Conclusao
+Write-Host "[5/5] Concluindo instalacao..." -ForegroundColor $white
+Start-Sleep -Seconds 1
+Write-Host ""
+Write-Host " =====================================================" -ForegroundColor $green
+Write-Host "       ATUALIZACAO CONCLUIDA COM SUCESSO!            " -ForegroundColor $white -BackgroundColor "DarkGreen"
+Write-Host " =====================================================" -ForegroundColor $green
+Write-Host ""
+Write-Host " O Sentinela foi atualizado para a nova versao." -ForegroundColor $white
+Write-Host " Voce ja pode abrir o aplicativo novamente." -ForegroundColor $white
+Write-Host ""
+Write-Host " >>> Pressione qualquer tecla para fechar esta janela..." -ForegroundColor $yellow
+
+# Aguarda pressionar tecla antes de apagar o script e sair
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+# Remove o próprio script ao sair
 Remove-Item $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
-Write-Host "Atualização concluída."
 """
     ps1_path.write_text(script, encoding="utf-8-sig")
     return ps1_path
@@ -687,10 +725,34 @@ def download_and_apply_update(download_url: str) -> None:
     t.start()
 
 
+def _find_updater_exe(exe_path: Path) -> Path | None:
+    """
+    Localiza SentinelaUpdater.exe na ordem de preferência:
+    1. _MEIPASS (quando rodando como bundle PyInstaller).
+    2. Mesmo diretório do exe principal (cópia persistida de execuções anteriores).
+    3. dist/ (modo desenvolvimento).
+    Retorna None se não encontrado — apply_update() fará fallback para PS1.
+    """
+    candidates: list[Path] = []
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass) / "SentinelaUpdater.exe")
+
+    candidates.append(exe_path.parent / "SentinelaUpdater.exe")
+    candidates.append(Path("dist/SentinelaUpdater.exe"))
+
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
 def apply_update() -> None:
     """
     Chamado pelo frontend após contagem regressiva.
-    Gera o bat, lança-o e encerra o servidor.
+    Lança SentinelaUpdater.exe (app gráfico PyWebView) para realizar a troca
+    do executável. Faz fallback para PS1 se o updater não for encontrado.
     """
     exe_path = _current_exe_path()
     tmp_path = exe_path.parent / "sentinela_update.exe.tmp"
@@ -698,14 +760,30 @@ def apply_update() -> None:
     if not tmp_path.exists():
         raise RuntimeError("Arquivo de atualização não encontrado. Faça o download novamente.")
 
-    ps1_path = _write_update_ps1(exe_path, tmp_path)
-    logger.info("[auto-update] Aplicando atualização. ps1: %s", ps1_path)
+    updater_src = _find_updater_exe(exe_path)
 
-    subprocess.Popen(
-        ["powershell.exe", "-WindowStyle", "Normal", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
-        creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
-        close_fds=True,
-    )
+    if updater_src:
+        # Copia para junto do exe principal: o _MEIPASS é apagado ao sair,
+        # mas a cópia em exe_path.parent persiste para o updater concluir.
+        updater_dest = exe_path.parent / "SentinelaUpdater.exe"
+        if updater_src != updater_dest:
+            shutil.copy2(str(updater_src), str(updater_dest))
+
+        logger.info("[auto-update] Lançando SentinelaUpdater: %s", updater_dest)
+        subprocess.Popen(
+            [str(updater_dest), "--exe", str(exe_path), "--tmp", str(tmp_path)],
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+    else:
+        # Fallback: PS1 em modo texto (dev sem bundle ou updater ausente)
+        ps1_path = _write_update_ps1(exe_path, tmp_path)
+        logger.warning("[auto-update] SentinelaUpdater.exe não encontrado — usando PS1 fallback: %s", ps1_path)
+        subprocess.Popen(
+            ["powershell.exe", "-WindowStyle", "Normal", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
+            creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
 
     time.sleep(0.5)
     sys.exit(0)

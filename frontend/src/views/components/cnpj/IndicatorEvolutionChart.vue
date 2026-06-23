@@ -21,8 +21,6 @@ use([
   LineChart,
   GridComponent,
   LegendComponent,
-  MarkAreaComponent,
-  MarkLineComponent,
   TooltipComponent,
 ]);
 
@@ -119,24 +117,6 @@ const markArea = computed(() => {
   };
 });
 
-const unusedMarkLine = computed(() => {
-  if (!selectedSingleYear.value) return undefined;
-  return {
-    silent: true,
-    symbol: 'none',
-    lineStyle: {
-      color: palette.value.mark,
-      width: 1.5,
-      type: 'dashed',
-    },
-    label: {
-      formatter: 'Período',
-      color: palette.value.mark,
-      fontSize: 11,
-    },
-    data: [{ xAxis: selectedSingleYear.value }],
-  };
-});
 
 function buildLine(name, key, color, width, extra = {}) {
   const { lineStyle, itemStyle, ...rest } = extra;

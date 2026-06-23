@@ -816,7 +816,7 @@ def generate_nota_tecnica(
     p_aviso_titulo = doc.add_paragraph()
     p_aviso_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_aviso_titulo.paragraph_format.space_after = Pt(4)
-    _run(p_aviso_titulo, 'ATENÇÃO !', color='DC2626', size=10, bold=True)
+    _run(p_aviso_titulo, 'ATENÇÃO!', color='DC2626', size=10, bold=True)
 
     p_aviso_1 = doc.add_paragraph()
     p_aviso_1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -826,7 +826,7 @@ def generate_nota_tecnica(
         p_aviso_1,
         'A presente Nota Técnica tem como objetivo padronizar a abordagem, nos trabalhos realizados pela DIOPE e NAEs, dos achados extraídos do Sistema Sentinela sobre possíveis irregularidades praticadas por estabelecimentos farmacêuticos no âmbito do Programa Farmácia Popular do Brasil.',
         color='DC2626',
-        size=8,
+        size=10,
         italic=True,
     )
 

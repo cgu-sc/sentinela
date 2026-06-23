@@ -1741,10 +1741,17 @@ def generate_nota_tecnica(
     p_atencao_conclusao = doc.add_paragraph()
     _run(
         p_atencao_conclusao,
-        'ATENÇÃO: Caso sejam identificadas criticidades em relação ao estabelecimento (sócio laranja, endereço inexistente, alteração de endereço para outro município, sócio com vínculo empregatício, etc.), trazer os achados de forma resumida para a conclusão.',
+        'ATENÇÃO: ',
         color='DC2626',
         size=10,
         bold=True,
+        italic=True,
+    )
+    _run(
+        p_atencao_conclusao,
+        'Caso sejam identificadas criticidades em relação ao estabelecimento (sócio laranja, endereço inexistente, alteração de endereço para outro município, sócio com vínculo empregatício, etc.), trazer os achados de forma resumida para a conclusão.',
+        color='DC2626',
+        size=10,
         italic=True,
     )
 

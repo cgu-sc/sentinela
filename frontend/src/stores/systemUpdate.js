@@ -22,6 +22,8 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
   const downloadError = ref(null);
   const downloadDialogVisible = ref(false);
   let _progressInterval = null;
+  let _pollingInterval = null;
+  const POLLING_INTERVAL_MS = 15 * 60 * 1000; // 15 minutos
 
   // ─── Computed de verificação ─────────────────────────────────────────────────
   const isBlocked = computed(() => status.value === 'update_required');
@@ -106,7 +108,21 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
         message.value = 'Não foi possível verificar atualizações.';
         source.value = 'none';
       }
+    } finally {
+      _startPolling();
     }
+  }
+
+  function _startPolling() {
+    if (_pollingInterval) return;
+    _pollingInterval = setInterval(async () => {
+      try {
+        const { data } = await axios.post(API_ENDPOINTS.systemCheckUpdate);
+        _applyResponse(data);
+      } catch {
+        // falha silenciosa — não altera o status atual
+      }
+    }, POLLING_INTERVAL_MS);
   }
 
   async function forceCheckUpdate() {

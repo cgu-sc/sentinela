@@ -45,11 +45,8 @@ if (-not ($changelogContent.Contains($expectedHeader))) {
 }
 Write-Host "CHANGELOG.md contem a versao v$version"
 
-# Check git tag
-$tagExists = git tag -l "v$version" 2>$null
-
 $releaseTitle = "Sentinela v$version"
-$exePath = "dist/Sentinela.exe"
+$exePath      = "dist/Sentinela.exe"
 
 # Step 1: Build frontend
 Write-Host "[1/5] Building frontend (npm run build)..."
@@ -97,15 +94,14 @@ Write-Host "EXE gerado com sucesso: $exePath"
 
 # Step 5: Create Release on GitHub
 Write-Host "[5/5] Creating release on GitHub (v$version)..."
-if ($tagExists) {
-    Write-Host "Removendo tag local e remota anterior..."
-    $oldEAP = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    git tag -d "v$version" 2>$null
-    git push --delete origin "v$version" 2>$null
-    gh release delete "v$version" --yes --cleanup-tag 2>$null
-    $ErrorActionPreference = $oldEAP
-}
+
+# Limpa tag local, tag remota e release existentes — sem falhar se nao existirem
+$oldEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+git tag -d "v$version" 2>$null
+git push --delete origin "v$version" 2>$null
+gh release delete "v$version" --yes --cleanup-tag 2>$null
+$ErrorActionPreference = $oldEAP
 
 # Extrai apenas a seção da versão atual do CHANGELOG
 $changelogLines = Get-Content $changelogFile

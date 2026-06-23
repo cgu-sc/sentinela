@@ -205,7 +205,7 @@ function formatMesRange(mesInicio, mesFim) {
   return mi === mf ? mi : `${mi} – ${mf}`;
 }
 
-const isMonthlyChartExpanded = ref(false);
+
 
 // Todos os meses de todos os semestres (exibição global no card permanente)
 const todosMeses = computed(() => {
@@ -287,29 +287,9 @@ function abrirInfratores(mes) {
   insightSidebarVisible.value = true;
 }
 
-// Ao clicar em uma barra do gráfico mensal, seleciona o semestre e abre o detalhamento.
-function getPeriodoFromMensalChartClick(params) {
-  if (params?.name) return params.name;
-  if (params?.dataIndex == null) return null;
-  return todosMeses.value[params.dataIndex]?.mes ?? null;
-}
-
-function onMensalChartClick(params) {
-  const mesStr = getPeriodoFromMensalChartClick(params);
+function onZrMensalClick() {
+  const mesStr = hoveredMesKey.value;
   if (!mesStr) return;
-  const semestres = cachedEvolucaoData.value?.semestres ?? [];
-  const sem = semestres.find(s => mesPertenceAoSemestre(mesStr, s.semestre));
-  if (sem) selectedSemestreKey.value = sem.semestre;
-}
-
-function onRepassesMensalChartClick(params) {
-  if (!params) return;
-  const idx = params.dataIndex;
-  if (idx == null) return;
-  const meses = repassesMensalComSemestre.value;
-  const item = meses[idx];
-  if (!item) return;
-  const mesStr = item.mes;
   const semestres = cachedEvolucaoData.value?.semestres ?? [];
   const sem = semestres.find(s => mesPertenceAoSemestre(mesStr, s.semestre));
   if (sem) selectedSemestreKey.value = sem.semestre;
@@ -329,6 +309,7 @@ function onAxisPointerUpdate(event) {
 function onChartMouseOut() {
   hoveredSemestreKey.value = null;
 }
+
 
 function onMensalAxisPointerUpdate(event) {
   if (event.axesInfo && event.axesInfo[0]) {
@@ -421,13 +402,29 @@ const chartOption = computed(() => {
   const semestresAtipicos = semestres.filter(s => s.volume_atipico && s.taxa_crescimento_pct != null);
   const regular   = semestres.map(s => ({
     value: s.regular,
-    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 },
-    emphasis: { itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 } },
+    itemStyle: {
+      opacity: hoveredSemestreKey.value
+        ? (s.semestre === hoveredSemestreKey.value ? 1 : 0.35)
+        : (isMesSelecionado(s.semestre) ? 1 : 0.35),
+    },
+    emphasis: {
+      itemStyle: {
+        opacity: isMesSelecionado(s.semestre) ? 1 : 0.35,
+      },
+    },
   }));
   const irregular = semestres.map(s => ({
     value: s.irregular,
-    itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 },
-    emphasis: { itemStyle: { opacity: isMesSelecionado(s.semestre) ? 1 : 0.35 } },
+    itemStyle: {
+      opacity: hoveredSemestreKey.value
+        ? (s.semestre === hoveredSemestreKey.value ? 1 : 0.35)
+        : (isMesSelecionado(s.semestre) ? 1 : 0.35),
+    },
+    emphasis: {
+      itemStyle: {
+        opacity: isMesSelecionado(s.semestre) ? 1 : 0.35,
+      },
+    },
   }));
 
   return {
@@ -1226,13 +1223,7 @@ const exportMensalCard = () => {
               <i class="pi pi-star-fill" />
               {{ formatSemestreLabel(selectedSemestreKey) }}
             </span>
-            <Button 
-              v-if="cachedEvolucaoData"
-              icon="pi pi-external-link" 
-              label="AMPLIAR" 
-              class="p-button-outlined p-button-xs btn-zoom"
-              @click="isMonthlyChartExpanded = true" 
-            />
+
             <Button
               icon="pi pi-camera"
               label="Exportar Imagem"
@@ -1253,7 +1244,7 @@ const exportMensalCard = () => {
                 :update-options="{ notMerge: false, lazyUpdate: true }"
                 autoresize
                 class="evolucao-chart"
-                @click="onMensalChartClick"
+                @zr:click="onZrMensalClick"
                 @updateAxisPointer="onMensalAxisPointerUpdate"
               />
             </div>
@@ -1273,7 +1264,7 @@ const exportMensalCard = () => {
                 :update-options="{ notMerge: false, lazyUpdate: true }"
                 autoresize
                 class="evolucao-chart"
-                @click="onRepassesMensalChartClick"
+                @zr:click="onZrMensalClick"
                 @updateAxisPointer="onRepassesMensalAxisPointerUpdate"
               />
             </div>
@@ -1304,10 +1295,10 @@ const exportMensalCard = () => {
             <ColumnGroup type="footer">
               <Row>
                 <Column footer="Totais" :colspan="1" footer-style="font-weight:700;" />
-                <Column :footer="formatCurrencyFull(unifiedTotals.total)" footer-style="font-weight:700;" />
                 <Column :footer="formatCurrencyFull(unifiedTotals.regular)" footer-style="font-weight:700;" />
                 <Column :footer="formatCurrencyFull(unifiedTotals.irregular)" footer-class="col-irregular" footer-style="font-weight:700;" />
                 <Column footer="" />
+                <Column :footer="formatCurrencyFull(unifiedTotals.total)" footer-style="font-weight:700;" />
                 <Column :footer="formatCurrencyFull(unifiedTotals.total_repassado)" footer-style="font-weight:700;" />
                 <Column footer="" :colspan="2" />
               </Row>
@@ -1317,15 +1308,12 @@ const exportMensalCard = () => {
                 <span style="font-weight: 600;">{{ formatMonth(m.mes) }}</span>
               </template>
             </Column>
-            <Column field="total" header="Total Movimentado" style="width: 13%">
-              <template #body="{ data: m }">{{ formatCurrencyFull(m.total) }}</template>
-            </Column>
-            <Column field="regular" header="Total Regular" style="width: 13%">
+            <Column field="regular" header="Vendas Regulares" style="width: 13%">
               <template #body="{ data: m }">
                 {{ formatCurrencyFull(m.total - m.irregular) }}
               </template>
             </Column>
-            <Column field="irregular" header="Sem Comprovação" style="width: 13%">
+            <Column field="irregular" header="Vendas Sem Comprovação" style="width: 13%">
               <template #body="{ data: m }">
                 <span class="col-irregular">{{ formatCurrencyFull(m.irregular) }}</span>
               </template>
@@ -1354,12 +1342,21 @@ const exportMensalCard = () => {
                 </div>
               </template>
             </Column>
-            <Column field="total_repassado" header="Total Repassado" style="width: 13%">
+            <Column field="total" header="Valor Total Vendas" style="width: 13%">
+              <template #body="{ data: m }">{{ formatCurrencyFull(m.total) }}</template>
+            </Column>
+            <Column field="total_repassado" style="width: 13%">
+              <template #header>
+                <div style="display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; width: 100%;">
+                  <span>Valor Total OBs</span>
+                  <i class="pi pi-info-circle" v-tooltip.top="'Valor acumulado de ordens bancárias recebidas do Tesouro Nacional no período.'" style="font-size: 0.75rem; cursor: help; opacity: 0.7;" />
+                </div>
+              </template>
               <template #body="{ data: m }">
                 {{ formatCurrencyFull(m.total_repassado) }}
               </template>
             </Column>
-            <Column field="pagamentos" header="Detalhamento dos Repasses" style="width: 28%"
+            <Column field="pagamentos" header="Detalhamento das Ordens Bancárias" style="width: 28%"
               :header-style="'text-align: left;'"
               :pt="{ headerCell: { style: 'text-align: left;' }, headerContent: { style: 'justify-content: flex-start;' } }"
             >
@@ -1397,35 +1394,7 @@ const exportMensalCard = () => {
         </div>
       </Transition>
 
-      <!-- Modal de Zoom do Histórico Mensal -->
-      <Dialog 
-        v-model:visible="isMonthlyChartExpanded" 
-        modal 
-        header="Volume de Vendas Mensal (Detalhamento)" 
-        :style="{ width: '90vw', maxWidth: '1400px' }"
-        :breakpoints="{ '960px': '95vw' }"
-        class="evolucao-zoom-dialog"
-      >
-        <div style="height: 65vh; min-height: 450px; padding: 1rem 0;">
-          <VChart
-            v-if="isMonthlyChartExpanded"
-            :option="chartOptionMensalGtin(selectedSemestre?.semestre, true)"
-            :update-options="{ notMerge: false, lazyUpdate: true }"
-            autoresize
-            style="width: 100%; height: 100%;"
-            @click="onMensalChartClick"
-          />
-        </div>
-        <template #footer>
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-top: 0.5rem;">
-            <div style="font-size: 0.75rem; color: var(--text-muted);">
-              <i class="pi pi-info-circle" style="margin-right: 6px; font-size: 0.8rem;" />
-              Utilize o mouse ou o slider inferior para navegar pelo histórico.
-            </div>
-            <Button label="Fechar" icon="pi pi-times" class="p-button-outlined p-button-sm" @click="isMonthlyChartExpanded = false" />
-          </div>
-        </template>
-      </Dialog>
+
     </template>
 
     <GtinDetalhamentoMensalSidebar
@@ -1509,37 +1478,28 @@ const exportMensalCard = () => {
   opacity: 0.5;
 }
 
-.btn-clear-filter {
-  margin-left: auto;
-  margin-right: 1rem;
+.evolucao-card-header :deep(.p-button) {
   font-size: 0.72rem !important;
-  font-weight: 600 !important;
-  color: var(--primary-color) !important;
-  padding: 0.2rem 0.6rem !important;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
-  transition: all 0.2s ease !important;
-}
-.btn-clear-filter:hover {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
-  transform: translateY(-1px);
-}
-.btn-zoom {
-  font-size: 0.7rem !important;
   font-weight: 700 !important;
   color: var(--primary-color) !important;
-  padding: 0.25rem 0.75rem !important;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+  padding: 0.3rem 0.75rem !important;
+  border-radius: 8px !important;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent) !important;
   transition: all 0.2s ease !important;
-  white-space: nowrap;
   height: auto !important;
   line-height: 1 !important;
+  white-space: nowrap;
 }
-.btn-zoom:hover {
+
+.evolucao-card-header :deep(.p-button:hover) {
   background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+  border-color: color-mix(in srgb, var(--primary-color) 45%, transparent) !important;
   transform: translateY(-1px);
+}
+
+.evolucao-card-header :deep(.p-button:active) {
+  transform: translateY(0);
 }
 .evolucao-chart-wrap { 
   height: 20vh; 
@@ -1549,20 +1509,22 @@ const exportMensalCard = () => {
 .evolucao-chart { width: 100%; height: 100%; }
 
 .sem-badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 2px 10px;
+  padding: 0.25rem 0.65rem;
   border-radius: 99px;
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: var(--primary-color);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
-  display: flex;
+  border: none;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  line-height: 1;
+  user-select: none;
 }
-.sem-badge i { font-size: 0.6rem !important; }
+.sem-badge i { font-size: 0.55rem !important; }
 
 .col-regular { color: var(--risk-low); }
 .col-irregular { color: var(--risk-high); }
@@ -1924,20 +1886,6 @@ const exportMensalCard = () => {
 
 .copy-btn:active {
   transform: scale(0.9);
-}
-
-.btn-export-img {
-  font-size: 0.72rem !important;
-  font-weight: 600 !important;
-  color: var(--primary-color) !important;
-  padding: 0.2rem 0.6rem !important;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
-  transition: all 0.2s ease !important;
-}
-.btn-export-img:hover {
-  background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
-  transform: translateY(-1px);
 }
 
 </style>

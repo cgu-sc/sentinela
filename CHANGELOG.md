@@ -4,119 +4,22 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
-## [1.1.19] - 2026-06-22
+
+## [1.1.5] - 2026-06-23
+
+### Corrigido
+- Nota Técnica: Tabela 8 (Repasses Anuais) centralizada corretamente no documento Word.
+- Nota Técnica: remoção de bold nas linhas de dados da Tabela 9 (Indicadores Críticos) — bold mantido apenas no cabeçalho.
+- Nota Técnica: apenas a palavra 'ATENÇÃO!' permanece em negrito no texto de conclusão; restante do parágrafo sem formatação especial.
+- Nota Técnica: removido espaço extra antes de 'ATENÇÃO!' na capa.
+- Nota Técnica: largura da Tabela 8 equalizada à Tabela 7 (7,30 polegadas no total).
+- Nota Técnica: ajustes de tipagem e formatação geral nos relatórios.
 
 ### Alterado
-- Remoção do contador regressivo e botão de cancelar no diálogo de atualização — atualização é aplicada automaticamente ao término do download.
-
-## [1.1.18] - 2026-06-22
-
-### Adicionado
-- Novo atualizador gráfico (SentinelaUpdater.exe) com interface PyWebView mostrando progresso das etapas de instalação.
-
-## [1.1.17] - 2026-06-22
-
-### Corrigido
-- Ajuste fino adicional na rotina de verificação e download do novo executável.
-
-## [1.1.16] - 2026-06-22
-
-### Corrigido
-- Ajustes finos adicionais na liberação de processos no auto-update.
-
-## [1.1.15] - 2026-06-22
-
-### Corrigido
-- Uso do ProcessStartInfo do .NET no PowerShell para remoção forçada e explícita do _MEIPASS do bloco de ambiente no reinício do executável.
-
-## [1.1.14] - 2026-06-22
-
-### Corrigido
-- Implementação de inicialização desvinculada (ShellExecute/explorer.exe) no PowerShell para prevenir herança indesejada de processos e ambientes no reinício automático do aplicativo.
-- Otimização do rótulo do botão de cancelamento para "Cancelar".
-
-## [1.1.13] - 2026-06-22
-
-### Corrigido
-- Implementação de inicialização desvinculada (ShellExecute/explorer.exe) no PowerShell para prevenir herança indesejada de processos e ambientes no reinício automático do aplicativo.
-
-## [1.1.12] - 2026-06-22
-
-### Corrigido
-- Refinamento da limpeza de ambiente no PowerShell para garantir que variáveis internas do PyInstaller sejam totalmente removidas nativamente no processo do Windows.
-- Otimização do rótulo do botão de cancelamento para "Cancelar".
-
-## [1.1.11] - 2026-06-22
-
-### Corrigido
-- Exibição de progresso no script PowerShell `sentinela_update.ps1` (removido `$ErrorActionPreference = 'SilentlyContinue'` silencioso e adicionados tratamentos robustos de erro).
-- Falha de cache do PyInstaller ao reiniciar: agora a variável de ambiente `_MEIPASS` é limpa no PowerShell antes da reinicialização, garantindo que o novo executável carregue a versão correta.
-- Ajustado o tamanho visual do botão "Cancelar atualização" na tela de progresso.
-- Título do card de produção semestral alterado para "VALOR SEM COMPROVAÇÃO E % SEM COMPROVAÇÃO POR SEMESTRE".
-
-## [1.1.10] - 2026-06-20
-
-### Adicionado
-- Sistema de verificação automática de atualizações com assinatura Ed25519 e manifesto público no GitHub Pages.
-- Tela de bloqueio profissional exibida quando a versão instalada está abaixo da versão mínima suportada.
-- Cache local offline do manifesto validado em `%LOCALAPPDATA%\Sentinela\updates\` com proteção anti-downgrade.
-- Card Sistema expandido com linha de status de atualização (Atualizado, Atualização disponível, Verificação offline, Não verificado) e tooltip com data da última verificação.
-- Link para documentação do sistema (`https://cgu-sc.github.io/sentinela/`) na barra de navegação.
-- Endpoints `GET /api/v1/system/update-status` e `POST /api/v1/system/check-update`.
-- Fonte única de versão do produto em `version.json` na raiz do projeto.
-
-
-### Adicionado
-- Sistema de verificação automática de atualizações com assinatura Ed25519 e manifesto público no GitHub Pages.
-- Tela de bloqueio profissional exibida quando a versão instalada está abaixo da versão mínima suportada.
-- Cache local offline do manifesto validado em `%LOCALAPPDATA%\Sentinela\updates\` com proteção anti-downgrade.
-- Card Sistema expandido com linha de status de atualização (Atualizado, Atualização disponível, Verificação offline, Não verificado) e tooltip com data da última verificação.
-- Link para documentação do sistema (`https://cgu-sc.github.io/sentinela/`) na barra de navegação.
-- Endpoints `GET /api/v1/system/update-status` e `POST /api/v1/system/check-update`.
-- Fonte única de versão do produto em `version.json` na raiz do projeto.
-
-
-
-
-
-
-
-
-
-
-
-
-## [1.1.9] - 2026-06-22
-
-### Adicionado
-- Teste de funcionalidade de atualização automática do aplicativo desktop via release.ps1 (versão 1.1.9 para teste de update da 1.1.8).
-
-## [1.1.8] - 2026-06-22
-
-### Adicionado
-- Teste de funcionalidade de atualização automática do aplicativo desktop via release.ps1.
-
-## [1.1.7] - 2026-06-22
-
-### Adicionado
-- Teste de funcionalidade de atualização automática do aplicativo desktop via release.ps1.
-
-## [1.1.6] - 2026-06-22
-
-### Corrigido
-- Gráfico "Repasses por Semestre" sem destaque visual ao clicar: barras agora aplicam opacidade reduzida nos semestres não selecionados, igual ao comportamento do "Volume de Vendas por Semestre".
-- Gráfico "Histórico Mensal de Repasses" sem destaque dos meses do semestre selecionado: agora aplica opacidade reduzida nos meses fora do semestre clicado.
-- Coluna "Programa" na tabela de detalhamento mensal de repasses exibia texto em caixa baixa; agora é formatada em TitleCase via `formatTitleCase`.
-
-## [1.1.5] - 2026-06-22
-
-### Corrigido
-- Gráfico "Repasses por Semestre" sem destaque visual ao clicar: barras agora aplicam opacidade reduzida nos semestres não selecionados, igual ao comportamento do "Volume de Vendas por Semestre".
-- Gráfico "Histórico Mensal de Repasses" sem destaque dos meses do semestre selecionado: agora aplica opacidade reduzida nos meses fora do semestre clicado.
-- Coluna "Programa" na tabela de detalhamento mensal de repasses exibia texto em caixa baixa; agora é formatada em TitleCase via `formatTitleCase`.
-
-### Adicionado
-- Badge no header do card "Histórico Mensal de Repasses" exibindo o semestre atualmente selecionado.
+- Aba Financeiro: visualizações de Vendas e Repasses unificadas em layout único, eliminando alternância entre abas separadas.
+- Aba Financeiro: removido modal de zoom do gráfico mensal.
+- Card Sistema: ícone de download pulsante exibido ao lado do label "Atualização" quando há versão disponível ou atualização obrigatória, indicando que o card é clicável.
+- Dashboard: proporções dos cards ajustadas — card Sistema levemente menor, card Integridade levemente maior.
 
 ## [1.1.4] - 2026-06-20
 

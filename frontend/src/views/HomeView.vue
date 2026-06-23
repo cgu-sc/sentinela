@@ -329,7 +329,13 @@ function handleUpdateClick() {
                 ? `Última verificação: ${updateStore.checkedAtFormatted}`
                 : updateStore.message || 'Verificação pendente'"
             >
-              <span class="system-stat__label">Atualização</span>
+              <span class="system-stat__label">
+                Atualização
+                <i
+                  v-if="updateStore.hasUpdate || updateStore.isBlocked"
+                  class="pi pi-download update-pulse-icon"
+                />
+              </span>
               <div class="system-stat__value-container">
                 <strong class="system-stat__value system-stat__value--update"
                   :class="`system-stat__value--update-${updateStore.statusTone}`">
@@ -495,7 +501,7 @@ function handleUpdateClick() {
 
 .priority-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.62fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.78fr) minmax(0, 0.9fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
 }
@@ -954,6 +960,19 @@ function handleUpdateClick() {
 }
 .system-stat__release-link:hover { opacity: 1; color: var(--primary-color); }
 .system-stat__release-link .pi { font-size: 0.65rem; }
+
+.update-pulse-icon {
+  font-size: 0.62rem;
+  margin-left: 0.3rem;
+  color: var(--risk-medium);
+  animation: update-pulse 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes update-pulse {
+  0%, 100% { opacity: 1;   transform: translateY(0); }
+  50%       { opacity: 0.4; transform: translateY(2px); }
+}
 
 .system-stat__value--update-ok       { color: var(--status-success); }
 .system-stat__value--update-warn      { color: var(--risk-medium); }

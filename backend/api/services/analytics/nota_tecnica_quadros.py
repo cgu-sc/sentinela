@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
@@ -804,6 +805,7 @@ def _add_tabela_repasses_anuais(
 
     # cabeçalho + linhas de dados + linha de total
     table = doc.add_table(rows=len(rows_data) + 2, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_fixed_widths(table, [Inches(2.80), Inches(1.10), Inches(2.40)])
     _set_table_open_borders(table)
     _repeat_table_header(table.rows[0])

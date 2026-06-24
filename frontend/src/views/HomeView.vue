@@ -252,6 +252,11 @@ function handleUpdateClick() {
   window.open(url, '_blank');
 }
 
+function handleRefreshCheck(event) {
+  event.stopPropagation();
+  updateStore.forceCheckUpdate();
+}
+
 </script>
 
 <template>
@@ -331,6 +336,16 @@ function handleUpdateClick() {
             >
               <span class="system-stat__label">
                 Atualização
+                <button
+                  type="button"
+                  class="update-check-btn"
+                  :disabled="updateStore.loading"
+                  @click="handleRefreshCheck"
+                  v-tooltip.right="'Verificar atualizações agora'"
+                  aria-label="Verificar atualizações"
+                >
+                  <i :class="updateStore.loading ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" />
+                </button>
                 <i
                   v-if="updateStore.hasUpdate || updateStore.isBlocked"
                   class="pi pi-download update-pulse-icon"
@@ -501,7 +516,7 @@ function handleUpdateClick() {
 
 .priority-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.78fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.78fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
   gap: 1rem;
   align-items: stretch;
 }
@@ -908,6 +923,9 @@ function handleUpdateClick() {
 }
 
 .system-stat__label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   font-size: 0.66rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -972,6 +990,37 @@ function handleUpdateClick() {
 @keyframes update-pulse {
   0%, 100% { opacity: 1;   transform: translateY(0); }
   50%       { opacity: 0.4; transform: translateY(2px); }
+}
+
+.update-check-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.2rem;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.6rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.update-check-btn:hover:not(:disabled) {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+}
+
+.update-check-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.update-check-btn .pi {
+  font-size: inherit;
 }
 
 .system-stat__value--update-ok       { color: var(--status-success); }

@@ -46,6 +46,7 @@ export function buildAnalyticsParams(filters = {}) {
     socioEsocial = null,
     cnaeIncompativel = false,
     socioIdadeAtipica = false,
+    socioFalecido = false,
     volumeAtipicoEnabled = false,
     volumeAtipicoPercentual = null,
     dispersaoUfSemFronteiraEnabled = false,
@@ -74,6 +75,7 @@ export function buildAnalyticsParams(filters = {}) {
   if (socioEsocial) params.socio_esocial = socioEsocial;
   if (cnaeIncompativel) params.cnae_incompativel = cnaeIncompativel;
   if (socioIdadeAtipica) params.socio_idade_atipica = socioIdadeAtipica;
+  if (socioFalecido) params.socio_falecido = socioFalecido;
   if (volumeAtipicoEnabled) {
     params.volume_atipico = true;
     if (volumeAtipicoPercentual !== null && volumeAtipicoPercentual !== undefined) {

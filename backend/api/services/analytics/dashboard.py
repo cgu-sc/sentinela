@@ -58,7 +58,7 @@ from ...schemas.analytics import (
     GtinDetalhamentoMensalItem,
 )
 
-def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, dispersao_uf_sem_fronteira: bool = False, dispersao_uf_sem_fronteira_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, socio_esocial: Optional[str] = None, cnae_incompativel: bool = False, socio_idade_atipica: bool = False, estabelecimento: Optional[str] = None) -> AnalyticsResponse:
+def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, regiao_saude=None, municipio=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, dispersao_uf_sem_fronteira: bool = False, dispersao_uf_sem_fronteira_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, socio_esocial: Optional[str] = None, cnae_incompativel: bool = False, socio_idade_atipica: bool = False, socio_falecido: bool = False, estabelecimento: Optional[str] = None) -> AnalyticsResponse:
     """
     Versão Unificada (Motor Polars): Calcula KPIs e análise por UF em tempo real.
     Garante consistência total entre as telas e alta performance via processamento em memória.
@@ -143,6 +143,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            socio_falecido=socio_falecido,
             cnae_incompativel=cnae_incompativel,
             socio_idade_atipica=socio_idade_atipica,
             data_referencia=fim,
@@ -302,7 +303,7 @@ def get_dashboard_data(db: Session, data_inicio=None, data_fim=None, perc_min=No
         raise HTTPException(status_code=503, detail="Resumo analitico indisponivel: matriz dinamica de risco ou cache base invalido.") from e
 
 
-def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, dispersao_uf_sem_fronteira: bool = False, dispersao_uf_sem_fronteira_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, socio_esocial: Optional[str] = None, cnae_incompativel: bool = False, socio_idade_atipica: bool = False, estabelecimento: Optional[str] = None) -> ProducaoSemestralResponse:
+def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, perc_min=None, perc_max=None, val_min=None, uf=None, situacao_rf=None, conexao_ms=None, porte_empresa=None, grande_rede=None, cnpj_raiz=None, unidade_pf=None, razao_social=None, cnpjs: Optional[List[str]] = None, regiao_id: Optional[int] = None, id_ibge7: Optional[int] = None, volume_atipico: bool = False, volume_atipico_limite: Optional[float] = None, dispersao_uf_sem_fronteira: bool = False, dispersao_uf_sem_fronteira_limite: Optional[float] = None, par_teia: Optional[str] = None, socio_beneficio: Optional[str] = None, socio_esocial: Optional[str] = None, cnae_incompativel: bool = False, socio_idade_atipica: bool = False, socio_falecido: bool = False, estabelecimento: Optional[str] = None) -> ProducaoSemestralResponse:
     """Retorna a producao acumulada por semestre para a Home, respeitando os filtros globais."""
     try:
         MIN_DATA = date(2015, 7, 1)
@@ -346,6 +347,7 @@ def get_producao_semestral_data(db: Session, data_inicio=None, data_fim=None, pe
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            socio_falecido=socio_falecido,
             cnae_incompativel=cnae_incompativel,
             socio_idade_atipica=socio_idade_atipica,
             data_referencia=fim,

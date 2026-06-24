@@ -158,6 +158,48 @@ def apply_socio_idade_atipica_filter(
     return df.join(cnpjs_idade_atipica, on="cnpj", how="semi")
 
 
+def apply_socio_falecido_filter(
+    df: pl.DataFrame,
+    socio_falecido: bool,
+) -> pl.DataFrame:
+    """
+    Filtra o perfil para CNPJs com ao menos um socio PF ativo (sem data
+    de exclusao) com `is_falecido == True` em `dados_socios`. A coluna
+    `is_falecido` vem do SQL Server (cruza CPF do socio com base de
+    obitos) e e espelhada no Parquet global de socios.
+    """
+    if not socio_falecido:
+        return df
+    if "cnpj" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="Filtro socio_falecido exige coluna 'cnpj' no perfil do estabelecimento.",
+        )
+
+    socios = get_df_dados_socios()
+    required = {"cnpj", "indicador_socio", "data_exclusao_sociedade", "is_falecido"}
+    if not required.issubset(set(socios.columns)):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Filtro socio_falecido exige colunas em dados_socios: "
+                + ", ".join(sorted(required - set(socios.columns)))
+            ),
+        )
+
+    cnpjs_socio_falecido = (
+        socios
+        .filter(
+            (pl.col("indicador_socio") == "PF")
+            & pl.col("data_exclusao_sociedade").is_null()
+            & (pl.col("is_falecido") == True)  # noqa: E712
+        )
+        .select("cnpj")
+        .unique()
+    )
+    return df.join(cnpjs_socio_falecido, on="cnpj", how="semi")
+
+
 def apply_socio_esocial_filter(
     df: pl.DataFrame,
     socio_esocial: Optional[str],
@@ -213,6 +255,7 @@ def build_perfil_filtrado(
     par_teia: Optional[str] = None,
     socio_beneficio: Optional[str] = None,
     socio_esocial: Optional[str] = None,
+    socio_falecido: bool = False,
     cnae_incompativel: bool = False,
     socio_idade_atipica: bool = False,
     data_referencia: Optional[date] = None,
@@ -234,12 +277,14 @@ def build_perfil_filtrado(
     `volume_atipico_fim` (período do crescimento semestral).
 
     Ordem de aplicação: par_teia → socio_beneficio → socio_esocial →
-    cnae_incompativel → socio_idade_atipica → volume_atipico. Cada filtro
-    é no-op quando o parâmetro correspondente é o default (None / False).
+    socio_falecido → cnae_incompativel → socio_idade_atipica → volume_atipico.
+    Cada filtro é no-op quando o parâmetro correspondente é o default
+    (None / False).
     """
     df = _apply_par_teia_filter(perfil_df, par_teia)
     df = apply_socio_beneficio_filter(df, socio_beneficio)
     df = apply_socio_esocial_filter(df, socio_esocial)
+    df = apply_socio_falecido_filter(df, socio_falecido)
     df = apply_cnae_incompativel_filter(df, cnae_incompativel)
     df = apply_socio_idade_atipica_filter(df, socio_idade_atipica, data_referencia=data_referencia)
     df = apply_volume_atipico_filter(

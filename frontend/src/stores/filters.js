@@ -92,6 +92,7 @@ export const useFilterStore = defineStore('filters', () => {
   );
   const selectedCnaeIncompativel = ref(saved?.selectedCnaeIncompativel ?? FILTER_DEFAULTS.CNAE_INCOMPATIVEL);
   const selectedSocioIdadeAtipica = ref(typeof saved?.selectedSocioIdadeAtipica === 'boolean' ? saved.selectedSocioIdadeAtipica : FILTER_DEFAULTS.SOCIO_IDADE_ATIPICA);
+  const selectedSocioFalecido = ref(typeof saved?.selectedSocioFalecido === 'boolean' ? saved.selectedSocioFalecido : FILTER_DEFAULTS.SOCIO_FALECIDO);
   const selectedUnidadePf = ref(saved?.selectedUnidadePf ?? FILTER_ALL_VALUE);
   const selectedCnpjRaiz = ref(saved?.selectedCnpjRaiz ?? '');
   const hoveredMunicipioName = ref(null);
@@ -207,6 +208,7 @@ export const useFilterStore = defineStore('filters', () => {
       socioEsocial: selectedSocioEsocial.value !== FILTER_ALL_VALUE ? selectedSocioEsocial.value : null,
       cnaeIncompativel: selectedCnaeIncompativel.value,
       socioIdadeAtipica: selectedSocioIdadeAtipica.value,
+      socioFalecido: selectedSocioFalecido.value,
     };
   });
 
@@ -275,6 +277,7 @@ export const useFilterStore = defineStore('filters', () => {
       socioEsocial,
       cnaeIncompativel,
       socioIdadeAtipica,
+      socioFalecido,
       dispersaoUfSemFronteiraEnabled,
       dispersaoUfSemFronteiraPercentual,
       inicio,
@@ -303,6 +306,7 @@ export const useFilterStore = defineStore('filters', () => {
       socio_esocial: socioEsocial,
       cnae_incompativel: cnaeIncompativel,
       socio_idade_atipica: socioIdadeAtipica,
+      socio_falecido: socioFalecido,
       dispersao_uf_sem_fronteira: dispersaoUfSemFronteiraEnabled,
       dispersao_uf_sem_fronteira_limite: dispersaoUfSemFronteiraPercentual,
       perc_min: percMin,
@@ -360,6 +364,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedSocioEsocial: selectedSocioEsocial.value,
     selectedCnaeIncompativel: selectedCnaeIncompativel.value,
     selectedSocioIdadeAtipica: selectedSocioIdadeAtipica.value,
+    selectedSocioFalecido: selectedSocioFalecido.value,
     selectedUnidadePf: selectedUnidadePf.value,
     selectedCnpjRaiz: selectedCnpjRaiz.value,
     percentualNaoComprovacaoRange: percentualNaoComprovacaoRange.value,
@@ -409,6 +414,9 @@ export const useFilterStore = defineStore('filters', () => {
     }
     if (typeof filters.selectedSocioIdadeAtipica === 'boolean') {
       selectedSocioIdadeAtipica.value = filters.selectedSocioIdadeAtipica;
+    }
+    if (typeof filters.selectedSocioFalecido === 'boolean') {
+      selectedSocioFalecido.value = filters.selectedSocioFalecido;
     }
     if ('selectedUnidadePf' in filters) selectedUnidadePf.value = filters.selectedUnidadePf;
     if ('selectedCnpjRaiz' in filters) selectedCnpjRaiz.value = filters.selectedCnpjRaiz;
@@ -538,7 +546,7 @@ export const useFilterStore = defineStore('filters', () => {
   };
 
   watch(
-    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedSocioEsocial, selectedCnaeIncompativel, selectedSocioIdadeAtipica, selectedCnpjRaiz,
+    [selectedUF, selectedRegiaoSaude, selectedUnidadePf, selectedMunicipio, selectedSituacao, selectedMS, selectedPorte, selectedGrandeRede, selectedParTeia, selectedSocioBeneficio, selectedSocioEsocial, selectedCnaeIncompativel, selectedSocioIdadeAtipica, selectedSocioFalecido, selectedCnpjRaiz,
      percentualNaoComprovacaoRange, percentualNaoComprovacaoFilter,
      valorMinSemComp, valorMinSemCompFilter, volumeAtipicoEnabled, volumeAtipicoPercentual, volumeAtipicoPercentualFilter, dispersaoUfSemFronteiraEnabled, dispersaoUfSemFronteiraPercentual, periodo, sliderValue,
      clusterSelection, statusSelection, rfaSelection, searchTarget],
@@ -559,6 +567,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedSocioEsocial.value = FILTER_ALL_VALUE;
     selectedCnaeIncompativel.value = FILTER_DEFAULTS.CNAE_INCOMPATIVEL;
     selectedSocioIdadeAtipica.value = FILTER_DEFAULTS.SOCIO_IDADE_ATIPICA;
+    selectedSocioFalecido.value = FILTER_DEFAULTS.SOCIO_FALECIDO;
     selectedUnidadePf.value = FILTER_ALL_VALUE;
     selectedCnpjRaiz.value = '';
     percentualNaoComprovacaoRange.value = [...FILTER_DEFAULTS.PERCENTUAL_RANGE];
@@ -645,6 +654,7 @@ export const useFilterStore = defineStore('filters', () => {
     selectedSocioEsocial,
     selectedCnaeIncompativel,
     selectedSocioIdadeAtipica,
+    selectedSocioFalecido,
     selectedUnidadePf,
     selectedCnpjRaiz,
     percentualNaoComprovacaoRange,

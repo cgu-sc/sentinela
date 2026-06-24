@@ -5,6 +5,13 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.2.0] - 2026-06-24
+
+### Adicionado
+- **Filtro "Sócio ativo falecido"** na sidebar do dashboard, exibido logo após o filtro de idade atípica, permitindo restringir o dashboard a estabelecimentos com ao menos um sócio pessoa física com vínculo societário ativo identificado como falecido na base de óbitos. Reage em todos os cards (Escopo, Produção, Integridade) e KPIs. Fonte: coluna `is_falecido` de `dados_socios.parquet` (materializada no ETL do SQL Server a partir do cruzamento do CPF do sócio com a base de óbitos).
+- Filtro integrado em todos os endpoints: `/resumo`, `/faixas-risco`, `/producao-semestral`, `/alertas-panorama`, `/indicadores-analise` e `/indicadores-analise/cnpjs`.
+- `build_perfil_filtrado` em `alertas_alvos.py` agora aceita o parâmetro `socio_falecido: bool = False` aplicando `semi join` com `dados_socios` filtrado por `indicador_socio == 'PF'` + `data_exclusao_sociedade IS NULL` + `is_falecido == True`.
+
 ## [1.1.8] - 2026-06-24
 
 ### Adicionado

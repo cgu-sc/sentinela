@@ -42,6 +42,7 @@ def get_fator_risco_data(
     socio_esocial: Optional[str] = None,
     cnae_incompativel: bool = False,
     socio_idade_atipica: bool = False,
+    socio_falecido: bool = False,
     estabelecimento: Optional[str] = None,
 ) -> FatorRiscoResponseSchema:
     """
@@ -92,6 +93,7 @@ def get_fator_risco_data(
             par_teia=par_teia,
             socio_beneficio=socio_beneficio,
             socio_esocial=socio_esocial,
+            socio_falecido=socio_falecido,
             cnae_incompativel=cnae_incompativel,
             socio_idade_atipica=socio_idade_atipica,
             data_referencia=fim,

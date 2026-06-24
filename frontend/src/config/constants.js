@@ -65,6 +65,7 @@ export const FILTER_DEFAULTS = {
     SOCIO_ESOCIAL:    FILTER_ALL_VALUE,
     CNAE_INCOMPATIVEL: false,
     SOCIO_IDADE_ATIPICA: false,
+    SOCIO_FALECIDO: false,
     PERCENTUAL_RANGE: [0, 100],
     VALOR_MIN:        0,
     VALOR_MAX:        1000000,

@@ -586,6 +586,7 @@ def _build_indicador_scope_base(
     socio_esocial: str | None = None,
     cnae_incompativel: bool = False,
     socio_idade_atipica: bool = False,
+    socio_falecido: bool = False,
     dispersao_uf_sem_fronteira: bool = False,
     dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
@@ -647,6 +648,7 @@ def _build_indicador_scope_base(
         par_teia=par_teia,
         socio_beneficio=socio_beneficio,
         socio_esocial=socio_esocial,
+        socio_falecido=socio_falecido,
         cnae_incompativel=cnae_incompativel,
         socio_idade_atipica=socio_idade_atipica,
         data_referencia=fim,
@@ -805,6 +807,7 @@ def _build_indicador_dataset_cached(
     socio_esocial: str | None = None,
     cnae_incompativel: bool = False,
     socio_idade_atipica: bool = False,
+    socio_falecido: bool = False,
     dispersao_uf_sem_fronteira: bool = False,
     dispersao_uf_sem_fronteira_limite: float | None = None,
     volume_atipico: bool = False,
@@ -1291,6 +1294,7 @@ def get_indicadores_analise(
     volume_atipico_limite: float | None = None,
     cnae_incompativel: bool = False,
     socio_idade_atipica: bool = False,
+    socio_falecido: bool = False,
 ) -> IndicadorAnaliseResponse:
     """
     Análise cruzada de um indicador de risco: retorna KPIs, mapa municipal
@@ -1491,6 +1495,7 @@ def get_indicadores_analise_cnpjs(
     volume_atipico_limite: float | None = None,
     cnae_incompativel: bool = False,
     socio_idade_atipica: bool = False,
+    socio_falecido: bool = False,
     page: int = 1,
     page_size: int = 20,
     sort_field: str = "val_sem_comp",

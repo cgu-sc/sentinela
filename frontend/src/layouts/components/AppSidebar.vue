@@ -164,6 +164,10 @@ const socioEsocialTooltip =
   "Sócio direto ou N3: considera qualquer um desses dois níveis.";
 const socioIdadeAtipicaTooltip =
   "Filtra estabelecimentos com ao menos um sócio pessoa física com vínculo ativo e idade inferior a 21 anos ou superior a 80 anos na data de referência do período selecionado.";
+const socioFalecidoTooltip =
+  "Filtra estabelecimentos com ao menos um sócio pessoa física com vínculo societário ativo identificado como falecido na base de óbitos.";
+const cnaeIncompativelTooltip =
+  "Filtra estabelecimentos cujo CNAE principal e secundários não identificam atividade farmacêutica compatível com o programa.";
 
 const { formatBRL: formatCurrency } = useFormatting();
 
@@ -409,6 +413,7 @@ const isFilterActive = (field) => {
     selectedSocioEsocial: FILTER_DEFAULTS.SOCIO_ESOCIAL,
     selectedCnaeIncompativel: FILTER_DEFAULTS.CNAE_INCOMPATIVEL,
     selectedSocioIdadeAtipica: FILTER_DEFAULTS.SOCIO_IDADE_ATIPICA,
+    selectedSocioFalecido: FILTER_DEFAULTS.SOCIO_FALECIDO,
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
@@ -495,6 +500,7 @@ const integrityFilterCount = computed(() =>
     "selectedSocioEsocial",
     "selectedCnaeIncompativel",
     "selectedSocioIdadeAtipica",
+    "selectedSocioFalecido",
     "dispersaoUfSemFronteiraEnabled",
   ]),
 );
@@ -952,6 +958,10 @@ onBeforeUnmount(() => {
       >
         <label class="filter-label">
           Farmácia com CNAE Incompatível
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: cnaeIncompativelTooltip, showDelay: 120, hideDelay: 80 }"
+          />
           <button
             v-if="isFilterActive('selectedCnaeIncompativel')"
             class="filter-clear-btn"
@@ -978,7 +988,7 @@ onBeforeUnmount(() => {
         :class="{ 'filter-locked': allFiltersLocked }"
       >
         <label class="filter-label">
-          Sócio com idade atípica (&lt; 21 ou &gt; 80 anos)
+          Sócio &lt; 21 anos ou &gt; 80 anos
           <i
             class="pi pi-info-circle filter-info-icon"
             v-tooltip.right="{ value: socioIdadeAtipicaTooltip, showDelay: 120, hideDelay: 80 }"
@@ -1009,7 +1019,38 @@ onBeforeUnmount(() => {
         :class="{ 'filter-locked': allFiltersLocked }"
       >
         <label class="filter-label">
-          Sócio no CadÚnico/Seguro Defeso
+          Sócio ativo falecido
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioFalecidoTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioFalecido')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioFalecido = false"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioFalecido') }">
+          <label class="checkbox-label">
+            <input
+              v-model="filterStore.selectedSocioFalecido"
+              type="checkbox"
+              class="filter-checkbox"
+            />
+            <span>Mostrar apenas farmácias com sócio PF ativo falecido</span>
+          </label>
+        </div>
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio no CadÚnico/Defeso
           <i
             class="pi pi-info-circle filter-info-icon"
             v-tooltip.right="{ value: socioBeneficioTooltip, showDelay: 120, hideDelay: 80 }"

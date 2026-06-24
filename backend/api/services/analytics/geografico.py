@@ -14,7 +14,7 @@ from ...schemas.analytics import (
 )
 from .matriz_risco_dinamica import build_dynamic_matriz_risco
 
-LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT = 5.0
+LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT = 10.0
 
 UF_VIZINHAS: dict[str, set[str]] = {
     "AC": {"AM", "RO"},

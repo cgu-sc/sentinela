@@ -350,7 +350,7 @@ const clearVolumeAtipico = () => {
     FILTER_DEFAULTS.VOLUME_ATIPICO_PERCENTUAL;
 };
 
-const dispersaoUfQuickSelect = [5, 10, 20, 50];
+const dispersaoUfQuickSelect = [10, 20, 30, 50];
 
 const clampDispersaoUfSemFronteira = (value) => {
   const numeric = Number(value) || FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL;
@@ -458,6 +458,9 @@ const activeFilterCount = computed(() => {
     "selectedParTeia",
     "selectedSocioBeneficio",
     "selectedSocioEsocial",
+    "selectedCnaeIncompativel",
+    "selectedSocioIdadeAtipica",
+    "selectedSocioFalecido",
     "dispersaoUfSemFronteiraEnabled",
     "selectedCnpjRaiz",
     "percentualNaoComprovacaoRange",
@@ -587,12 +590,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- BOTÃO DE LIMPAR TODOS OS FILTROS (ALÇA) -->
+  <button
+    v-if="activeFilterCount > 0"
+    class="sidebar-clear-btn"
+    @click="filterStore.resetFilters()"
+    v-tooltip.right="'Limpar todos os filtros'"
+    aria-label="Limpar todos os filtros"
+  >
+    <i class="pi pi-eraser"></i>
+  </button>
+
   <!-- BOTÃO DE FILTROS ATIVOS (ALÇA) -->
   <button
     v-if="activeFilterCount > 0"
     class="sidebar-filter-count-btn"
     @click="isCollapsed = false"
-    :title="`Existem ${activeFilterCount} filtro(s) ativo(s)`"
+    v-tooltip.right="`Existem ${activeFilterCount} filtro(s) ativo(s)`"
   >
     <i class="pi pi-filter"></i>
     <span class="filter-count-badge">{{ activeFilterCount }}</span>
@@ -602,7 +616,7 @@ onBeforeUnmount(() => {
   <button
     class="sidebar-float-btn"
     @click="isCollapsed = !isCollapsed"
-    :title="isCollapsed ? 'Abrir painel' : 'Fechar painel'"
+    v-tooltip.right="isCollapsed ? 'Abrir painel' : 'Fechar painel'"
   >
     <i :class="isCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
   </button>
@@ -612,7 +626,7 @@ onBeforeUnmount(() => {
     class="sidebar-lock-btn"
     :class="{ locked: isSidebarLocked }"
     @click="toggleSidebarLock"
-    :title="
+    v-tooltip.right="
       isSidebarLocked
         ? 'Sidebar travada — clique para destravar'
         : 'Travar sidebar colapsada'
@@ -1658,6 +1672,39 @@ onBeforeUnmount(() => {
   height: calc(100vh - 56px);
   border-right: 1px solid var(--sidebar-border);
   overflow: hidden;
+}
+
+/* BOTÃO FLUTUANTE DE LIMPAR TODOS OS FILTROS */
+.sidebar-clear-btn {
+  position: fixed;
+  top: calc(50% - 90px);
+  left: var(--sidebar-width);
+  transform: translateY(-50%);
+  z-index: 240;
+  will-change: left;
+  width: 20px;
+  height: 36px;
+  background: color-mix(in srgb, var(--risk-high) 12%, var(--sidebar-bg));
+  border: 1px solid color-mix(in srgb, var(--risk-high) 55%, transparent);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--risk-high);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-clear-btn:hover {
+  width: 28px;
+  background: color-mix(in srgb, var(--risk-high) 22%, var(--sidebar-bg));
+  box-shadow: 6px 0 15px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-clear-btn i {
+  font-size: 0.8rem;
 }
 
 /* BOTÃO FLUTUANTE DE CONTADOR DE FILTROS ATIVOS */

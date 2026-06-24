@@ -66,7 +66,7 @@ const alertTooltipTemplates = {
   volume_atipico:
     '{qtd} estabelecimentos apresentaram crescimento semestral superior a 50%, com aumento absoluto mínimo de {aumento_minimo}, em pelo menos um semestre comparável no período selecionado.',
   cnpj_dispersao_uf_nao_vizinha:
-    '{qtd} estabelecimentos tiveram mais de 5% do valor autorizado associado a beneficiários residentes em UFs que não fazem fronteira com a UF da farmácia, no período selecionado.',
+    '{qtd} estabelecimentos tiveram mais de 10% do valor autorizado associado a beneficiários residentes em UFs que não fazem fronteira com a UF da farmácia, no período selecionado.',
   cnpj_cnae_farmacia_ausente:
     '{qtd} estabelecimentos possuem CNAE principal e secundários sem identificação de atividade farmacêutica compatível.',
   socio_falecido:

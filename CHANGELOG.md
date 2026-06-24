@@ -5,6 +5,18 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.2.2] - 2026-06-24
+
+### Adicionado
+- **Botão flutuante de "Limpar todos os filtros"** na sidebar (AppSidebar.vue), posicionado acima do badge de filtros ativos. Aparece somente quando `activeFilterCount > 0` e chama `filterStore.resetFilters()`. Visual consistente com os outros botões flutuantes (`sidebar-float-btn`, `sidebar-lock-btn`, `sidebar-filter-count-btn`), mas com tom `--risk-high` para reforçar a ação destrutiva. Ícone `pi pi-eraser`. Gap uniforme de 6px entre todos os 4 botões flutuantes da sidebar.
+
+### Alterado
+- **Limiar do alerta "Vendas para UFs sem fronteira"** subiu de 5% para 10%: constante `LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT` em `backend/api/services/analytics/geografico.py` foi de 5.0 para 10.0. Texto do tooltip do alerta (HomeView) e default do filtro da sidebar (`DISPERSAO_UF_SEM_FRONTEIRA_PERCENTUAL` em `constants.js`) ajustados para 10. Chip de quick-select no AppSidebar.vue: `[5, 10, 20, 50]` → `[10, 20, 30, 50]` (5 substituído por 30).
+
+### Corrigido
+- **Filtros de integridade não ativavam a alça "Filtros ativos"** na sidebar. Os checkboxes `Sócio com vínculo eSocial` e `Sócio em programa social` eram contados normalmente, mas `Sócio ativo falecido`, `Sócio com idade atípica` e `Farmácia com CNAE incompatível` não faziam aparecer nem o badge com a contagem nem o botão de limpar todos. Causa raiz: o array `fields` do `computed activeFilterCount` em `AppSidebar.vue:448` não incluía `selectedSocioFalecido`, `selectedSocioIdadeAtipica` nem `selectedCnaeIncompativel` — a função `isFilterActive` (`AppSidebar.vue:400`) já dava suporte aos 3, mas eles nunca eram contados. Adicionados os 3 campos ao array, na mesma família de filtros de integridade (logo após `selectedSocioEsocial`).
+- **Tooltips nativos (`title=""`) nos 4 botões flutuantes da sidebar** (`sidebar-clear-btn`, `sidebar-filter-count-btn`, `sidebar-float-btn`, `sidebar-lock-btn`) trocados pela diretiva `v-tooltip.right` do PrimeVue, alinhando com o restante do projeto (que usa `v-tooltip.right="'Limpar filtro'"` nos chips de filtro ativos desde a v1.1.x). Antes, os tooltips dos 4 botões que ficam colados na borda lateral da sidebar apareciam com o estilo nativo do browser (lento, sem fade, com delay alto) e o do botão de limpar não aparecia de jeito nenhum em alguns browsers.
+
 ## [1.2.1] - 2026-06-24
 
 ### Adicionado

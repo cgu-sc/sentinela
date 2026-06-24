@@ -5,6 +5,14 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.2.1] - 2026-06-24
+
+### Adicionado
+- **Alertas do card Integridade (HomeView) são clicáveis.** Cada alerta no panorama de alertas é agora um botão que, ao clicar, ativa/desativa o filtro correspondente na sidebar (mapeamento `alerta.tipo` → `filterStore.selectedXxx` em `ALERTA_TIPO_PARA_FILTRO`). Comportamento de toggle: clique 1 ativa, clique 2 desativa. Para os filtros dropdown (`Sócio em programa social` e `Sócio com vínculo eSocial`) o valor aplicado é `direto`. Hover deixa o card levemente mais saturado e com lift de 1px; o estado ativo (filtro ligado) ganha bg/border mais saturados, `box-shadow` interna e tom da cor de risco correspondente (`--risk-high` para crítico, `--risk-medium` para atenção). Acessibilidade: `aria-pressed` reflete o estado e `aria-label` descreve a ação.
+
+### Corrigido
+- **Filtro "Sócio ativo falecido" não restringia a tabela "Farmácias por Indicador"** em `/estabelecimentos` (`/api/v1/analytics/indicadores-analise/cnpjs`). O card Escopo, Produção e Integridade e o endpoint `/resumo` reagem normalmente, mas a tabela de CNPJs por indicador mantinha o total sem filtro quando o checkbox de sócio falecido era marcado. Causa raiz: o campo `socio_falecido` não estava declarado em `_INDICADOR_SCOPE_FILTER_FIELDS` (`backend/api/services/analytics/indicadores.py`), então a função `_build_indicador_dataset_cached` filtrava o parâmetro fora do `filters` dict antes de passar para `_build_indicador_scope_base`, mesmo com a assinatura da função aceitando o parâmetro. Adicionado `("socio_falecido", _normalize_cache_bool)` à tupla, e os kwargs `socio_falecido=socio_falecido` nos 2 call sites de `_build_indicador_dataset_cached` que faltavam (no commit `084a5dc` o `replaceAll` só pegou 1 dos 3 call sites por causa de indentação diferente).
+
 ## [1.2.0] - 2026-06-24
 
 ### Adicionado

@@ -957,7 +957,7 @@ onBeforeUnmount(() => {
         :class="{ 'filter-locked': allFiltersLocked }"
       >
         <label class="filter-label">
-          Farmácia com CNAE Incompatível
+          CNPJ com CNAE Incompatível
           <i
             class="pi pi-info-circle filter-info-icon"
             v-tooltip.right="{ value: cnaeIncompativelTooltip, showDelay: 120, hideDelay: 80 }"

@@ -79,6 +79,41 @@ const alertTooltipTemplates = {
     '{qtd} estabelecimentos possuem sócios ativos que possuem vínculos em outros CNPJs em funções não gerenciais, conforme registros do eSocial.',
 };
 
+const SOCIO_BENEFICIO_DIRETO = 'direto';
+const SOCIO_ESOCIAL_DIRETO = 'direto';
+
+// Mapeia cada tipo de alerta do card Integridade para o filtro
+// correspondente do filterStore. 'bool' faz toggle; 'dropdown' força
+// o valor padrão (direto) e mantém se já estiver aplicado.
+const ALERTA_TIPO_PARA_FILTRO = {
+  volume_atipico: { kind: 'bool', ref: 'volumeAtipicoEnabled' },
+  cnpj_dispersao_uf_nao_vizinha: { kind: 'bool', ref: 'dispersaoUfSemFronteiraEnabled' },
+  cnpj_cnae_farmacia_ausente: { kind: 'bool', ref: 'selectedCnaeIncompativel' },
+  socio_falecido: { kind: 'bool', ref: 'selectedSocioFalecido' },
+  socio_beneficio_social: { kind: 'dropdown', ref: 'selectedSocioBeneficio', value: SOCIO_BENEFICIO_DIRETO },
+  socio_idade_atipica: { kind: 'bool', ref: 'selectedSocioIdadeAtipica' },
+  socio_esocial: { kind: 'dropdown', ref: 'selectedSocioEsocial', value: SOCIO_ESOCIAL_DIRETO },
+};
+
+function isAlertaFiltroAtivo(alerta) {
+  const m = ALERTA_TIPO_PARA_FILTRO[alerta?.tipo];
+  if (!m) return false;
+  const current = filterStore[m.ref];
+  if (m.kind === 'bool') return Boolean(current);
+  return current === m.value;
+}
+
+function toggleAlertaFiltro(alerta) {
+  const m = ALERTA_TIPO_PARA_FILTRO[alerta?.tipo];
+  if (!m) return;
+  const current = filterStore[m.ref];
+  if (m.kind === 'bool') {
+    filterStore[m.ref] = !current;
+  } else {
+    filterStore[m.ref] = current === m.value ? 'Todos' : m.value;
+  }
+}
+
 function normalizeLabel(label) {
   return String(label || '')
     .normalize('NFD')
@@ -389,11 +424,15 @@ function handleRefreshCheck(event) {
             <span class="integrity-hero__label">estabelecimentos com ao menos 1 alerta identificado</span>
           </div>
           <div v-if="displayAlertasPanorama" class="alerts-grid">
-            <div
+            <button
               v-for="alerta in displayAlertasPanorama.alertas"
               :key="alerta.tipo"
+              type="button"
               class="alert-cell"
-              :class="`alert-cell--${alerta.severidade}`"
+              :class="[`alert-cell--${alerta.severidade}`, { 'alert-cell--active': isAlertaFiltroAtivo(alerta) }]"
+              :aria-pressed="isAlertaFiltroAtivo(alerta)"
+              :aria-label="`${alerta.titulo}: ${isAlertaFiltroAtivo(alerta) ? 'filtro ativo, clique para desativar' : 'clique para ativar o filtro'}`"
+              @click="toggleAlertaFiltro(alerta)"
             >
               <span class="alert-cell__count">
                 {{ alerta.qtd_cnpjs }}
@@ -404,7 +443,7 @@ function handleRefreshCheck(event) {
                 />
               </span>
               <span class="alert-cell__titulo">{{ alerta.titulo }}</span>
-            </div>
+            </button>
           </div>
           <div v-else-if="showAlertasSkeleton" class="alerts-grid alerts-grid--loading">
             <div v-for="n in 6" :key="n" class="alert-cell alert-cell--skeleton" />
@@ -1207,6 +1246,22 @@ function handleRefreshCheck(event) {
   border: 1px solid color-mix(in srgb, var(--card-border) 60%, transparent);
   background: color-mix(in srgb, var(--card-border) 18%, transparent);
   min-width: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.alert-cell:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--card-border) 32%, transparent);
+  border-color: color-mix(in srgb, var(--card-border) 80%, transparent);
+}
+
+.alert-cell:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 60%, transparent);
+  outline-offset: 1px;
 }
 
 .alert-cell--critico {
@@ -1214,9 +1269,36 @@ function handleRefreshCheck(event) {
   background: color-mix(in srgb, var(--risk-high) 7%, transparent);
 }
 
+.alert-cell--critico:hover {
+  background: color-mix(in srgb, var(--risk-high) 14%, transparent);
+  border-color: color-mix(in srgb, var(--risk-high) 42%, transparent);
+}
+
 .alert-cell--atencao {
   border-color: color-mix(in srgb, var(--risk-medium) 22%, transparent);
   background: color-mix(in srgb, var(--risk-medium) 7%, transparent);
+}
+
+.alert-cell--atencao:hover {
+  background: color-mix(in srgb, var(--risk-medium) 14%, transparent);
+  border-color: color-mix(in srgb, var(--risk-medium) 42%, transparent);
+}
+
+.alert-cell--active {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.alert-cell--critico.alert-cell--active {
+  background: color-mix(in srgb, var(--risk-high) 22%, transparent);
+  border-color: color-mix(in srgb, var(--risk-high) 65%, transparent);
+  color: var(--risk-high);
+}
+
+.alert-cell--atencao.alert-cell--active {
+  background: color-mix(in srgb, var(--risk-medium) 22%, transparent);
+  border-color: color-mix(in srgb, var(--risk-medium) 65%, transparent);
+  color: var(--risk-medium);
 }
 
 .alert-cell--skeleton {

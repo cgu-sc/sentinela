@@ -162,6 +162,8 @@ const socioEsocialTooltip =
   "Sócio direto: vínculo societário ativo na farmácia alvo e vínculo em outro CNPJ em função não gerencial no eSocial.\n" +
   "Sócio N3: vínculo ativo em empresa do nível 2 e vínculo em outro CNPJ em função não gerencial no eSocial.\n" +
   "Sócio direto ou N3: considera qualquer um desses dois níveis.";
+const socioIdadeAtipicaTooltip =
+  "Filtra estabelecimentos com ao menos um sócio pessoa física com vínculo ativo e idade inferior a 21 anos ou superior a 80 anos na data de referência do período selecionado.";
 
 const { formatBRL: formatCurrency } = useFormatting();
 
@@ -406,6 +408,7 @@ const isFilterActive = (field) => {
     selectedSocioBeneficio: FILTER_DEFAULTS.SOCIO_BENEFICIO,
     selectedSocioEsocial: FILTER_DEFAULTS.SOCIO_ESOCIAL,
     selectedCnaeIncompativel: FILTER_DEFAULTS.CNAE_INCOMPATIVEL,
+    selectedSocioIdadeAtipica: FILTER_DEFAULTS.SOCIO_IDADE_ATIPICA,
     selectedCnpjRaiz: "",
     percentualNaoComprovacaoRange: FILTER_DEFAULTS.PERCENTUAL_RANGE,
     valorMinSemComp: FILTER_DEFAULTS.VALOR_MIN,
@@ -491,6 +494,7 @@ const integrityFilterCount = computed(() =>
     "selectedSocioBeneficio",
     "selectedSocioEsocial",
     "selectedCnaeIncompativel",
+    "selectedSocioIdadeAtipica",
     "dispersaoUfSemFronteiraEnabled",
   ]),
 );
@@ -965,6 +969,37 @@ onBeforeUnmount(() => {
               class="filter-checkbox"
             />
             <span>Mostrar apenas farmácias com CNAE incompatível</span>
+          </label>
+        </div>
+      </div>
+
+      <div
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio com idade atípica (&lt; 21 ou &gt; 80 anos)
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioIdadeAtipicaTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioIdadeAtipica')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioIdadeAtipica = false"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioIdadeAtipica') }">
+          <label class="checkbox-label">
+            <input
+              v-model="filterStore.selectedSocioIdadeAtipica"
+              type="checkbox"
+              class="filter-checkbox"
+            />
+            <span>Mostrar apenas farmácias com sócio PF &lt; 21 ou &gt; 80 anos</span>
           </label>
         </div>
       </div>

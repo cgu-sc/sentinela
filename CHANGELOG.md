@@ -5,6 +5,25 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.1.8] - 2026-06-24
+
+### Adicionado
+- **Filtro "Sócio com idade atípica (< 21 ou > 80 anos)"** na sidebar, permitindo restringir o dashboard a estabelecimentos com sócios PF ativos em idade fora do padrão.
+- **Indicador `socio_idade_atipica`** no card Integridade do dashboard, com tooltip descritivo e contagem no panorama de alertas.
+- Filtro integrado em todos os endpoints: `/resumo`, `/faixas-risco`, `/producao-semestral`, `/alertas-panorama`, `/indicadores-analise` e `/indicadores-analise/cnpjs`.
+- Cache do filtro nos indicadores para recálculo automático via `_INDICADOR_SCOPE_FILTER_FIELDS`.
+- Checkbox com destaque visual (clear button, `filter-active-box`, `integrityFilterCount`) consistente com os demais filtros de integridade.
+- Função `build_perfil_filtrado` em `alertas_alvos.py` aplicando par_teia, socio_beneficio, socio_esocial, cnae_incompativel, socio_idade_atipica e volume_atipico em sequência, compartilhada por dashboard, fator_risco, indicadores e alertas_panorama.
+
+### Corrigido
+- **Card Integridade (HomeView) não reagia aos filtros da sidebar.** O endpoint `/alertas-panorama` e a função `get_alertas_panorama` recebiam apenas filtros geográficos e `dispersao_uf_sem_fronteira`; demais filtros da sidebar (CNAE, sócio CadÚnico/Defeso, sócio eSocial, sócio idade atípica, PAR, volume atípico) eram ignorados. O endpoint e o service agora aceitam todos os filtros globais e a função `fetchAlertasPanorama` no frontend usa `buildAnalyticsParams` para enviá-los, refletindo as contagens do card em tempo real quando o usuário marca/desmarca qualquer filtro.
+- `_filtrar_id_cnpjs_por_escopo` em `alertas_panorama.py` retornava `None` (interpretado como "Brasil inteiro") sempre que não havia filtro geográfico, descartando todos os filtros de integridade aplicados via `build_perfil_filtrado`. Agora retorna os `id_cnpj` do `perfil_df` filtrado (ou `None` apenas quando o filtro atual não casa com nenhum CNPJ), refletindo corretamente o subconjunto da sidebar no card.
+
+### Alterado
+- Cálculo de idade do sócio passa a ser **on-demand** a partir de `dados_socios.parquet` (mesma lógica do `alertas_panorama`), em vez de coluna materializada `has_socio_idade_atipica` em `perfil_consolidado_estabelecimento`. Garante consistência quando um sócio cruza a fronteira dos 21 ou 80 anos após a geração do Parquet.
+- Data de referência para o cálculo da idade é `data_fim` do período selecionado (com fallback para `date.today()`), alinhada ao card Integridade.
+- Filtro `volume_atipico` aplicado uniformemente no `perfil_filtrado` em todos os call sites (antes era aplicado direto no `period_df` em alguns e no perfil em outros, com duplicação quando passava pelos dois caminhos).
+
 ## [1.1.7] - 2026-06-24
 
 ### Adicionado

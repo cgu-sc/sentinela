@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Optional
 
 import polars as pl
 
@@ -15,6 +16,7 @@ from ...schemas.analytics import AlertaPanoramaItemSchema, AlertasPanoramaRespon
 from .geografico import UF_VIZINHAS, UF_BRASILEIRAS, LIMIAR_ALERTA_UF_NAO_VIZINHA_PCT
 from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
+from .alertas_alvos import build_perfil_filtrado
 
 
 # ---------------------------------------------------------------------------
@@ -22,20 +24,30 @@ from .volume_atipico import get_volume_atipico_id_cnpjs_df
 # ---------------------------------------------------------------------------
 
 def _filtrar_id_cnpjs_por_escopo(
+    perfil_df: pl.DataFrame,
     uf: str | None,
     regiao_id: int | None,
     id_ibge7: int | None,
 ) -> pl.Series | None:
     """
-    Retorna um Series de id_cnpj (Int32) correspondente ao escopo geográfico
-    informado, ou None quando não há filtro (Brasil inteiro).
+    Retorna um Series de id_cnpj (Int32) restrito ao escopo geográfico
+    informado e aos filtros de integridade já aplicados no `perfil_df` (que
+    o call site deve passar via `build_perfil_filtrado`). Retorna None
+    apenas quando o `perfil_df` está vazio, indicando que os filtros
+    atuais não casaram com nenhum CNPJ.
     """
-    if not any([uf, regiao_id, id_ibge7]):
+    if "id_cnpj" not in perfil_df.columns:
+        raise RuntimeError(
+            "perfil_estabelecimento sem coluna obrigatória para escopo: id_cnpj"
+        )
+    if perfil_df.is_empty():
         return None
 
-    perfil = get_df_perfil_estabelecimento()
+    if not any([uf, regiao_id, id_ibge7]):
+        return perfil_df.get_column("id_cnpj")
+
     required = {"id_cnpj", "uf", "id_regiao_saude", "id_ibge7"}
-    missing = required - set(perfil.columns)
+    missing = required - set(perfil_df.columns)
     if missing:
         raise RuntimeError(
             f"perfil_estabelecimento sem colunas obrigatórias para filtro geográfico: {missing}"
@@ -49,7 +61,7 @@ def _filtrar_id_cnpjs_por_escopo(
     elif uf:
         mask = mask & (pl.col("uf") == uf)
 
-    return perfil.filter(mask).get_column("id_cnpj")
+    return perfil_df.filter(mask).get_column("id_cnpj")
 
 
 def _intersect_id_cnpjs(
@@ -321,18 +333,41 @@ def get_alertas_panorama(
     id_ibge7: int | None = None,
     data_inicio: date | None = None,
     data_fim: date | None = None,
+    par_teia: Optional[str] = None,
+    socio_beneficio: Optional[str] = None,
+    socio_esocial: Optional[str] = None,
+    cnae_incompativel: bool = False,
+    socio_idade_atipica: bool = False,
+    volume_atipico: bool = False,
+    volume_atipico_limite: Optional[float] = None,
     dispersao_uf_sem_fronteira: bool = False,
     dispersao_uf_sem_fronteira_limite: float | None = None,
 ) -> AlertasPanoramaResponse:
     """
     Agrega contagens de alertas de integridade por tipo, filtradas pelo escopo
-    geográfico e período informados. Processamento 100% em memória via Polars.
+    geográfico, filtros de integridade e período informados. Processamento
+    100% em memória via Polars.
     """
     ano_base_min = data_inicio.year if data_inicio else None
     ano_base_max = data_fim.year if data_fim else None
     data_ref = data_fim or date.today()
 
-    id_cnpjs = _filtrar_id_cnpjs_por_escopo(uf, regiao_id, id_ibge7)
+    perfil_df = get_df_perfil_estabelecimento()
+    perfil_filtrado = build_perfil_filtrado(
+        perfil_df,
+        par_teia=par_teia,
+        socio_beneficio=socio_beneficio,
+        socio_esocial=socio_esocial,
+        cnae_incompativel=cnae_incompativel,
+        socio_idade_atipica=socio_idade_atipica,
+        data_referencia=data_ref,
+        volume_atipico=volume_atipico,
+        volume_atipico_inicio=data_inicio,
+        volume_atipico_fim=data_fim,
+        volume_atipico_limite=volume_atipico_limite,
+    )
+
+    id_cnpjs = _filtrar_id_cnpjs_por_escopo(perfil_filtrado, uf, regiao_id, id_ibge7)
     if dispersao_uf_sem_fronteira:
         id_cnpjs_dispersao = (
             get_dispersao_uf_sem_fronteira_id_cnpjs_df(

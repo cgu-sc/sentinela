@@ -9,9 +9,8 @@ from data_cache import get_df, get_df_perfil_estabelecimento
 
 from ...schemas.analytics import FatorRiscoBucketSchema, FatorRiscoResponseSchema
 from ...utils.text_search import apply_token_search
-from .alertas_alvos import apply_socio_beneficio_filter, apply_socio_esocial_filter, apply_cnae_incompativel_filter
+from .alertas_alvos import build_perfil_filtrado
 from .dispersao_uf import get_dispersao_uf_sem_fronteira_id_cnpjs_df
-from .par_teia import apply_par_teia_filter
 from .volume_atipico import get_volume_atipico_id_cnpjs_df
 
 
@@ -42,6 +41,7 @@ def get_fator_risco_data(
     socio_beneficio: Optional[str] = None,
     socio_esocial: Optional[str] = None,
     cnae_incompativel: bool = False,
+    socio_idade_atipica: bool = False,
     estabelecimento: Optional[str] = None,
 ) -> FatorRiscoResponseSchema:
     """
@@ -87,17 +87,23 @@ def get_fator_risco_data(
             estabelecimento or razao_social,
             ("cnpj", "razao_social", "nome_fantasia"),
         )
-        perfil_filtrado = apply_par_teia_filter(perfil_filtrado, par_teia)
-        perfil_filtrado = apply_socio_beneficio_filter(perfil_filtrado, socio_beneficio)
-        perfil_filtrado = apply_socio_esocial_filter(perfil_filtrado, socio_esocial)
-        perfil_filtrado = apply_cnae_incompativel_filter(perfil_filtrado, cnae_incompativel)
+        perfil_filtrado = build_perfil_filtrado(
+            perfil_filtrado,
+            par_teia=par_teia,
+            socio_beneficio=socio_beneficio,
+            socio_esocial=socio_esocial,
+            cnae_incompativel=cnae_incompativel,
+            socio_idade_atipica=socio_idade_atipica,
+            data_referencia=fim,
+            volume_atipico=volume_atipico,
+            volume_atipico_inicio=inicio,
+            volume_atipico_fim=fim,
+            volume_atipico_limite=volume_atipico_limite,
+        )
         period_df = (
             df.filter(mov_mask)
             .join(perfil_filtrado.select("id_cnpj"), on="id_cnpj", how="semi")
         )
-        if volume_atipico:
-            id_cnpjs_volume_df = get_volume_atipico_id_cnpjs_df(inicio, fim, volume_atipico_limite)
-            period_df = period_df.join(id_cnpjs_volume_df, on="id_cnpj", how="semi")
         if dispersao_uf_sem_fronteira:
             id_cnpjs_dispersao_df = get_dispersao_uf_sem_fronteira_id_cnpjs_df(
                 inicio,

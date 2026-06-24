@@ -14,7 +14,7 @@ if (!(Test-Path $PY)) {
 
 # 1. INSTALAR DEPENDENCIAS DESKTOP
 Write-Host "`n[1/4] Instalando dependencias desktop..." -ForegroundColor Yellow
-& $PY -m pip install uvicorn pywebview pyinstaller --quiet
+& $PY -m pip install uvicorn pywebview pyinstaller pywinstyles --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Erro ao instalar dependencias desktop." -ForegroundColor Red
     exit $LASTEXITCODE

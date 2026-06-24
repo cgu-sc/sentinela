@@ -520,6 +520,17 @@ def main() -> None:
         except Exception:
             pass
 
+        # Cor da barra de título
+        try:
+            import ctypes
+            import pywinstyles
+            time.sleep(0.3)
+            hwnd = ctypes.windll.user32.FindWindowW(None, "Sentinela — Atualizando")
+            if hwnd:
+                pywinstyles.change_header_color(hwnd, "#080d1a")
+        except Exception:
+            pass
+
         t = threading.Thread(
             target=_run_update,
             args=(window, exe_path, tmp_path),

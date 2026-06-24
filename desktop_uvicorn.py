@@ -368,35 +368,25 @@ def main():
         logger.info("Janela criada, iniciando webview.start()...")
 
         def set_title_bar_color():
-            """Define a cor da barra de título via DWM API (Windows 11+)."""
+            """Define a cor da barra de título via pywinstyles (Windows 10/11)."""
             try:
+                import pywinstyles
                 import ctypes
-                import ctypes.wintypes
 
-                DWMWA_CAPTION_COLOR = 35  # disponível no Windows 11 build 22000+
-                # Cor #1a1a1a em formato 0x00BBGGRR (little-endian)
-                color = ctypes.c_uint(0x001a1a1a)
-
-                # Busca o handle pelo título da janela
                 hwnd = ctypes.windll.user32.FindWindowW(None, "Sentinela")
                 if not hwnd:
                     logger.warning("Barra de título: handle da janela não encontrado pelo título.")
                     return
 
-                result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                    hwnd,
-                    DWMWA_CAPTION_COLOR,
-                    ctypes.byref(color),
-                    ctypes.sizeof(color),
-                )
-                logger.info(f"Cor da barra de título aplicada. HWND={hwnd}, resultado DWM={result}")
+                pywinstyles.change_header_color(hwnd, "#1a1a1a")
+                logger.info(f"Cor da barra de título aplicada via pywinstyles. HWND={hwnd}")
             except Exception as e:
                 logger.warning(f"Não foi possível aplicar cor na barra de título: {e}")
 
         def on_shown():
             logger.info("Maximizando janela")
             window.maximize()
-            time.sleep(0.5)  # aguarda janela estar completamente renderizada
+  
             set_title_bar_color()
 
         webview.start(on_shown)

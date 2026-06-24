@@ -5,6 +5,29 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.1.7] - 2026-06-24
+
+### Adicionado
+- **Botão de refresh para verificação manual de atualizações** ao lado do label "Atualização" no card Sistema (HomeView).
+  - Ícone 🔄 permite forçar verificação imediata sem aguardar os 15 minutos do polling automático.
+  - Desabilitado durante a verificação com feedback visual de carregamento (ícone gira).
+  - Aciona requisição POST para `/api/v1/system/check-update`.
+- **Cor da barra de título da janela desktop** personalizada via `pywinstyles` (Windows 10/11): barra escura (`#1a1a1a`) alinhada ao tema visual do Sentinela.
+- **Cor da barra de título do SentinelaUpdater** personalizada (`#080d1a`), alinhada ao fundo da janela de atualização.
+- **Verificação automática de atualizações a cada 15 minutos** em segundo plano, sem intervenção do usuário.
+- **Script `release_granian.ps1`** equivalente ao `release.ps1` para builds com Granian.
+
+### Alterado
+- **Proporcionalidade dos cards no dashboard (HomeView)**:
+  - Card Sistema aumentado (0.88fr → 1fr) para melhor destaque.
+  - Card Produção reduzido (1fr → 0.9fr) para melhor equilíbrio visual.
+- **Ícone de atualização aumentado em tamanho** (1rem → 1.15rem, font-size: 0.6rem) para melhor visibilidade.
+- **Label do filtro "Atualização"** agora exibe ícone de refresh inline usando `display: flex` com alinhamento horizontal.
+- **`release.ps1`**: limpeza de tag/release anterior agora é sempre executada, independente de a tag existir localmente — corrige falha ao recriar releases.
+- **`build_pywebview_granian.ps1`**: adicionado passo de build do `SentinelaUpdater.exe` antes do executável principal, garantindo que o updater seja embutido corretamente.
+- **`sentinela_server2.spec`**: adicionado `SentinelaUpdater.exe` nos `datas` e nome do executável alterado para `Sentinela` (igual ao uvicorn).
+- **Documentação** (`mkdocs.yml`): removida dependência do `polyfill.io` que causava prompt de login ao acessar o GitHub Pages.
+
 ## [1.1.6] - 2026-06-23
 
 ### Adicionado

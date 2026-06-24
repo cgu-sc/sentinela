@@ -957,7 +957,7 @@ onBeforeUnmount(() => {
             <i class="pi pi-eraser" />
           </button>
         </label>
-        <div class="filter-checkbox-wrapper">
+        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedCnaeIncompativel') }">
           <label class="checkbox-label">
             <input
               v-model="filterStore.selectedCnaeIncompativel"

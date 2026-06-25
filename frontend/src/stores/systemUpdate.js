@@ -14,6 +14,9 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
   const checkedAt = ref(null);
   const source = ref(null);       // 'remote' | 'cache' | 'none'
   const message = ref('');
+  const blockTitle = ref(null);
+  const blockMessage = ref(null);
+  const blockedSince = ref(null);
   const loading = ref(false);
 
   // ─── Estado de download automático ──────────────────────────────────────────
@@ -26,13 +29,15 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
   const POLLING_INTERVAL_MS = 15 * 60 * 1000; // 15 minutos
 
   // ─── Computed de verificação ─────────────────────────────────────────────────
-  const isBlocked = computed(() => status.value === 'update_required');
+  const isBlocked = computed(() => status.value === 'update_required' || status.value === 'execution_blocked');
+  const isExecutionBlocked = computed(() => status.value === 'execution_blocked');
   const hasUpdate = computed(() => status.value === 'update_available');
   const isOffline = computed(() => status.value === 'offline_cached');
   const isUnavailable = computed(() => status.value === 'verification_unavailable');
   const isCurrent = computed(() => status.value === 'current');
 
   const statusLabel = computed(() => {
+    if (status.value === 'execution_blocked') return 'ExecuÃ§Ã£o bloqueada';
     switch (status.value) {
       case 'current':                  return 'Atualizado';
       case 'update_available':         return 'Atualização disponível';
@@ -48,6 +53,7 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
       case 'current':                  return 'ok';
       case 'update_available':         return 'warn';
       case 'update_required':          return 'critical';
+      case 'execution_blocked':        return 'critical';
       case 'offline_cached':           return 'muted';
       case 'verification_unavailable': return 'muted';
       default:                         return 'muted';
@@ -95,6 +101,9 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
     checkedAt.value       = data.checked_at;
     source.value          = data.source;
     message.value         = data.message;
+    blockTitle.value      = data.block_title;
+    blockMessage.value    = data.block_message;
+    blockedSince.value    = data.blocked_since;
   }
 
   async function fetchUpdateStatus() {
@@ -209,8 +218,9 @@ export const useSystemUpdateStore = defineStore('systemUpdate', () => {
   return {
     // verificação
     status, currentVersion, latestVersion, minimumVersion,
-    downloadUrl, releaseNotesUrl, checkedAt, source, message, loading,
-    isBlocked, hasUpdate, isOffline, isUnavailable, isCurrent,
+    downloadUrl, releaseNotesUrl, checkedAt, source, message,
+    blockTitle, blockMessage, blockedSince, loading,
+    isBlocked, isExecutionBlocked, hasUpdate, isOffline, isUnavailable, isCurrent,
     statusLabel, statusTone, checkedAtFormatted,
     fetchUpdateStatus, forceCheckUpdate,
     // download automático

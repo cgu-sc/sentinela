@@ -5,6 +5,23 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.4.0] - 2026-06-25
+
+### Adicionado
+- **Bloqueio administrativo de execução via manifesto assinado.** O `manifest.json` passa a aceitar um bloco `execution_policy` com a flag `blocked_execution`, título, mensagem e timestamp opcionais (`blocked_since`). Quando a flag vem `true` em um manifesto com assinatura Ed25519 válida, o backend devolve status `execution_blocked` e o frontend exibe uma tela de bloqueio fullscreen sem confirmação do usuário. O desbloqueio é automático na próxima checagem (15 min ou botão "Verificar agora") quando o manifesto volta para `blocked_execution: false`.
+- **Schema do manifesto atualizado** com `ExecutionPolicy` (Pydantic) em `backend/api/schemas/system_update.py`. O campo `execution_policy` é obrigatório a partir desta versão: manifestos sem o bloco falham a validação de schema, sem fallback silencioso.
+- **Status `execution_blocked`** no contrato de `UpdateStatusResponse`, propagado por `check_for_updates()` e `initialize_update_check()` em ambos os caminhos (remoto e cache offline). O cache local com assinatura válida continua aplicando o bloqueio mesmo sem rede, evitando que o usuário se proteja via desligamento de internet.
+- **Tela de bloqueio genérica** em `frontend/src/views/components/UpdateBlocker.vue` com dois modos:
+  - `update_required` — atualização obrigatória por versão mínima (comportamento anterior).
+  - `execution_blocked` — bloqueio administrativo. Título e mensagem vêm do manifesto (`block_title`/`block_message`), data `blocked_since` formatada pt-BR, ícone e tom ajustados, botão "Baixar atualização" só aparece quando há `download_url` válido no manifesto.
+- **Botão "Verificar agora"** no modo `execution_blocked` para forçar re-checagem imediata do manifesto.
+- **Helpers de mensagem** `_manifest_status()` e `_manifest_message()` em `backend/api/services/system_update.py` centralizam a derivação do status final e da mensagem, garantindo que o bloqueio administrativo tenha prioridade sobre `update_required`/`update_available`/`current`.
+
+### Alterado
+- **Card "Sistema" da HomeView** passa a refletir o status `execution_blocked` com tom `critical` e label "Execução bloqueada" no lugar de "Atualização obrigatória" quando o motivo do bloqueio é administrativo, evitando confundir o operador.
+- **Contrato do manifesto é breaking**: campo `execution_policy` agora é obrigatório. Manifestos antigos sem o bloco serão rejeitados pela validação Pydantic, e o sistema cai em `verification_unavailable` (sem bloquear, apenas sem garantia online) até a próxima publicação já com o novo formato.
+
+
 ## [1.3.1] - 2026-06-25
 
 ### Alterado

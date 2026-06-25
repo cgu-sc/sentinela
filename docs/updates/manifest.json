@@ -2,9 +2,15 @@
   "schema_version": 1,
   "product": "sentinela",
   "channel": "stable",
-  "latest_version": "1.3.1",
+  "latest_version": "1.4.0",
   "minimum_supported_version": "1.1.4",
   "published_at": "2026-06-25T08:00:00-03:00",
-  "download_url": "https://github.com/cgu-sc/sentinela/releases/download/v1.3.1/Sentinela.exe",
-  "release_notes_url": "https://github.com/cgu-sc/sentinela/releases/tag/v1.3.1"
+  "download_url": "https://github.com/cgu-sc/sentinela/releases/download/v1.4.0/Sentinela.exe",
+  "release_notes_url": "https://github.com/cgu-sc/sentinela/releases/tag/v1.4.0",
+  "execution_policy": {
+    "blocked_execution": false,
+    "block_title": "Execução bloqueada",
+    "block_message": "Esta versão do Sentinela foi temporariamente bloqueada pela política de atualização. Atualize para a versão mais recente para continuar utilizando o sistema.",
+    "blocked_since": null
+  }
 }

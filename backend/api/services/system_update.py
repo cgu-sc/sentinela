@@ -267,7 +267,43 @@ def _build_response(
         download_url=str(manifest.download_url) if manifest else None,
         release_notes_url=str(manifest.release_notes_url) if manifest else None,
         message=message,
+        block_title=manifest.execution_policy.block_title if manifest else None,
+        block_message=manifest.execution_policy.block_message if manifest else None,
+        blocked_since=manifest.execution_policy.blocked_since if manifest else None,
     )
+
+
+def _manifest_status(current_version: str, manifest: UpdateManifest) -> str:
+    """Retorna o status final do manifesto, priorizando bloqueio operacional assinado."""
+    if manifest.execution_policy.blocked_execution:
+        return "execution_blocked"
+    return _compare_versions(
+        current_version,
+        manifest.latest_version,
+        manifest.minimum_supported_version,
+    )
+
+
+def _manifest_message(status: str, manifest: UpdateManifest, *, offline: bool = False) -> str:
+    if status == "execution_blocked":
+        return manifest.execution_policy.block_message
+    if status == "current":
+        return "Sistema atualizado."
+    if status == "update_available":
+        return f"Nova versão disponível: {manifest.latest_version}."
+    if status == "update_required":
+        if offline:
+            return (
+                f"Atualização obrigatória (verificação offline). "
+                f"Versão mínima: {manifest.minimum_supported_version}."
+            )
+        return (
+            f"Atualização obrigatória. Versão mínima exigida: "
+            f"{manifest.minimum_supported_version}."
+        )
+    if status == "offline_cached":
+        return "Verificação offline. Usando último manifesto validado."
+    return "Não foi possível verificar atualizações. Continuando sem verificação."
 
 
 # ---------------------------------------------------------------------------
@@ -319,26 +355,14 @@ def check_for_updates(force_remote: bool = False) -> UpdateStatusResponse:
         manifest = _validate_manifest(manifest_bytes)
         _write_cache_atomic(manifest_bytes, sig_bytes)
 
-        status = _compare_versions(
-            current_version,
-            manifest.latest_version,
-            manifest.minimum_supported_version,
-        )
-        messages = {
-            "current": "Sistema atualizado.",
-            "update_available": f"Nova versão disponível: {manifest.latest_version}.",
-            "update_required": (
-                f"Atualização obrigatória. Versão mínima exigida: "
-                f"{manifest.minimum_supported_version}."
-            ),
-        }
+        status = _manifest_status(current_version, manifest)
         result = _build_response(
             current_version=current_version,
             manifest=manifest,
             status=status,
             source="remote",
             checked_at=datetime.now(timezone.utc),
-            message=messages[status],
+            message=_manifest_message(status, manifest),
         )
         _cached_status = result
         return result
@@ -354,19 +378,14 @@ def check_for_updates(force_remote: bool = False) -> UpdateStatusResponse:
             manifest = _validate_manifest(cached_manifest_bytes)
 
             # Cache válido ainda pode exigir bloqueio
-            status = _compare_versions(
-                current_version,
-                manifest.latest_version,
-                manifest.minimum_supported_version,
-            )
-            if status == "update_required":
-                msg = (
-                    f"Atualização obrigatória (verificação offline). "
-                    f"Versão mínima: {manifest.minimum_supported_version}."
-                )
+            status = _manifest_status(current_version, manifest)
+            if status in ("update_required", "execution_blocked"):
+                msg = _manifest_message(status, manifest, offline=True)
                 final_status = "update_required"
+                if status == "execution_blocked":
+                    final_status = "execution_blocked"
             else:
-                msg = "Verificação offline. Usando último manifesto validado."
+                msg = _manifest_message("offline_cached", manifest)
                 final_status = "offline_cached"
 
             result = _build_response(
@@ -419,20 +438,8 @@ def initialize_update_check() -> None:
         try:
             _verify_signature(cached_manifest_bytes, cached_sig_bytes)
             manifest = _validate_manifest(cached_manifest_bytes)
-            status = _compare_versions(
-                current_version,
-                manifest.latest_version,
-                manifest.minimum_supported_version,
-            )
-            if status == "update_required":
-                msg = (
-                    f"Atualização obrigatória. Versão mínima: "
-                    f"{manifest.minimum_supported_version}."
-                )
-            elif status == "update_available":
-                msg = f"Nova versão disponível: {manifest.latest_version}."
-            else:
-                msg = "Sistema atualizado."
+            status = _manifest_status(current_version, manifest)
+            msg = _manifest_message(status, manifest)
 
             _cached_status = _build_response(
                 current_version=current_version,

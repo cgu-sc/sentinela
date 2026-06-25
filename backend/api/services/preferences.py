@@ -66,7 +66,6 @@ def _default_preferences_dir() -> Path:
 
 class PreferencesService:
     SCHEMA_VERSION = 1
-    LEGACY_BASE_DIR = Path(__file__).resolve().parents[2] / "data" / "user_preferences"
     BASE_DIR = _default_preferences_dir()
     FILE_PATH = BASE_DIR / "preferences.json"
     BACKUP_PATH = BASE_DIR / "preferences.backup.json"
@@ -103,19 +102,6 @@ class PreferencesService:
     @classmethod
     def _ensure_dir(cls) -> None:
         cls.BASE_DIR.mkdir(parents=True, exist_ok=True)
-
-    @classmethod
-    def _migrate_legacy_file(cls) -> None:
-        if cls.FILE_PATH.exists():
-            return
-
-        if cls.BASE_DIR != cls.LEGACY_BASE_DIR:
-            legacy_file = cls.LEGACY_BASE_DIR / "preferences.json"
-            if legacy_file.exists():
-                try:
-                    cls._copy_file(legacy_file, cls.FILE_PATH)
-                except OSError:
-                    pass
 
     @classmethod
     def _normalize(cls, data: Dict[str, Any] | None) -> Dict[str, Any]:
@@ -156,7 +142,6 @@ class PreferencesService:
     @classmethod
     def read(cls) -> Dict[str, Any]:
         cls._ensure_dir()
-        cls._migrate_legacy_file()
         if not cls.FILE_PATH.exists():
             data = cls.default_preferences()
             cls.write(data)

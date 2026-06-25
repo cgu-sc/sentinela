@@ -150,4 +150,15 @@ function onRowClick({ data: row }) {
 .rede-dialog__state i {
   font-size: 1.05rem;
 }
+
+/* Override da tabela compartilhada: ela reserva altura para 20 linhas
+   via min-height no .p-datatable-wrapper, o que estoura o modal de 70vh.
+   Aqui no modal a tabela assume sua altura natural. */
+.rede-dialog :deep(.p-datatable-wrapper) {
+  min-height: 0;
+}
+
+.rede-dialog :deep(.p-datatable) {
+  min-height: 0;
+}
 </style>

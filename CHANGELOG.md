@@ -5,15 +5,15 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
-## [1.6.1] - 2026-06-25
+## [1.6.0] - 2026-06-25
 
 ### Adicionado
-- **Modal de estabelecimentos da rede ao clicar na badge "Grande Rede"** em `CnpjHeader.vue`. Quando `qtd_estabelecimentos_rede > 1`, abrir a badge exibe um modal fullscreen com a lista de todos os estabelecimentos da rede usando a tabela modelo `EstablishmentRiskTable.vue`. O modal reaproveita o endpoint existente `/api/v1/analytics/indicadores-analise/cnpjs` com `indicador=percentual_nao_comprovacao` + `cnpj_raiz` (zero alteracoes no backend). Clique na linha fecha o modal e navega para o detalhe do CNPJ (drill-down).
-- **Novo componente** `frontend/src/views/components/cnpj/RedeEstabelecimentosDialog.vue`: modal PrimeVue fullscreen com header, loading state, empty state e tabela reusada.
+- **Modal de estabelecimentos da rede ao clicar na badge "Estabelecimentos"** em `CnpjHeader.vue`. Quando `qtd_estabelecimentos_rede > 1`, a badge exibe um modal fullscreen com a lista de todos os estabelecimentos da rede usando a tabela modelo `EstablishmentRiskTable.vue`. O modal reaproveita o endpoint existente `/api/v1/analytics/indicadores-analise/cnpjs` com `indicador=percentual_nao_comprovacao` + `cnpj_raiz` (zero alteracoes no backend). Clique na linha fecha o modal e navega para o detalhe do CNPJ (drill-down).
+- **Novo componente** `frontend/src/views/components/cnpj/RedeEstabelecimentosDialog.vue`: modal PrimeVue fullscreen (70vw x 70vh) com header, loading state, empty state e tabela reusada. Reaproveita o CSS class `.clickable-badge` (cursor pointer + hover com lift) ja existente.
 - **Prop `compact` em `EstablishmentRiskTable.vue`**: quando `true`, a tabela assume sua altura natural em vez de reservar 20 linhas. Aplicado via `pt` do PrimeVue (inline style no `.p-datatable-wrapper`) para bypass de escopo de CSS scoped. Default `false` preserva o comportamento original em `/estabelecimentos`.
 
 ### Alterado
-- **Badge "Grande Rede"** no `CnpjHeader.vue`: cursor pointer + hover com lift e box-shadow sutil via `.clickable-badge` (classe condicional antes inativa). Tooltip subiu de `.bottom` para `.top` para evitar que o texto mais longo estoure lateralmente.
+- **Header do CNPJ simplificado**: a badge "Grande Rede" (Sim/Não) foi removida. A informacao da quantidade de estabelecimentos da rede agora vive sozinha em uma badge dedicada "Estabelecimentos", que e clicavel e abre o modal de rede. Resultado: a interface indica visualmente qual informacao e interativa, sem perder o conteudo. Estabelecimentos individuais (qtd = 1) nao mostram a badge.
 - **Tooltip global** em `assets/styles/tooltip.css`: adicionado `position: fixed` + `pointer-events: none` no `.p-tooltip.sentinela-tooltip` para evitar clipping por ancestrais com `overflow: hidden` ou `transform`.
 
 ### Correcoes

@@ -5,16 +5,28 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.4.1] - 2026-06-25
+
+### Alterado
+- **Tela de bloqueio administrativo dedicada** em `frontend/src/views/components/ExecutionBlocker.vue`. A 1.4.0 compartilhava a `UpdateBlocker.vue` entre `update_required` e `execution_blocked`; o teste de UX mostrou que a tela única confundia o operador, porque "atualização necessária" e "decisão administrativa" são contextos diferentes. A nova tela tem visual institucional e sóbrio (escuro, ícone escudo/X, eyebrow `Decisão administrativa`, pill `Bloqueado desde`, versão instalada como referência), sem a tabela de versões que só fazia sentido em `update_required`. Ações: **Verificar novamente** (primária), **Ver alterações** e **Baixar atualização** (secundárias, condicionais), **Sair** (ghost, só desktop).
+- **Tela de atualização obrigatória isolada** em `frontend/src/views/components/UpdateBlocker.vue`. Voltou a ser exclusiva para `update_required`, com a tabela de versões (Sua versão / Versão mínima / Versão mais recente) e os 3 botões originais (Baixar, Ver alterações, Sair).
+- `App.vue` passou a rotear o status para a tela certa:
+  - `update_required` → `<UpdateBlocker />`
+  - `execution_blocked` → `<ExecutionBlocker />`
+
+
 ## [1.4.0] - 2026-06-25
 
 ### Adicionado
 - **Bloqueio administrativo de execução via manifesto assinado.** O `manifest.json` passa a aceitar um bloco `execution_policy` com a flag `blocked_execution`, título, mensagem e timestamp opcionais (`blocked_since`). Quando a flag vem `true` em um manifesto com assinatura Ed25519 válida, o backend devolve status `execution_blocked` e o frontend exibe uma tela de bloqueio fullscreen sem confirmação do usuário. O desbloqueio é automático na próxima checagem (15 min ou botão "Verificar agora") quando o manifesto volta para `blocked_execution: false`.
 - **Schema do manifesto atualizado** com `ExecutionPolicy` (Pydantic) em `backend/api/schemas/system_update.py`. O campo `execution_policy` é obrigatório a partir desta versão: manifestos sem o bloco falham a validação de schema, sem fallback silencioso.
 - **Status `execution_blocked`** no contrato de `UpdateStatusResponse`, propagado por `check_for_updates()` e `initialize_update_check()` em ambos os caminhos (remoto e cache offline). O cache local com assinatura válida continua aplicando o bloqueio mesmo sem rede, evitando que o usuário se proteja via desligamento de internet.
-- **Tela de bloqueio genérica** em `frontend/src/views/components/UpdateBlocker.vue` com dois modos:
-  - `update_required` — atualização obrigatória por versão mínima (comportamento anterior).
-  - `execution_blocked` — bloqueio administrativo. Título e mensagem vêm do manifesto (`block_title`/`block_message`), data `blocked_since` formatada pt-BR, ícone e tom ajustados, botão "Baixar atualização" só aparece quando há `download_url` válido no manifesto.
-- **Botão "Verificar agora"** no modo `execution_blocked` para forçar re-checagem imediata do manifesto.
+- **Tela dedicada de bloqueio administrativo** em `frontend/src/views/components/ExecutionBlocker.vue`. Visual institucional e sóbrio: tom vermelho escuro, ícone de escudo/X maior, eyebrow `Decisão administrativa` em caps, data `Bloqueado desde` em pill, versão instalada como referência. Sem tabela de versões (que não faz sentido fora do contexto de `update_required`). Ações: **Verificar novamente** (primária), **Ver alterações** e **Baixar atualização** (secundárias, condicionais), **Sair** (ghost, só desktop).
+- **Tela de atualização obrigatória isolada** em `frontend/src/views/components/UpdateBlocker.vue`. Voltou a ser exclusiva para `update_required`, com a tabela de versões (Sua versão / Versão mínima / Versão mais recente) e os 3 botões originais.
+- `App.vue` passou a rotear o status para a tela certa:
+  - `update_required` → `<UpdateBlocker />`
+  - `execution_blocked` → `<ExecutionBlocker />`
+- **Store `systemUpdate.js`**: `blockTitle`, `blockMessage` e `blockedSince` permanecem como campos consumidos pela `ExecutionBlocker.vue`; `isExecutionBlocked` é o gatilho de renderização.
 - **Helpers de mensagem** `_manifest_status()` e `_manifest_message()` em `backend/api/services/system_update.py` centralizam a derivação do status final e da mensagem, garantindo que o bloqueio administrativo tenha prioridade sobre `update_required`/`update_available`/`current`.
 
 ### Alterado

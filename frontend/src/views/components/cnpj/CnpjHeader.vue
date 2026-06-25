@@ -16,6 +16,7 @@ import ObservationDialog from "./ObservationDialog.vue";
 import IntegrityAlertsDialog from "./IntegrityAlertsDialog.vue";
 import CnpjCadastroDialog from "./CnpjCadastroDialog.vue";
 import CnpjTerritoryMap from "./CnpjTerritoryMap.vue";
+import RedeEstabelecimentosDialog from "./RedeEstabelecimentosDialog.vue";
 
 const cnpjNav = useCnpjNavStore();
 const farmaciaLists = useFarmaciaListsStore();
@@ -203,12 +204,17 @@ const formattedFullAddress = computed(() => {
 
 const router = useRouter();
 
-const filterNetwork = () => {
+const showRedeDialog = ref(false);
+
+const openRedeDialog = () => {
   if (props.cnpjData?.qtd_estabelecimentos_rede > 1) {
-    filterStore.selectedCnpjRaiz = extractCnpjRaiz(props.cnpj);
-    router.push("/cnpj");
+    showRedeDialog.value = true;
   }
 };
+
+const redeDialogCnpjRaiz = computed(() =>
+  extractCnpjRaiz(props.cnpj ?? "")
+);
 
 const showObsDialog = ref(false);
 const openObsDialog = () => {
@@ -391,12 +397,12 @@ const pdfTooltip = computed(() => {
               cnpjData.is_grande_rede ? 'status-info' : 'status-secondary',
               cnpjData.qtd_estabelecimentos_rede > 1 ? 'clickable-badge' : '',
             ]"
-            v-tooltip.bottom="
+            v-tooltip.top="
               cnpjData.qtd_estabelecimentos_rede > 1
                 ? 'Clique para ver todos os estabelecimentos desta rede'
                 : 'Estabelecimento Individual'
             "
-            @click="filterNetwork"
+            @click="openRedeDialog"
           >
             <span class="institution-label">Grande Rede</span>
             <span class="institution-value">
@@ -702,6 +708,11 @@ const pdfTooltip = computed(() => {
       v-model:visible="showIntegrityDialog"
       :data="integrityAlerts"
       @navigate="emit('navigate-section', $event)"
+    />
+    <RedeEstabelecimentosDialog
+      v-model:visible="showRedeDialog"
+      :cnpj-raiz="redeDialogCnpjRaiz"
+      :cnpj-origem="cnpj"
     />
   </div>
 </template>
@@ -1644,6 +1655,29 @@ const pdfTooltip = computed(() => {
     var(--text-muted) 25%,
     var(--establishment-header-bg)
   ) !important;
+}
+
+/* ── BADGE CLICÁVEL (Grande Rede com múltiplos estabelecimentos) ── */
+.institution-chip.clickable-badge {
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease;
+}
+
+.institution-chip.clickable-badge:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+.institution-chip.clickable-badge:active {
+  transform: translateY(0);
+  filter: brightness(0.96);
 }
 
 /* ── VALORES INTERNOS (linha de baixo) ── */

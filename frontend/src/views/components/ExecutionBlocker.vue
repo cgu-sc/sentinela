@@ -27,33 +27,14 @@ const blockedSinceFormatted = computed(() => {
   }
 });
 
-const hasDownload = computed(() => Boolean(updateStore.downloadUrl));
-const hasChangelog = computed(() => Boolean(updateStore.releaseNotesUrl));
-const isDesktop = computed(() => Boolean(window.pywebview?.api));
-
-const openDownload = () => {
-  if (updateStore.downloadUrl) window.open(updateStore.downloadUrl, '_blank');
-};
-const openChangelog = () => {
-  if (updateStore.releaseNotesUrl) window.open(updateStore.releaseNotesUrl, '_blank');
-};
 const recheck = () => {
   updateStore.forceCheckUpdate();
-};
-const exitApp = () => {
-  if (window.pywebview?.api?.exit_app) {
-    window.pywebview.api.exit_app();
-  } else {
-    window.close();
-  }
 };
 </script>
 
 <template>
   <div class="execution-blocker" role="alertdialog" aria-modal="true" aria-labelledby="execution-blocker-title">
     <div class="execution-blocker__card">
-      <span class="execution-blocker__eyebrow">Decisão administrativa</span>
-
       <div class="execution-blocker__icon-wrap">
         <svg
           class="execution-blocker__icon"
@@ -94,46 +75,6 @@ const exitApp = () => {
           </svg>
           Verificar novamente
         </button>
-        <button
-          v-if="hasChangelog"
-          class="execution-action execution-action--secondary"
-          @click="openChangelog"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-          </svg>
-          Ver alterações
-        </button>
-        <button
-          v-if="hasDownload"
-          class="execution-action execution-action--secondary"
-          @click="openDownload"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Baixar atualização
-        </button>
-        <button
-          v-if="isDesktop"
-          class="execution-action execution-action--ghost"
-          @click="exitApp"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          Sair
-        </button>
       </div>
     </div>
   </div>
@@ -170,19 +111,6 @@ const exitApp = () => {
     0 24px 64px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   text-align: center;
-}
-
-.execution-blocker__eyebrow {
-  display: inline-block;
-  padding: 0.3rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(220, 38, 38, 0.1);
-  border: 1px solid rgba(220, 38, 38, 0.3);
-  color: #fca5a5;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
 }
 
 .execution-blocker__icon-wrap {
@@ -306,28 +234,5 @@ const exitApp = () => {
   background: #b91c1c;
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(220, 38, 38, 0.55);
-}
-
-.execution-action--secondary {
-  background: rgba(255, 255, 255, 0.04);
-  color: #cbd5e1;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.execution-action--secondary:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.execution-action--ghost {
-  background: transparent;
-  color: #64748b;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.execution-action--ghost:hover {
-  color: #94a3b8;
-  border-color: rgba(255, 255, 255, 0.12);
 }
 </style>

@@ -14,7 +14,7 @@ if (-not (Test-Path $versionFile)) {
     Write-Error "version.json nao encontrado"
     exit 1
 }
-$versionData = Get-Content $versionFile -Raw | ConvertFrom-Json
+$versionData = Get-Content $versionFile -Raw -Encoding utf8 | ConvertFrom-Json
 $version = $versionData.version
 Write-Host "Versao detectada em version.json: v$version"
 
@@ -24,7 +24,7 @@ if (-not (Test-Path $manifestFile)) {
     Write-Error "manifest.json nao encontrado"
     exit 1
 }
-$manifestData = Get-Content $manifestFile -Raw | ConvertFrom-Json
+$manifestData = Get-Content $manifestFile -Raw -Encoding utf8 | ConvertFrom-Json
 if ($manifestData.latest_version -ne $version) {
     Write-Error "Versao desalinhada! version.json=$version manifest.json=$($manifestData.latest_version)"
     exit 1
@@ -37,7 +37,7 @@ if (-not (Test-Path $changelogFile)) {
     Write-Error "CHANGELOG.md nao encontrado"
     exit 1
 }
-$changelogContent = Get-Content $changelogFile -Raw
+$changelogContent = Get-Content $changelogFile -Raw -Encoding utf8
 $expectedHeader = "## [$version]"
 if (-not ($changelogContent.Contains($expectedHeader))) {
     Write-Error "CHANGELOG.md nao contem a sessao da versao atual. Cabecalho esperado: '$expectedHeader'"
@@ -104,7 +104,7 @@ gh release delete "v$version" --yes --cleanup-tag 2>$null
 $ErrorActionPreference = $oldEAP
 
 # Extrai apenas a seção da versão atual do CHANGELOG
-$changelogLines = Get-Content $changelogFile
+$changelogLines = Get-Content $changelogFile -Encoding utf8
 $inSection = $false
 $sectionLines = @()
 foreach ($line in $changelogLines) {
@@ -121,7 +121,7 @@ foreach ($line in $changelogLines) {
 }
 $releaseNotes = ($sectionLines | Out-String).Trim()
 $tmpNotes = [System.IO.Path]::GetTempFileName()
-[System.IO.File]::WriteAllText($tmpNotes, $releaseNotes, [System.Text.Encoding]::UTF8)
+[System.IO.File]::WriteAllText($tmpNotes, $releaseNotes, (New-Object System.Text.UTF8Encoding $false))
 
 gh release create "v$version" $exePath `
     --title $releaseTitle `

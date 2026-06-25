@@ -390,27 +390,17 @@ const pdfTooltip = computed(() => {
 
         <!-- Linha 2: Risco | Status Cadastral -->
         <div class="status-chips-row">
-          <!-- Grande Rede -->
+          <!-- Estabelecimentos (clicável quando há mais de 1 na rede) -->
           <div
-            class="institution-chip"
-            :class="[
-              cnpjData.is_grande_rede ? 'status-info' : 'status-secondary',
-              cnpjData.qtd_estabelecimentos_rede > 1 ? 'clickable-badge' : '',
-            ]"
-            v-tooltip.top="
-              cnpjData.qtd_estabelecimentos_rede > 1
-                ? 'Clique para ver todos os estabelecimentos desta rede'
-                : 'Estabelecimento Individual'
-            "
+            v-if="cnpjData.qtd_estabelecimentos_rede > 1"
+            class="institution-chip status-info clickable-badge"
+            v-tooltip.top="'Clique para ver todos os estabelecimentos desta rede'"
             @click="openRedeDialog"
           >
-            <span class="institution-label">Grande Rede</span>
-            <span class="institution-value">
-              {{ cnpjData.is_grande_rede ? "Sim" : "Não" }}
-              <small class="ml-1 opacity-70"
-                >({{ cnpjData.qtd_estabelecimentos_rede }})</small
-              >
-            </span>
+            <span class="institution-label">Estabelecimentos</span>
+            <span class="institution-value">{{
+              cnpjData.qtd_estabelecimentos_rede
+            }}</span>
           </div>
 
           <!-- Ministério da Saúde -->

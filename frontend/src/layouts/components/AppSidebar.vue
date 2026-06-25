@@ -477,22 +477,20 @@ const activeFilterCount = computed(() => {
 const countActiveFilters = (fields) =>
   fields.filter((field) => isFilterActive(field)).length;
 
-const scopeFilterCount = computed(() =>
+const generalFilterCount = computed(() =>
   countActiveFilters([
     "selectedUF",
     "selectedRegiaoSaude",
     "selectedMunicipio",
     "selectedUnidadePf",
-  ]),
-);
-
-const registryFilterCount = computed(() =>
-  countActiveFilters([
     "selectedSituacao",
     "selectedMS",
     "selectedPorte",
     "selectedGrandeRede",
     "selectedCnpjRaiz",
+    "sliderValue",
+    "percentualNaoComprovacaoRange",
+    "valorMinSemComp",
   ]),
 );
 
@@ -505,17 +503,10 @@ const integrityFilterCount = computed(() =>
     "selectedSocioIdadeAtipica",
     "selectedSocioFalecido",
     "dispersaoUfSemFronteiraEnabled",
-  ]),
-);
-
-const analyticFilterCount = computed(() =>
-  countActiveFilters([
-    "sliderValue",
-    "percentualNaoComprovacaoRange",
-    "valorMinSemComp",
     "volumeAtipicoEnabled",
   ]),
 );
+
 
 // ── Período de análise (slider) ──────────────────────────────────────────────
 const displayYears = computed(() => ANALYSIS_YEARS.filter((y) => y >= 2020));
@@ -587,6 +578,158 @@ watch(
 onBeforeUnmount(() => {
   filterStore.resetAnimationPreview();
 });
+
+// === ORGANIZAÇÃO DA SIDEBAR: ACORDEÃO + BUSCA ===
+// Índice declarativo dos filtros. Cada entrada é usada para:
+//   1) control de visibilidade via busca (v-show)
+//   2) badge de matches por seção durante a busca
+//   3) persistência do estado colapsado
+const FILTER_INDEX = [
+  { id: "uf", section: "geral", label: "UF", keywords: "unidade federativa estado sg sigla" },
+  { id: "regiao", section: "geral", label: "Região de Saúde", keywords: "regiao saude id regiao saude id_regiao_saude" },
+  { id: "municipio", section: "geral", label: "Município", keywords: "municipio cidade id ibge ibge7" },
+  { id: "unidadePf", section: "geral", label: "Unidade PF", keywords: "unidade pf programa saude farmacia popular" },
+  { id: "situacao", section: "geral", label: "Situação RF", keywords: "situacao rf receita federal ativa baixada inapta" },
+  { id: "ms", section: "geral", label: "Conexão MS", keywords: "ms ministerio saude tipo estabelecimento" },
+  { id: "porte", section: "geral", label: "Porte", keywords: "porte empresa tamanho" },
+  { id: "grandeRede", section: "geral", label: "Grande Rede", keywords: "grande rede bandeira franquia" },
+  { id: "cnpjRaiz", section: "geral", label: "CNPJ Raiz", keywords: "cnpj raiz cnpj_raiz cnpj-raiz matriz grupo empresarial" },
+  { id: "parTeia", section: "integridade", label: "Par/Teia", keywords: "par teia socios rede societaria cnpj cpf" },
+  { id: "cnaeIncompativel", section: "integridade", label: "CNAE Incompatível", keywords: "cnae incompativel cnae atividade economica incompatibilidade" },
+  { id: "socioIdadeAtipica", section: "integridade", label: "Idade Atípica do Sócio", keywords: "idade atipica socio jovem idoso 21 80 anos" },
+  { id: "socioFalecido", section: "integridade", label: "Sócio Falecido", keywords: "socio falecido obito morte cpf base obitos" },
+  { id: "socioBeneficio", section: "integridade", label: "Sócio em Programa Social", keywords: "socio beneficio programa social bolsa familia cadunico" },
+  { id: "socioEsocial", section: "integridade", label: "Sócio com Vínculo eSocial", keywords: "socio esocial vinculo emprego clt vinculo trabalhista" },
+  { id: "dispersaoUf", section: "integridade", label: "Vendas para UFs sem Fronteira", keywords: "dispersao uf sem fronteira geografica distancia venda autorizado" },
+  { id: "volumeAtipico", section: "integridade", label: "Aumento Semestral Atípico", keywords: "volume atipico crescimento semestral faturamento auditoria aumento anomalo" },
+  { id: "percentual", section: "geral", label: "% Não Comprovação", keywords: "percentual nao comprovacao risco faixa auditoria" },
+  { id: "slider", section: "geral", label: "Período (Slider)", keywords: "periodo slider semestral mensal tempo data" },
+  { id: "valorMin", section: "geral", label: "Valor Mínimo sem Comprovação", keywords: "valor minimo sem comprovacao reais auditoria financeiro ticket" },
+  { id: "busca", section: "geral", label: "Busca por Estabelecimento", keywords: "busca estabelecimento cnpj razao social nome fantasia search" },
+  { id: "cluster", section: "geral", label: "Cluster", keywords: "cluster agrupamento kmeans segmento" },
+  { id: "rfa", section: "geral", label: "RFA", keywords: "rfa receita federal ativos cnae" },
+];
+
+const collapsedSections = ref(new Set());
+const sidebarSearch = ref("");
+
+// IDs válidos de seção. Usado pelo acordeão exclusivo: ao abrir uma seção,
+// as demais são marcadas como fechadas (Set contém os IDs colapsados).
+const SECTION_IDS = ["geral", "integridade"];
+
+// Persistência do estado colapsado em localStorage
+const COLLAPSED_KEY = "sentinela_sidebar_collapsed";
+
+const loadCollapsedFromStorage = () => {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // Migração: 'escopo', 'cadastro' e 'parametros' foram fundidos em 'geral' na v1.2.2
+      const migrated = parsed
+        .map((id) =>
+          id === "escopo" || id === "cadastro" || id === "parametros"
+            ? "geral"
+            : id,
+        );
+      collapsedSections.value = new Set(migrated);
+    }
+  } catch (_) {
+    // silencioso: localStorage indisponível ou JSON inválido
+  }
+};
+
+const persistCollapsed = (newSet) => {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...newSet]));
+  } catch (_) {
+    // silencioso
+  }
+};
+
+onMounted(() => {
+  loadCollapsedFromStorage();
+});
+
+watch(
+  collapsedSections,
+  (newSet) => {
+    persistCollapsed(newSet);
+  },
+  { deep: true },
+);
+
+const toggleSection = (id) => {
+  const isOpen = !collapsedSections.value.has(id);
+  if (isOpen) {
+    // Fecha este. Mantém os outros estados.
+    const next = new Set(collapsedSections.value);
+    next.add(id);
+    collapsedSections.value = next;
+  } else {
+    // Abre este e fecha os outros (acordeão exclusivo).
+    collapsedSections.value = new Set(
+      SECTION_IDS.filter((sid) => sid !== id),
+    );
+  }
+};
+
+const isSectionCollapsed = (id) => effectiveCollapsed.value.has(id);
+
+// === BUSCA ===
+const normalize = (s) =>
+  (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const searchTerm = computed(() => normalize(sidebarSearch.value.trim()));
+
+const filterMatchesSearch = (filterMeta) => {
+  if (!searchTerm.value) return true;
+  const haystack = normalize(`${filterMeta.label} ${filterMeta.keywords}`);
+  return haystack.includes(searchTerm.value);
+};
+
+const shouldShowFilter = (filterId) => {
+  const meta = FILTER_INDEX.find((f) => f.id === filterId);
+  if (!meta) return true;
+  return filterMatchesSearch(meta);
+};
+
+const shouldDisplayFilter = (sectionId, filterId) => {
+  if (isSectionCollapsed(sectionId)) return false;
+  return shouldShowFilter(filterId);
+};
+
+const sectionMatchCount = (sectionId) =>
+  FILTER_INDEX.filter(
+    (f) => f.section === sectionId && filterMatchesSearch(f),
+  ).length;
+
+const shouldShowSection = (sectionId) => {
+  if (!searchTerm.value) return true;
+  return sectionMatchCount(sectionId) > 0;
+};
+
+// `collapsedSections` é o estado MANUAL do acordeão. `effectiveCollapsed`
+// é o estado EFETIVO usado pelo template: durante a busca, força a abertura
+// de qualquer seção que tenha matches (suspende o acordeão).
+const effectiveCollapsed = computed(() => {
+  if (!searchTerm.value) return collapsedSections.value;
+  const result = new Set(collapsedSections.value);
+  for (const id of SECTION_IDS) {
+    if (sectionMatchCount(id) > 0) {
+      result.delete(id);
+    }
+  }
+  return result;
+});
+
+const clearSearch = () => {
+  sidebarSearch.value = "";
+};
 </script>
 
 <template>
@@ -645,6 +788,27 @@ onBeforeUnmount(() => {
         <span>FILTROS DE PESQUISA</span>
       </div>
 
+      <!-- BUSCA DE FILTROS -->
+      <div class="sidebar-search" :class="{ 'has-value': sidebarSearch }">
+        <i class="pi pi-search sidebar-search-icon"></i>
+        <input
+          v-model="sidebarSearch"
+          type="text"
+          class="sidebar-search-input"
+          placeholder="Buscar filtro..."
+          aria-label="Buscar filtro"
+        />
+        <button
+          v-if="sidebarSearch"
+          class="sidebar-search-clear"
+          @click="clearSearch"
+          v-tooltip.bottom="'Limpar busca'"
+          aria-label="Limpar busca"
+        >
+          <i class="pi pi-times"></i>
+        </button>
+      </div>
+
       <!-- BANNER DE FILTROS BLOQUEADOS -->
       <div v-if="allFiltersLocked" class="filters-locked-banner">
         <i class="pi pi-lock" />
@@ -657,13 +821,24 @@ onBeforeUnmount(() => {
         <span v-else>Filtros indisponíveis nesta tela</span>
       </div>
 
-      <div class="sidebar-section-heading">
-        <span><i class="pi pi-map-marker"></i> Escopo</span>
-        <small v-if="scopeFilterCount">{{ scopeFilterCount }}</small>
-      </div>
+      <button
+        v-show="shouldShowSection('geral')"
+        class="sidebar-section-heading"
+        :class="{ collapsed: isSectionCollapsed('geral'), searching: !!searchTerm }"
+        @click="toggleSection('geral')"
+        :aria-expanded="!isSectionCollapsed('geral')"
+        aria-controls="sidebar-section-geral"
+      >
+        <span><i class="pi pi-th-large"></i> Geral</span>
+        <small v-if="searchTerm">{{ sectionMatchCount('geral') }}</small>
+        <small v-else-if="generalFilterCount">{{ generalFilterCount }}</small>
+        <i class="pi pi-chevron-down sidebar-section-chevron"></i>
+      </button>
 
       <!-- FILTROS GLOBAIS -->
+      <div v-show="!isSectionCollapsed('geral')">
       <div
+        v-show="shouldDisplayFilter('geral', 'uf')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -689,6 +864,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-show="shouldDisplayFilter('geral', 'regiao')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -722,6 +898,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-show="shouldDisplayFilter('geral', 'municipio')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -755,6 +932,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-show="shouldDisplayFilter('geral', 'unidadePf')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -785,13 +963,8 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div class="sidebar-section-heading">
-        <span><i class="pi pi-id-card"></i> Cadastro</span>
-        <small v-if="registryFilterCount">{{ registryFilterCount }}</small>
-      </div>
-
-      <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
-        <div class="filter-section">
+      <div v-show="!isSectionCollapsed('geral')" class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
+        <div v-show="shouldDisplayFilter('geral', 'situacao')" class="filter-section">
           <label class="filter-label">
             Situação RF
             <button
@@ -811,7 +984,7 @@ onBeforeUnmount(() => {
             :class="{ 'filter-active': isFilterActive('selectedSituacao') }"
           />
         </div>
-        <div class="filter-section">
+        <div v-show="shouldDisplayFilter('geral', 'ms')" class="filter-section">
           <label class="filter-label">
             Conexão MS
             <button
@@ -833,8 +1006,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
-        <div class="filter-section">
+      <div v-show="!isSectionCollapsed('geral')" class="grid-filters" :class="{ 'filter-locked': allFiltersLocked }">
+        <div v-show="shouldDisplayFilter('geral', 'porte')" class="filter-section">
           <label class="filter-label">
             Porte CNPJ
             <button
@@ -854,7 +1027,7 @@ onBeforeUnmount(() => {
             :class="{ 'filter-active': isFilterActive('selectedPorte') }"
           />
         </div>
-        <div class="filter-section">
+        <div v-show="shouldDisplayFilter('geral', 'grandeRede')" class="filter-section">
           <label class="filter-label">
             Grande Rede
             <button
@@ -877,6 +1050,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-show="shouldDisplayFilter('geral', 'cnpjRaiz')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -931,276 +1105,8 @@ onBeforeUnmount(() => {
         </AutoComplete>
       </div>
 
-      <div class="sidebar-section-heading">
-        <span><i class="pi pi-shield"></i> Integridade societária</span>
-        <small v-if="integrityFilterCount">{{ integrityFilterCount }}</small>
-      </div>
-
       <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Empresas com PAR
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: parTeiaTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedParTeia')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedParTeia = FILTER_ALL_VALUE"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <Dropdown
-          v-model="filterStore.selectedParTeia"
-          :options="parTeiaOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="w-full filter-input"
-          panelClass="sidebar-panel"
-          :class="{ 'filter-active': isFilterActive('selectedParTeia') }"
-        />
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          CNPJ com CNAE Incompatível
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: cnaeIncompativelTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedCnaeIncompativel')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedCnaeIncompativel = false"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedCnaeIncompativel') }">
-          <label class="checkbox-label">
-            <input
-              v-model="filterStore.selectedCnaeIncompativel"
-              type="checkbox"
-              class="filter-checkbox"
-            />
-            <span>Mostrar apenas farmácias com CNAE incompatível</span>
-          </label>
-        </div>
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Sócio &lt; 21 anos ou &gt; 80 anos
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: socioIdadeAtipicaTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedSocioIdadeAtipica')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedSocioIdadeAtipica = false"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioIdadeAtipica') }">
-          <label class="checkbox-label">
-            <input
-              v-model="filterStore.selectedSocioIdadeAtipica"
-              type="checkbox"
-              class="filter-checkbox"
-            />
-            <span>Mostrar apenas farmácias com sócio PF &lt; 21 ou &gt; 80 anos</span>
-          </label>
-        </div>
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Sócio ativo falecido
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: socioFalecidoTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedSocioFalecido')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedSocioFalecido = false"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioFalecido') }">
-          <label class="checkbox-label">
-            <input
-              v-model="filterStore.selectedSocioFalecido"
-              type="checkbox"
-              class="filter-checkbox"
-            />
-            <span>Mostrar apenas farmácias com sócio PF ativo falecido</span>
-          </label>
-        </div>
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Sócio no CadÚnico/Defeso
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: socioBeneficioTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedSocioBeneficio')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedSocioBeneficio = FILTER_ALL_VALUE"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <Dropdown
-          v-model="filterStore.selectedSocioBeneficio"
-          :options="socioBeneficioOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="w-full filter-input"
-          panelClass="sidebar-panel"
-          :class="{ 'filter-active': isFilterActive('selectedSocioBeneficio') }"
-        />
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Sócio com vínculo eSocial
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: socioEsocialTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('selectedSocioEsocial')"
-            class="filter-clear-btn"
-            @click="filterStore.selectedSocioEsocial = FILTER_ALL_VALUE"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <Dropdown
-          v-model="filterStore.selectedSocioEsocial"
-          :options="socioEsocialOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="w-full filter-input"
-          panelClass="sidebar-panel"
-          :class="{ 'filter-active': isFilterActive('selectedSocioEsocial') }"
-        />
-      </div>
-
-      <div
-        class="filter-section"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <label class="filter-label">
-          Vendas para UFs sem fronteira
-          <i
-            class="pi pi-info-circle filter-info-icon"
-            v-tooltip.right="{ value: dispersaoUfSemFronteiraTooltip, showDelay: 120, hideDelay: 80 }"
-          />
-          <button
-            v-if="isFilterActive('dispersaoUfSemFronteiraEnabled')"
-            class="filter-clear-btn"
-            @click="clearDispersaoUfSemFronteira"
-            v-tooltip.right="'Limpar filtro'"
-          >
-            <i class="pi pi-eraser" />
-          </button>
-        </label>
-        <div
-          class="slider-container"
-          :class="{ 'filter-active-box': isFilterActive('dispersaoUfSemFronteiraEnabled') }"
-        >
-          <div class="perc-chips" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 0.5rem">
-            <button
-              v-for="value in dispersaoUfQuickSelect"
-              :key="value"
-              class="perc-chip"
-              :class="{
-                active:
-                  filterStore.dispersaoUfSemFronteiraEnabled &&
-                  filterStore.dispersaoUfSemFronteiraPercentual === value,
-              }"
-              @click="setDispersaoUfSemFronteira(value)"
-            >
-              {{ value }}%
-            </button>
-          </div>
-
-          <div class="period-steppers">
-            <button
-              class="period-step-btn"
-              @click="stepDispersaoUfSemFronteira(-1)"
-              :disabled="
-                filterStore.dispersaoUfSemFronteiraPercentual <=
-                FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN
-              "
-            >
-              <i class="pi pi-minus" />
-            </button>
-            <span class="period-label percent-label">
-              mínimo {{ filterStore.dispersaoUfSemFronteiraPercentual }}%
-            </span>
-            <button
-              class="period-step-btn"
-              @click="stepDispersaoUfSemFronteira(1)"
-              :disabled="
-                filterStore.dispersaoUfSemFronteiraPercentual >=
-                FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX
-              "
-            >
-              <i class="pi pi-plus" />
-            </button>
-          </div>
-
-          <Slider
-            v-model="filterStore.dispersaoUfSemFronteiraPercentual"
-            :min="FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN"
-            :max="FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX"
-            :step="1"
-            class="custom-slider"
-            @slideend="applyDispersaoUfSemFronteira"
-          />
-        </div>
-      </div>
-
-      <div class="sidebar-section-heading">
-        <span><i class="pi pi-chart-line"></i> Parâmetros</span>
-        <small v-if="analyticFilterCount">{{ analyticFilterCount }}</small>
-      </div>
-
-      <div
+        v-show="shouldDisplayFilter('geral', 'percentual')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -1303,6 +1209,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-show="shouldDisplayFilter('geral', 'slider')"
         class="filter-section"
         :class="{ 'filter-locked-alt': periodFilterLocked }"
       >
@@ -1399,6 +1306,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
+        v-show="shouldDisplayFilter('geral', 'valorMin')"
         class="filter-section"
         :class="{ 'filter-locked': allFiltersLocked }"
       >
@@ -1463,7 +1371,380 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <!-- FILTROS CONTEXTUAIS -->
       <div
+        v-if="route.path === '/alvos/cluster' || route.path === '/alvos/rede'"
+        class="dynamic-filters-box"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <div v-if="route.path === '/alvos/cluster'" class="contextual-filters">
+          <div v-show="shouldDisplayFilter('geral', 'busca')" class="filter-section mini">
+            <label class="filter-label sm">
+              Busca Alvo
+              <button
+                v-if="isFilterActive('searchTarget')"
+                class="filter-clear-btn"
+                @click="filterStore.searchTarget = ''"
+                v-tooltip.right="'Limpar filtro'"
+              >
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
+            <InputText
+              v-model="filterStore.searchTarget"
+              placeholder="ID/CNPJ..."
+              class="w-full filter-input sm"
+              :class="{ 'filter-active': isFilterActive('searchTarget') }"
+            />
+          </div>
+          <div v-show="shouldDisplayFilter('geral', 'cluster')" class="filter-section mini">
+            <label class="filter-label sm">
+              Target Cluster
+              <button
+                v-if="isFilterActive('clusterSelection')"
+                class="filter-clear-btn"
+                @click="filterStore.clusterSelection = FILTER_ALL_VALUE"
+                v-tooltip.right="'Limpar filtro'"
+              >
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
+            <Dropdown
+              v-model="filterStore.clusterSelection"
+              :options="clusterOptions"
+              class="w-full filter-input sm"
+              panelClass="sidebar-panel"
+              :class="{ 'filter-active': isFilterActive('clusterSelection') }"
+            />
+          </div>
+          <div v-show="shouldDisplayFilter('geral', 'rfa')" class="filter-section mini">
+            <label class="filter-label sm">
+              Risco (RFA)
+              <button
+                v-if="isFilterActive('rfaSelection')"
+                class="filter-clear-btn"
+                @click="filterStore.rfaSelection = FILTER_ALL_VALUE"
+                v-tooltip.right="'Limpar filtro'"
+              >
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
+            <Dropdown
+              v-model="filterStore.rfaSelection"
+              :options="rfaOptions"
+              class="w-full filter-input sm"
+              panelClass="sidebar-panel"
+              :class="{ 'filter-active': isFilterActive('rfaSelection') }"
+            />
+          </div>
+        </div>
+
+        <div v-if="route.path === '/alvos/rede'" class="contextual-filters">
+          <div v-show="shouldDisplayFilter('geral', 'busca')" class="filter-section mini">
+            <label class="filter-label sm">
+              CPF/CNPJ Alvo
+              <button
+                v-if="isFilterActive('searchTarget')"
+                class="filter-clear-btn"
+                @click="filterStore.searchTarget = ''"
+                v-tooltip.right="'Limpar filtro'"
+              >
+                <i class="pi pi-eraser" />
+              </button>
+            </label>
+            <InputText
+              v-model="filterStore.searchTarget"
+              placeholder="Pesquisar rede..."
+              class="w-full filter-input sm"
+            />
+          </div>
+        </div>
+
+      </div>
+      </div>
+
+      <button
+        v-show="shouldShowSection('integridade')"
+        class="sidebar-section-heading"
+        :class="{ collapsed: isSectionCollapsed('integridade'), searching: !!searchTerm }"
+        @click="toggleSection('integridade')"
+        :aria-expanded="!isSectionCollapsed('integridade')"
+        aria-controls="sidebar-section-integridade"
+      >
+        <small v-if="searchTerm">{{ sectionMatchCount('integridade') }}</small>
+        <small v-else-if="integrityFilterCount">{{ integrityFilterCount }}</small>
+        <span><i class="pi pi-bell"></i> Alertas</span>
+        <i class="pi pi-chevron-down sidebar-section-chevron"></i>
+      </button>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'parTeia')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Empresas com PAR
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: parTeiaTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedParTeia')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedParTeia = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedParTeia"
+          :options="parTeiaOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedParTeia') }"
+        />
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'cnaeIncompativel')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          CNPJ com CNAE Incompatível
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: cnaeIncompativelTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedCnaeIncompativel')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedCnaeIncompativel = false"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedCnaeIncompativel') }">
+          <label class="checkbox-label">
+            <input
+              v-model="filterStore.selectedCnaeIncompativel"
+              type="checkbox"
+              class="filter-checkbox"
+            />
+            <span>Mostrar apenas farmácias com CNAE incompatível</span>
+          </label>
+        </div>
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'socioIdadeAtipica')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio &lt; 21 anos ou &gt; 80 anos
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioIdadeAtipicaTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioIdadeAtipica')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioIdadeAtipica = false"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioIdadeAtipica') }">
+          <label class="checkbox-label">
+            <input
+              v-model="filterStore.selectedSocioIdadeAtipica"
+              type="checkbox"
+              class="filter-checkbox"
+            />
+            <span>Mostrar apenas farmácias com sócio PF &lt; 21 ou &gt; 80 anos</span>
+          </label>
+        </div>
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'socioFalecido')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio ativo falecido
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioFalecidoTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioFalecido')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioFalecido = false"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioFalecido') }">
+          <label class="checkbox-label">
+            <input
+              v-model="filterStore.selectedSocioFalecido"
+              type="checkbox"
+              class="filter-checkbox"
+            />
+            <span>Mostrar apenas farmácias com sócio PF ativo falecido</span>
+          </label>
+        </div>
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'socioBeneficio')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio no CadÚnico/Defeso
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioBeneficioTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioBeneficio')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioBeneficio = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedSocioBeneficio"
+          :options="socioBeneficioOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedSocioBeneficio') }"
+        />
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'socioEsocial')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Sócio com vínculo eSocial
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: socioEsocialTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('selectedSocioEsocial')"
+            class="filter-clear-btn"
+            @click="filterStore.selectedSocioEsocial = FILTER_ALL_VALUE"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <Dropdown
+          v-model="filterStore.selectedSocioEsocial"
+          :options="socioEsocialOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-full filter-input"
+          panelClass="sidebar-panel"
+          :class="{ 'filter-active': isFilterActive('selectedSocioEsocial') }"
+        />
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'dispersaoUf')"
+        class="filter-section"
+        :class="{ 'filter-locked': allFiltersLocked }"
+      >
+        <label class="filter-label">
+          Vendas para UFs sem fronteira
+          <i
+            class="pi pi-info-circle filter-info-icon"
+            v-tooltip.right="{ value: dispersaoUfSemFronteiraTooltip, showDelay: 120, hideDelay: 80 }"
+          />
+          <button
+            v-if="isFilterActive('dispersaoUfSemFronteiraEnabled')"
+            class="filter-clear-btn"
+            @click="clearDispersaoUfSemFronteira"
+            v-tooltip.right="'Limpar filtro'"
+          >
+            <i class="pi pi-eraser" />
+          </button>
+        </label>
+        <div
+          class="slider-container"
+          :class="{ 'filter-active-box': isFilterActive('dispersaoUfSemFronteiraEnabled') }"
+        >
+          <div class="perc-chips" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 0.5rem">
+            <button
+              v-for="value in dispersaoUfQuickSelect"
+              :key="value"
+              class="perc-chip"
+              :class="{
+                active:
+                  filterStore.dispersaoUfSemFronteiraEnabled &&
+                  filterStore.dispersaoUfSemFronteiraPercentual === value,
+              }"
+              @click="setDispersaoUfSemFronteira(value)"
+            >
+              {{ value }}%
+            </button>
+          </div>
+
+          <div class="period-steppers">
+            <button
+              class="period-step-btn"
+              @click="stepDispersaoUfSemFronteira(-1)"
+              :disabled="
+                filterStore.dispersaoUfSemFronteiraPercentual <=
+                FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN
+              "
+            >
+              <i class="pi pi-minus" />
+            </button>
+            <span class="period-label percent-label">
+              mínimo {{ filterStore.dispersaoUfSemFronteiraPercentual }}%
+            </span>
+            <button
+              class="period-step-btn"
+              @click="stepDispersaoUfSemFronteira(1)"
+              :disabled="
+                filterStore.dispersaoUfSemFronteiraPercentual >=
+                FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX
+              "
+            >
+              <i class="pi pi-plus" />
+            </button>
+          </div>
+
+          <Slider
+            v-model="filterStore.dispersaoUfSemFronteiraPercentual"
+            :min="FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MIN"
+            :max="FILTER_DEFAULTS.DISPERSAO_UF_SEM_FRONTEIRA_MAX"
+            :step="1"
+            class="custom-slider"
+            @slideend="applyDispersaoUfSemFronteira"
+          />
+        </div>
+      </div>
+
+      <div
+        v-show="shouldDisplayFilter('integridade', 'volumeAtipico')"
         class="filter-section"
         :class="{ 'filter-locked': volumeAtipicoFilterLocked }"
       >
@@ -1540,97 +1821,6 @@ onBeforeUnmount(() => {
             @slideend="applyVolumeAtipico"
           />
         </div>
-      </div>
-
-      <!-- FILTROS CONTEXTUAIS -->
-      <div
-        v-if="route.path === '/alvos/cluster' || route.path === '/alvos/rede'"
-        class="dynamic-filters-box"
-        :class="{ 'filter-locked': allFiltersLocked }"
-      >
-        <div v-if="route.path === '/alvos/cluster'" class="contextual-filters">
-          <div class="filter-section mini">
-            <label class="filter-label sm">
-              Busca Alvo
-              <button
-                v-if="isFilterActive('searchTarget')"
-                class="filter-clear-btn"
-                @click="filterStore.searchTarget = ''"
-                v-tooltip.right="'Limpar filtro'"
-              >
-                <i class="pi pi-eraser" />
-              </button>
-            </label>
-            <InputText
-              v-model="filterStore.searchTarget"
-              placeholder="ID/CNPJ..."
-              class="w-full filter-input sm"
-              :class="{ 'filter-active': isFilterActive('searchTarget') }"
-            />
-          </div>
-          <div class="filter-section mini">
-            <label class="filter-label sm">
-              Target Cluster
-              <button
-                v-if="isFilterActive('clusterSelection')"
-                class="filter-clear-btn"
-                @click="filterStore.clusterSelection = FILTER_ALL_VALUE"
-                v-tooltip.right="'Limpar filtro'"
-              >
-                <i class="pi pi-eraser" />
-              </button>
-            </label>
-            <Dropdown
-              v-model="filterStore.clusterSelection"
-              :options="clusterOptions"
-              class="w-full filter-input sm"
-              panelClass="sidebar-panel"
-              :class="{ 'filter-active': isFilterActive('clusterSelection') }"
-            />
-          </div>
-          <div class="filter-section mini">
-            <label class="filter-label sm">
-              Risco (RFA)
-              <button
-                v-if="isFilterActive('rfaSelection')"
-                class="filter-clear-btn"
-                @click="filterStore.rfaSelection = FILTER_ALL_VALUE"
-                v-tooltip.right="'Limpar filtro'"
-              >
-                <i class="pi pi-eraser" />
-              </button>
-            </label>
-            <Dropdown
-              v-model="filterStore.rfaSelection"
-              :options="rfaOptions"
-              class="w-full filter-input sm"
-              panelClass="sidebar-panel"
-              :class="{ 'filter-active': isFilterActive('rfaSelection') }"
-            />
-          </div>
-        </div>
-
-        <div v-if="route.path === '/alvos/rede'" class="contextual-filters">
-          <div class="filter-section mini">
-            <label class="filter-label sm">
-              CPF/CNPJ Alvo
-              <button
-                v-if="isFilterActive('searchTarget')"
-                class="filter-clear-btn"
-                @click="filterStore.searchTarget = ''"
-                v-tooltip.right="'Limpar filtro'"
-              >
-                <i class="pi pi-eraser" />
-              </button>
-            </label>
-            <InputText
-              v-model="filterStore.searchTarget"
-              placeholder="Pesquisar rede..."
-              class="w-full filter-input sm"
-            />
-          </div>
-        </div>
-
       </div>
 
       <div class="sidebar-spacer"></div>
@@ -1885,18 +2075,38 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-section-heading {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  justify-content: flex-start;
+  gap: 0.4rem;
   min-height: 1.45rem;
-  padding: 0.35rem 0.1rem 0.2rem;
+  width: 100%;
+  padding: 0.35rem 0.45rem 0.2rem 0.45rem;
   border-top: 1px solid color-mix(in srgb, var(--sidebar-border) 82%, transparent);
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
   color: color-mix(in srgb, var(--sidebar-text) 74%, transparent);
   font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.sidebar-section-heading:hover {
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--sidebar-text);
+}
+
+.sidebar-section-heading:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
 }
 
 .sidebar-section-heading:first-of-type {
@@ -1910,13 +2120,17 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.sidebar-section-heading i {
+.sidebar-section-heading > i {
   color: var(--primary-color);
   font-size: 0.72rem;
   opacity: 0.85;
 }
 
 .sidebar-section-heading small {
+  position: absolute;
+  right: 1.8rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1929,6 +2143,113 @@ onBeforeUnmount(() => {
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0;
+}
+
+.sidebar-section-heading.searching {
+  color: var(--sidebar-text);
+}
+
+.sidebar-section-heading.searching small {
+  background: color-mix(in srgb, var(--primary-color) 26%, var(--sidebar-bg));
+}
+
+.sidebar-section-chevron {
+  margin-left: auto;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+  opacity: 0.55;
+}
+
+.sidebar-section-heading:hover .sidebar-section-chevron {
+  opacity: 1;
+}
+
+.sidebar-section-heading.collapsed .sidebar-section-chevron {
+  transform: rotate(-90deg);
+}
+
+/* === BUSCA DE FILTROS === */
+.sidebar-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin: 0.5rem 0.5rem 0.4rem;
+  padding: 0 1rem 0 2.4rem;
+  background: var(--sidebar-input-bg);
+  border: 1px solid color-mix(in srgb, var(--sidebar-border) 80%, transparent);
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-search:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 40%, var(--sidebar-border));
+}
+
+.sidebar-search:focus-within {
+  border-color: var(--primary-color);
+  background: var(--sidebar-input-bg);
+  box-shadow: 0 0 0 1px var(--primary-color),
+    0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-search.has-value {
+  border-color: color-mix(in srgb, var(--primary-color) 55%, transparent);
+}
+
+.sidebar-search-icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.sidebar-search-input {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--sidebar-text);
+  font-size: 0.75rem;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  min-width: 0;
+}
+
+.sidebar-search-input::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 80%, transparent);
+}
+
+.sidebar-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 0.35rem;
+  padding: 0;
+  background: color-mix(in srgb, var(--primary-color) 14%, transparent);
+  border: 0;
+  border-radius: 999px;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.sidebar-search-clear:hover {
+  background: color-mix(in srgb, var(--primary-color) 28%, transparent);
+  transform: scale(1.08);
+}
+
+.sidebar-search-clear i {
+  font-size: 0.62rem;
+  line-height: 1;
 }
 
 .filter-section {
@@ -1990,7 +2311,7 @@ onBeforeUnmount(() => {
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
   color: var(--sidebar-text);
   letter-spacing: 0.5px;
 }

@@ -71,6 +71,15 @@ def unique_file_path(directory, filename):
     return path
 
 
+def resolve_note_path(path):
+    """Normaliza e valida caminhos restritos a pasta notas_tecnicas."""
+    target = os.path.abspath(str(path or ""))
+    allowed_root = os.path.abspath(NOTAS_TECNICAS_DIR)
+    if not target.startswith(allowed_root + os.sep):
+        raise RuntimeError("Caminho fora da pasta notas_tecnicas.")
+    return target
+
+
 class DesktopApi:
     """Ponte nativa para recursos que o WebView nao executa como navegador."""
 
@@ -91,10 +100,7 @@ class DesktopApi:
 
     def open_file(self, path):
         try:
-            target = os.path.abspath(str(path or ""))
-            allowed_root = os.path.abspath(NOTAS_TECNICAS_DIR)
-            if not target.startswith(allowed_root + os.sep):
-                raise RuntimeError("Caminho fora da pasta notas_tecnicas.")
+            target = resolve_note_path(path)
             if not os.path.exists(target):
                 raise FileNotFoundError(target)
             os.startfile(target)
@@ -102,6 +108,56 @@ class DesktopApi:
             return {"ok": True}
         except Exception as exc:
             logger.error(f"Erro ao abrir arquivo via DesktopApi: {exc}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(exc)}
+
+    def convert_docx_to_pdf(self, path):
+        try:
+            target = resolve_note_path(path)
+            if not os.path.exists(target):
+                raise FileNotFoundError(target)
+            if os.path.splitext(target)[1].lower() != ".docx":
+                raise RuntimeError("Apenas arquivos .docx podem ser convertidos para PDF.")
+
+            pdf_path = os.path.splitext(target)[0] + ".pdf"
+            try:
+                from docx2pdf import convert
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Conversao DOCX/PDF indisponivel. Instale docx2pdf e pywin32 no ambiente do Sentinela."
+                ) from exc
+
+            conversion_started = time.perf_counter()
+            convert(target, pdf_path)
+            conversion_elapsed_ms = round((time.perf_counter() - conversion_started) * 1000, 2)
+            if not os.path.exists(pdf_path):
+                raise RuntimeError("O Word concluiu a conversao, mas o PDF nao foi encontrado.")
+
+            logger.info(
+                "DOCX convertido para PDF via DesktopApi: "
+                f"origem={target} | destino={pdf_path} | tempo_ms={conversion_elapsed_ms}"
+            )
+            return {"ok": True, "filename": os.path.basename(pdf_path), "path": pdf_path}
+        except Exception as exc:
+            logger.error(f"Erro ao converter DOCX para PDF via DesktopApi: {exc}")
+            logger.error(traceback.format_exc())
+            return {"ok": False, "error": str(exc)}
+
+    def read_pdf_base64(self, path):
+        try:
+            target = resolve_note_path(path)
+            if not os.path.exists(target):
+                raise FileNotFoundError(target)
+            if os.path.splitext(target)[1].lower() != ".pdf":
+                raise RuntimeError("Apenas arquivos PDF podem ser visualizados no Sentinela.")
+
+            with open(target, "rb") as file:
+                encoded = base64.b64encode(file.read()).decode("ascii")
+
+            logger.info(f"PDF lido via DesktopApi: {target}")
+            return {"ok": True, "filename": os.path.basename(target), "path": target, "base64": encoded}
+        except Exception as exc:
+            logger.error(f"Erro ao ler PDF via DesktopApi: {exc}")
             logger.error(traceback.format_exc())
             return {"ok": False, "error": str(exc)}
 

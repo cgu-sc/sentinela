@@ -5,6 +5,22 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.5.0] - 2026-06-25
+
+### Adicionado
+- **Pre-visualizacao interna da Nota Tecnica no Sentinela Desktop.** Apos gerar e salvar o `.docx` na pasta `notas_tecnicas`, o aplicativo converte automaticamente uma copia para PDF usando Microsoft Word via `docx2pdf`/`pywin32`. O toast de sucesso passa a exibir o botao **Visualizar**, abrindo o PDF dentro do proprio Sentinela em um modal dedicado.
+- **Modal global de visualizacao de documentos PDF** em `frontend/src/views/components/DocumentPreviewDialog.vue`, com opcao de abrir o arquivo externamente quando necessario.
+- **Ponte nativa segura no PyWebView** para conversao DOCX/PDF e leitura do PDF em base64, restrita a pasta `notas_tecnicas`, evitando leitura arbitraria do disco.
+- **Selecao de formatos de saida na Nota Tecnica.** O modal de dados da NT passa a exibir a secao **Formatos de saida**, deixando claro que a versao Word editavel sempre sera gerada e permitindo ao usuario optar por gerar ou nao a versao PDF para visualizacao.
+- **Logs de desempenho da Nota Tecnica.** A geracao do DOCX agora registra `nota_tecnica_docx` com tempo em milissegundos no log de requisicoes, e a conversao DOCX/PDF no Desktop registra o tempo da conversao no log `sentinela_*.log`.
+
+### Alterado
+- **Toasts de documentos salvos** agora podem oferecer visualizacao interna quando houver PDF disponivel. O Relatorio PDF tambem passa a expor o botao **Visualizar** no modo Desktop.
+- **Dependencias desktop atualizadas** com `docx2pdf` e `pywin32` para suportar a conversao fiel do DOCX usando o Microsoft Word instalado no ambiente.
+- **Numero do processo SEI no modal da Nota Tecnica** agora limita a entrada aos 17 digitos obrigatorios e aplica a mascara `00000.000000/0000-00`, evitando que o usuario digite um processo maior que o contrato aceito pelo backend.
+- **Toasts de sucesso para arquivos salvos** deixam de fechar automaticamente, mantendo as acoes de abrir/visualizar o documento disponiveis ate o usuario encerrar a notificacao.
+
+
 ## [1.4.1] - 2026-06-25
 
 ### Alterado

@@ -24,6 +24,8 @@ pydantic                      # Validação de dados (usado pelo FastAPI)
 httpx                         # Cliente HTTP para testes de integração
 polars                        # Engine columnar in-memory para queries analíticas (Modo 3)
 python-docx                   # Geração de documentos Word (.docx)业务
+docx2pdf                      # Conversao DOCX -> PDF usando Microsoft Word no Windows
+pywin32                       # Automacao COM do Microsoft Word para conversao DOCX/PDF
 loguru                        # Logs estruturados de tempo das requisicoes
 pywebview                     # Wrapper desktop para abrir a SPA em janela nativa
 pyinstaller                   # Empacotamento do app desktop em executavel

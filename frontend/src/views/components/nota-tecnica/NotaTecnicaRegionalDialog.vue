@@ -4,6 +4,7 @@ import Dialog from "primevue/dialog";
 import Dropdown from "primevue/dropdown";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
+import Checkbox from "primevue/checkbox";
 import { useToast } from "primevue/usetoast";
 import { useNotaTecnicaConfigStore } from "@/stores/notaTecnicaConfig";
 
@@ -20,6 +21,7 @@ const selectedCodigo = ref(null);
 const numeroNota = ref("");
 const numeroProcesso = ref("");
 const numeroProcessoDigitsRaw = ref("");
+const gerarPdf = ref(true);
 const assinantesTecnicos = ref([]);
 const anoNota = new Date().getFullYear();
 
@@ -62,9 +64,9 @@ function onNumeroNotaInput(event) {
 }
 
 function onNumeroProcessoInput(event) {
-  const digits = String(event.target.value || "").replace(/\D/g, "");
+  const digits = String(event.target.value || "").replace(/\D/g, "").slice(0, 17);
   numeroProcessoDigitsRaw.value = digits;
-  numeroProcesso.value = formatProcessoDigits(digits.slice(0, 17));
+  numeroProcesso.value = formatProcessoDigits(digits);
 }
 
 function normalizeAssinantes(value) {
@@ -121,7 +123,9 @@ watch(
       selectedCodigo.value = notaTecnicaConfig.selectedRegionalCodigo;
       numeroNota.value = notaTecnicaConfig.ultimoNumeroNota || "";
       numeroProcesso.value = notaTecnicaConfig.ultimoNumeroProcesso || "";
-      numeroProcessoDigitsRaw.value = String(numeroProcesso.value || "").replace(/\D/g, "");
+      numeroProcessoDigitsRaw.value = String(numeroProcesso.value || "").replace(/\D/g, "").slice(0, 17);
+      numeroProcesso.value = formatProcessoDigits(numeroProcessoDigitsRaw.value);
+      gerarPdf.value = true;
       assinantesTecnicos.value = normalizeAssinantes(notaTecnicaConfig.assinantesTecnicos);
     } catch (error) {
       toast.add({
@@ -156,6 +160,7 @@ async function save() {
       regional,
       numeroNota: numeroNota.value || null,
       numeroProcesso: processoFormatado.value || null,
+      gerarPdf: gerarPdf.value,
       assinantesTecnicos: assinantes,
     });
     close();
@@ -221,6 +226,7 @@ async function save() {
             :model-value="numeroProcesso"
             placeholder="00XXX.XXXXXX/2026-XX"
             inputmode="numeric"
+            maxlength="20"
             :invalid="processoInvalido"
             @input="onNumeroProcessoInput"
           />
@@ -278,6 +284,27 @@ async function save() {
       <div class="nt-document-preview">
         <span>{{ notaPreview }}</span>
         <span>(PROCESSO Nº {{ processoPreview }})</span>
+      </div>
+
+      <div class="nt-output-options">
+        <span class="nt-output-title">Formatos de saída</span>
+        <label class="nt-output-option nt-output-option--locked" for="nt-gerar-word">
+          <Checkbox
+            :model-value="true"
+            binary
+            disabled
+            input-id="nt-gerar-word"
+          />
+          <span>Gerar versão em Word para edição</span>
+        </label>
+        <label class="nt-output-option" for="nt-gerar-pdf">
+          <Checkbox
+            v-model="gerarPdf"
+            binary
+            input-id="nt-gerar-pdf"
+          />
+          <span>Gerar versão em PDF para visualização</span>
+        </label>
       </div>
     </div>
 
@@ -445,6 +472,45 @@ async function save() {
   color: var(--text-color-85);
   font-size: 0.86rem;
   line-height: 1.45;
+}
+
+.nt-output-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-bg) 72%, transparent);
+}
+
+.nt-output-title {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.nt-output-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--card-border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-color) 32%, transparent);
+  color: var(--text-color-85);
+  cursor: pointer;
+}
+
+.nt-output-option--locked {
+  cursor: default;
+  opacity: 0.78;
+}
+
+.nt-output-option span {
+  font-size: 0.88rem;
+  line-height: 1.35;
 }
 
 :global(.nt-regional-dialog .p-dialog-header-close) {

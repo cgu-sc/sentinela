@@ -26,8 +26,10 @@ from ..schemas.analytics import (
 )
 from ..services.analytics import AnalyticsService
 from fastapi.responses import StreamingResponse
+from loguru import logger
 from request_logging import FrontendPerformanceEvent, log_frontend_performance
 import json
+import time
 import urllib.parse
 
 router = APIRouter()
@@ -802,6 +804,7 @@ def get_nota_tecnica(
             missing = ", ".join(module["label"] for module in readiness["missing_modules"])
             raise RuntimeError(f"Nota Tecnica indisponivel. Modulos pendentes: {missing}.")
 
+        docx_started = time.perf_counter()
         file_stream = AnalyticsService.generate_nota_tecnica(
             db,
             cnpj,
@@ -811,6 +814,17 @@ def get_nota_tecnica(
             numero_nota,
             numero_processo,
             _parse_assinantes_tecnicos_param(assinantes_tecnicos),
+        )
+        docx_elapsed_ms = round((time.perf_counter() - docx_started) * 1000, 2)
+        logger.bind(sentinela_log="request_timing").info(
+            "cnpj={} | nota_tecnica_docx | params={} | tempo_ms={}",
+            cnpj,
+            {
+                "data_inicio": data_inicio.isoformat() if data_inicio else None,
+                "data_fim": data_fim.isoformat() if data_fim else None,
+                "regional_codigo": regional_codigo,
+            },
+            docx_elapsed_ms,
         )
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

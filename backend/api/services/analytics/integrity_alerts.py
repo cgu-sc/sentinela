@@ -3,7 +3,7 @@ from datetime import date, datetime
 import polars as pl
 
 from ...schemas.analytics import IntegrityAlertSchema, IntegrityAlertsResponse
-from data_cache import get_df_perfil_estabelecimento
+from data_cache import get_df_par_teia_alvos, get_df_perfil_estabelecimento
 from .farmacia import get_dados_farmacia
 from .financeiro import get_evolucao_financeira
 from .socios import get_socios_farmacia
@@ -118,6 +118,42 @@ def _build_alerta_volume_atipico(
     )
 
 
+def _build_alerta_par_teia_n2(*, cadastro) -> IntegrityAlertSchema | None:
+    par_teia = get_df_par_teia_alvos()
+    required = {"cnpj", "has_par_n2"}
+    missing = required - set(par_teia.columns)
+    if missing:
+        raise RuntimeError(
+            "par_teia_alvos sem colunas obrigatorias para alerta PAR N2: "
+            + ", ".join(sorted(missing))
+        )
+
+    has_par_n2 = (
+        par_teia
+        .filter(pl.col("cnpj") == cadastro.cnpj)
+        .select(pl.col("has_par_n2").any().alias("has_par_n2"))
+        .item()
+    )
+    if not has_par_n2:
+        return None
+
+    return IntegrityAlertSchema(
+        tipo="par_teia_n2",
+        escopo="cnpj",
+        entidade_id=cadastro.cnpj,
+        entidade_nome=cadastro.nome_fantasia or cadastro.razao_social or cadastro.cnpj,
+        severidade="atencao",
+        titulo="CNPJ Nível 2 da Teia com PAR",
+        fonte="PAR / Teia societária",
+        data_referencia=(
+            cadastro.data_processamento.date()
+            if cadastro.data_processamento is not None
+            else None
+        ),
+        aba_destino="teia",
+    )
+
+
 def get_integrity_alerts(
     cnpj: str,
     data_inicio: date | None = None,
@@ -137,6 +173,10 @@ def get_integrity_alerts(
     )
     if alerta_volume_atipico is not None:
         alertas.append(alerta_volume_atipico)
+
+    alerta_par_teia_n2 = _build_alerta_par_teia_n2(cadastro=cadastro)
+    if alerta_par_teia_n2 is not None:
+        alertas.append(alerta_par_teia_n2)
 
     if cadastro.is_cnae_farmacia_ausente:
         alertas.append(

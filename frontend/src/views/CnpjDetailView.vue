@@ -27,7 +27,7 @@ import TabPanel from "primevue/tabpanel";
 import { useToast } from "primevue/usetoast";
 import { API_ENDPOINTS } from "@/config/api";
 import { getApiErrorMessage } from "@/utils/apiErrors";
-import { downloadBlobFromResponse } from "@/utils/download";
+import { convertDocxToPdf, downloadBlobFromResponse } from "@/utils/download";
 import { createCnpjPerfSession, logCnpjPerf } from "@/utils/cnpjPerfLogger";
 
 // ── Índices das abas (evita números mágicos no template) ──
@@ -252,8 +252,7 @@ const handleExport = async () => {
         severity: "success",
         summary: "Relatório PDF salvo",
         detail: `Arquivo salvo em notas_tecnicas\\${downloadResult.filename}.`,
-        life: 12000,
-        data: { path: downloadResult.path },
+        data: { path: downloadResult.path, previewPath: downloadResult.path },
       });
     }
   } catch (error) {
@@ -300,13 +299,27 @@ const downloadNotaTecnica = async (dadosNota = {}) => {
 
     const downloadResult = await downloadBlobFromResponse(response, `Nota_Tecnica_${cnpj.value}.docx`);
     if (downloadResult?.desktop) {
+      let previewPath = null;
+      if (dadosNota.gerarPdf !== false) {
+        try {
+          const previewResult = await convertDocxToPdf(downloadResult.path);
+          previewPath = previewResult.path;
+        } catch (error) {
+          toast.add({
+            severity: "warn",
+            summary: "Pre-visualizacao indisponivel",
+            detail: error?.message || "A Nota Tecnica foi salva, mas nao foi possivel gerar a versao PDF para visualizacao.",
+            life: 12000,
+          });
+        }
+      }
+
       toast.add({
         group: "download",
         severity: "success",
         summary: "Nota Técnica salva",
         detail: `Arquivo salvo em notas_tecnicas\\${downloadResult.filename}.`,
-        life: 12000,
-        data: { path: downloadResult.path },
+        data: { path: downloadResult.path, previewPath },
       });
     }
   } finally {

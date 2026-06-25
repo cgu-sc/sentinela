@@ -52,6 +52,15 @@ function blobToBase64(blob) {
   });
 }
 
+function base64ToBlob(base64, mimeType) {
+  const binary = atob(String(base64 || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
 export async function openDownloadedFile(path) {
   const desktopApi = getDesktopApi();
   if (!desktopApi?.open_file) {
@@ -62,6 +71,34 @@ export async function openDownloadedFile(path) {
     throw new Error(result?.error || "Nao foi possivel abrir o arquivo.");
   }
   return result;
+}
+
+export async function convertDocxToPdf(path) {
+  const desktopApi = getDesktopApi();
+  if (!desktopApi?.convert_docx_to_pdf) {
+    throw new Error("Conversao DOCX/PDF indisponivel no modo atual.");
+  }
+  const result = await desktopApi.convert_docx_to_pdf(path);
+  if (!result?.ok) {
+    throw new Error(result?.error || "Nao foi possivel converter o DOCX para PDF.");
+  }
+  return result;
+}
+
+export async function createPdfObjectUrlFromDesktopFile(path) {
+  const desktopApi = getDesktopApi();
+  if (!desktopApi?.read_pdf_base64) {
+    throw new Error("Visualizacao nativa de PDF indisponivel.");
+  }
+  const result = await desktopApi.read_pdf_base64(path);
+  if (!result?.ok) {
+    throw new Error(result?.error || "Nao foi possivel ler o PDF salvo.");
+  }
+  const blob = base64ToBlob(result.base64, "application/pdf");
+  return {
+    ...result,
+    url: window.URL.createObjectURL(blob),
+  };
 }
 
 export async function saveBlobOrDownload(blob, filename) {

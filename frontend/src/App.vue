@@ -9,10 +9,11 @@ import { TIMING } from '@/config/constants';
 import { useThemeStore } from '@/stores/theme';
 import { useSystemUpdateStore } from '@/stores/systemUpdate';
 import Toast from 'primevue/toast';
-import { openDownloadedFile } from '@/utils/download';
+import { createPdfObjectUrlFromDesktopFile, openDownloadedFile } from '@/utils/download';
 import UpdateBlocker from '@/views/components/UpdateBlocker.vue';
 import ExecutionBlocker from '@/views/components/ExecutionBlocker.vue';
 import UpdateDialog from '@/views/components/UpdateDialog.vue';
+import DocumentPreviewDialog from '@/views/components/DocumentPreviewDialog.vue';
 
 const analyticsStore = useAnalyticsStore();
 const geoStore = useGeoStore();
@@ -24,6 +25,10 @@ const syncProgress = ref(0);
 const statusMessage = ref("Iniciando Sistema...");
 const hasError = ref(false);
 const errorMessageDetail = ref("");
+const previewVisible = ref(false);
+const previewUrl = ref("");
+const previewPath = ref("");
+const previewTitle = ref("");
 let _bootTimer = null;
 let _pollTimer = null;
 
@@ -151,6 +156,40 @@ const openToastFile = async (message) => {
     console.error('Erro ao abrir arquivo salvo:', error);
   }
 };
+
+const closeDocumentPreview = () => {
+  previewVisible.value = false;
+  if (previewUrl.value) {
+    window.URL.revokeObjectURL(previewUrl.value);
+  }
+  previewUrl.value = "";
+  previewPath.value = "";
+  previewTitle.value = "";
+};
+
+const openToastPreview = async (message) => {
+  const path = message?.data?.previewPath;
+  if (!path) return;
+  try {
+    const result = await createPdfObjectUrlFromDesktopFile(path);
+    closeDocumentPreview();
+    previewUrl.value = result.url;
+    previewPath.value = result.path;
+    previewTitle.value = result.filename || "Nota Tecnica";
+    previewVisible.value = true;
+  } catch (error) {
+    console.error('Erro ao visualizar PDF salvo:', error);
+  }
+};
+
+const openPreviewExternalFile = async () => {
+  if (!previewPath.value) return;
+  try {
+    await openDownloadedFile(previewPath.value);
+  } catch (error) {
+    console.error('Erro ao abrir PDF salvo:', error);
+  }
+};
 </script>
 
 <template>
@@ -173,10 +212,27 @@ const openToastFile = async (message) => {
             <i class="pi pi-external-link" />
             Abrir arquivo
           </button>
+          <button
+            v-if="slotProps.message.data?.previewPath"
+            type="button"
+            class="download-toast-action"
+            @click="openToastPreview(slotProps.message)"
+          >
+            <i class="pi pi-eye" />
+            Visualizar
+          </button>
         </div>
       </div>
     </template>
   </Toast>
+  <DocumentPreviewDialog
+    :visible="previewVisible"
+    :title="previewTitle"
+    :file-url="previewUrl"
+    :file-path="previewPath"
+    @close="closeDocumentPreview"
+    @open-file="openPreviewExternalFile"
+  />
 
   <!-- OVERLAY DE CARREGAMENTO GLOBAL -->
   <div v-if="isAppLoading" class="app-boot-overlay">

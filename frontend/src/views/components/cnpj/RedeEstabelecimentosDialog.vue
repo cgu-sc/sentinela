@@ -77,8 +77,8 @@ function onRowClick({ data: row }) {
     modal
     :draggable="false"
     :dismissable-mask="true"
-    :style="{ width: '80vw' }"
-    :breakpoints="{ '960px': '80vw' }"
+    :style="{ width: '75vw' }"
+    :breakpoints="{ '960px': '75vw' }"
     class="rede-dialog"
     pt-options="{ mergeSections: false, mergeProps: false }"
   >

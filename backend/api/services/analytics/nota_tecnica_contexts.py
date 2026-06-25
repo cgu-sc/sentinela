@@ -1187,6 +1187,7 @@ def _build_repasses_anuais_context(
         rows: lista de {ano, valor} ordenada por ano
         total: soma geral de valor_pago
         periodo_fmt: string "Ano1 a AnoN" para uso no título da tabela
+        sem_repasses: True quando a consulta é válida, mas não há registros no período
     """
     perfil = get_df_perfil_estabelecimento().filter(pl.col("cnpj") == cnpj).select("id_cnpj")
     if perfil.is_empty():
@@ -1216,7 +1217,22 @@ def _build_repasses_anuais_context(
     )
 
     if df.is_empty():
-        raise RuntimeError(f"Sem registros de repasses para CNPJ {cnpj} no período informado.")
+        periodo_inicio = data_inicio.year if data_inicio else None
+        periodo_fim = data_fim.year if data_fim else None
+        if periodo_inicio and periodo_fim:
+            periodo_fmt = str(periodo_inicio) if periodo_inicio == periodo_fim else f"{periodo_inicio} a {periodo_fim}"
+        elif periodo_inicio:
+            periodo_fmt = f"a partir de {periodo_inicio}"
+        elif periodo_fim:
+            periodo_fmt = f"até {periodo_fim}"
+        else:
+            periodo_fmt = "período analisado"
+        return {
+            "rows": [],
+            "total": 0.0,
+            "periodo_fmt": periodo_fmt,
+            "sem_repasses": True,
+        }
 
     rows = [{"ano": int(r["ano"]), "valor": round(float(r["valor"]), 2)} for r in df.to_dicts()]
     total = round(sum(r["valor"] for r in rows), 2)
@@ -1227,4 +1243,5 @@ def _build_repasses_anuais_context(
         "rows": rows,
         "total": total,
         "periodo_fmt": periodo_fmt,
+        "sem_repasses": False,
     }

@@ -789,22 +789,39 @@ def _add_tabela_repasses_anuais(
     repasses_ctx: dict[str, Any],
     tabela_num: int,
 ) -> None:
-    """Tabela de ordens bancárias do SIAFI agregadas por ano para o CNPJ."""
+    """Tabela de ordens bancárias do SIAFI agregadas por ano para o CNPJ.
+
+    Suporta dois cenários:
+    - Com repasses (sem_repasses=False): tabela com uma linha por ano + total.
+    - Sem repasses (sem_repasses=True): tabela com linha informativa mesclada +
+      total zerado, sem quebrar a numeração da NT.
+    """
     rows_data = repasses_ctx["rows"]
     periodo_fmt = repasses_ctx["periodo_fmt"]
+    sem_repasses = bool(repasses_ctx.get("sem_repasses"))
 
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(
-        p_title,
-        f'Tabela {tabela_num} – Valores consolidados de ordens bancárias recebidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_fmt}.',
-        color='334155',
-        size=12,
-        bold=True,
-    )
+    if sem_repasses:
+        _run(
+            p_title,
+            f'Tabela {tabela_num} – Consulta a ordens bancárias do Ministério da Saúde para a Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_fmt}.',
+            color='334155',
+            size=12,
+            bold=True,
+        )
+    else:
+        _run(
+            p_title,
+            f'Tabela {tabela_num} – Valores consolidados de ordens bancárias recebidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_fmt}.',
+            color='334155',
+            size=12,
+            bold=True,
+        )
 
-    # cabeçalho + linhas de dados + linha de total
-    table = doc.add_table(rows=len(rows_data) + 2, cols=3)
+    # cabeçalho + (linhas de dados OU linha informativa) + linha de total
+    n_rows = 3 if sem_repasses else len(rows_data) + 2
+    table = doc.add_table(rows=n_rows, cols=3)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     _set_table_fixed_widths(table, [Inches(3.50), Inches(1.30), Inches(2.50)])
     _set_table_open_borders(table)
@@ -817,13 +834,27 @@ def _add_tabela_repasses_anuais(
         _run(para, header, color='0F172A', size=9, bold=True)
         _cell_bg(table.rows[0].cells[idx], 'E2E8F0')
 
-    for row_idx, item in enumerate(rows_data, start=1):
-        cells = table.rows[row_idx].cells
-        _run(cells[0].paragraphs[0], '36000 - MINISTÉRIO DA SAÚDE', color='0F172A', size=9)
-        cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(cells[1].paragraphs[0], str(item["ano"]), color='0F172A', size=9)
-        cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        _run(cells[2].paragraphs[0], f'R$ {_format_decimal_pt(item["valor"], 2)}', color='0F172A', size=9)
+    if sem_repasses:
+        info_cells = table.rows[1].cells
+        merged = info_cells[0].merge(info_cells[1]).merge(info_cells[2])
+        merged.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(
+            merged.paragraphs[0],
+            f'Não foram identificadas ordens bancárias recebidas do Ministério da Saúde para o CNPJ {cnpj_fmt} no período analisado.',
+            color='475569',
+            size=9,
+            italic=True,
+        )
+        for cell in info_cells:
+            _cell_bg(cell, 'F1F5F9')
+    else:
+        for row_idx, item in enumerate(rows_data, start=1):
+            cells = table.rows[row_idx].cells
+            _run(cells[0].paragraphs[0], '36000 - MINISTÉRIO DA SAÚDE', color='0F172A', size=9)
+            cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _run(cells[1].paragraphs[0], str(item["ano"]), color='0F172A', size=9)
+            cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            _run(cells[2].paragraphs[0], f'R$ {_format_decimal_pt(item["valor"], 2)}', color='0F172A', size=9)
 
     total_cells = table.rows[-1].cells
     total_cells[0].merge(total_cells[1])
@@ -849,10 +880,19 @@ def _add_tabela_repasses_anuais(
     p_atencao.paragraph_format.space_before = Pt(8)
     p_atencao.paragraph_format.space_after = Pt(4)
     _run(p_atencao, 'ATENÇÃO: ', color='C0392B', size=10, bold=True, italic=True)
-    _run(
-        p_atencao,
-        f'Como o Sistema Sentinela se concentra apenas nos medicamentos previstos no rol do PFPB, o comportamento esperado é de que o valor total identificado pelo Sistema de faturamento da empresa junto ao MS (valor total da segunda coluna da Tabela {tabela_num - 1}) seja inferior ou no máximo igual ao valor total das ordens bancárias recebidas do MS (total do quadro anterior, que inclui pagamentos de medicamentos e também fraldas geriátricas e absorventes higiênicos). Valores totais de ordens bancárias menores do que os faturados indicam a possibilidade de glosa por parte do Ministério da Saúde e, consequentemente, de não efetivação total ou parcial de tentativas de fraude ao Programa. Neste caso, sugere-se alterar o texto padrão da "conclusão e encaminhamento" sugerido no item "8" desta Nota Técnica.',
-        color='C0392B',
-        size=10,
-        italic=True,
-    )
+    if sem_repasses:
+        _run(
+            p_atencao,
+            'Não foram identificadas ordens bancárias no período analisado; portanto, a comparação entre o faturamento declarado ao MS e os valores efetivamente repassados deve ser avaliada considerando o possível repasse dos recursos para o CNPJ da Matriz.',
+            color='C0392B',
+            size=10,
+            italic=True,
+        )
+    else:
+        _run(
+            p_atencao,
+            f'Como o Sistema Sentinela se concentra apenas nos medicamentos previstos no rol do PFPB, o comportamento esperado é de que o valor total identificado pelo Sistema de faturamento da empresa junto ao MS (valor total da segunda coluna da Tabela {tabela_num - 1}) seja inferior ou no máximo igual ao valor total das ordens bancárias recebidas do MS (total do quadro anterior, que inclui pagamentos de medicamentos e também fraldas geriátricas e absorventes higiênicos). Valores totais de ordens bancárias menores do que os faturados indicam a possibilidade de glosa por parte do Ministério da Saúde e, consequentemente, de não efetivação total ou parcial de tentativas de fraude ao Programa. Neste caso, sugere-se alterar o texto padrão da "conclusão e encaminhamento" sugerido no item "8" desta Nota Técnica.',
+            color='C0392B',
+            size=10,
+            italic=True,
+        )

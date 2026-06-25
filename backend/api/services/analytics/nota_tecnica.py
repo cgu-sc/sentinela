@@ -1439,10 +1439,13 @@ def generate_nota_tecnica(
         tabela_num += 1
     _add_quadro_socios_volume_atipico(doc, socios_volume_atipico, tabela_num)
     _add_figura_evolucao_financeira(doc, razao_social, cnpj_fmt, evolucao_comp, figure_number=2)
+    repasses_ctx = _build_repasses_anuais_context(cnpj, data_inicio, data_fim)
     p_ordens_bancarias_intro = doc.add_paragraph()
     p_ordens_bancarias_intro.paragraph_format.space_before = Pt(6)
-    _run(p_ordens_bancarias_intro, f'Quanto aos valores efetivamente recebidos pela Farmácia {razao_social} do Ministério da Saúde, referentes ao PFPB, o quadro a seguir consolida o total das ordens bancárias emitidas em seu favor.', color='0F172A', size=10)
-    repasses_ctx = _build_repasses_anuais_context(cnpj, data_inicio, data_fim)
+    if repasses_ctx.get("sem_repasses"):
+        _run(p_ordens_bancarias_intro, f'Quanto aos valores efetivamente repassados pelo Ministério da Saúde, referentes ao PFPB, não foram identificados registros para o CNPJ, conforme tabela a seguir.', color='0F172A', size=10)
+    else:
+        _run(p_ordens_bancarias_intro, f'Quanto aos valores efetivamente recebidos pela Farmácia {razao_social} do Ministério da Saúde, referentes ao PFPB, a tabela a seguir consolida o total das ordens bancárias emitidas em seu favor.', color='0F172A', size=10)
     tabela_num += 1
     _add_tabela_repasses_anuais(doc, razao_social, cnpj_fmt, repasses_ctx, tabela_num)
     p_spacer_repasses = doc.add_paragraph()

@@ -513,6 +513,31 @@ async function save() {
   line-height: 1.35;
 }
 
+:global(.nt-regional-dialog .p-checkbox .p-checkbox-box) {
+  border: 1px solid color-mix(in srgb, var(--card-border) 82%, transparent) !important;
+  background: color-mix(in srgb, var(--card-bg) 72%, var(--bg-color)) !important;
+  color: var(--color-on-primary) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 7%, transparent);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease !important;
+}
+
+:global(.nt-regional-dialog .p-checkbox:not(.p-disabled) .p-checkbox-box:hover) {
+  border-color: color-mix(in srgb, var(--primary-color) 48%, var(--card-border)) !important;
+  background: color-mix(in srgb, var(--primary-color) 9%, var(--card-bg)) !important;
+}
+
+:global(.nt-regional-dialog .p-checkbox.p-highlight .p-checkbox-box) {
+  border-color: var(--primary-color) !important;
+  background: var(--primary-color) !important;
+}
+
+:global(.nt-regional-dialog .p-checkbox.p-disabled .p-checkbox-box) {
+  opacity: 0.78;
+}
+
 :global(.nt-regional-dialog .p-dialog-header-close) {
   width: 2rem !important;
   height: 2rem !important;

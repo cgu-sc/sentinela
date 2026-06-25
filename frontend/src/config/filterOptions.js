@@ -19,10 +19,9 @@ export const FILTER_OPTIONS = {
   grandeRede: ['Todos', 'Sim', 'Não'],
   parTeia: [
     { label: 'Sem filtro', value: 'Todos' },
-    { label: 'Alvo com PAR', value: 'alvo' },
-    { label: 'Empresa N2 com PAR', value: 'n2' },
-    { label: 'Empresa N4 com PAR', value: 'n4' },
-    { label: 'Qualquer empresa com PAR', value: 'qualquer' },
+    { label: 'CNPJ Nível 2 da Teia com PAR', value: 'n2' },
+    { label: 'CNPJ Nível 4 da Teia com PAR', value: 'n4' },
+    { label: 'Qualquer CNPJ com PAR', value: 'qualquer' },
   ],
   socioBeneficio: SOCIO_BENEFICIO_FILTER_OPTIONS,
   socioEsocial: SOCIO_ESOCIAL_FILTER_OPTIONS,

@@ -77,10 +77,13 @@ const alertTooltipTemplates = {
     '{qtd} estabelecimentos possuem ao menos um sócio pessoa física com vínculo ativo e idade inferior a 21 anos ou superior a 80 anos na data de referência do período selecionado.',
   socio_esocial:
     '{qtd} estabelecimentos possuem sócios ativos que possuem vínculos em outros CNPJs em funções não gerenciais, conforme registros do eSocial.',
+  par_teia_n2:
+    '{qtd} estabelecimentos possuem ao menos um CNPJ vinculado no nível 2 da teia societária com registro em Processo Administrativo de Responsabilização (PAR).',
 };
 
 const SOCIO_BENEFICIO_DIRETO = 'direto';
 const SOCIO_ESOCIAL_DIRETO = 'direto';
+const PAR_TEIA_N2 = 'n2';
 
 // Mapeia cada tipo de alerta do card Integridade para o filtro
 // correspondente do filterStore. 'bool' faz toggle; 'dropdown' força
@@ -93,6 +96,7 @@ const ALERTA_TIPO_PARA_FILTRO = {
   socio_beneficio_social: { kind: 'dropdown', ref: 'selectedSocioBeneficio', value: SOCIO_BENEFICIO_DIRETO },
   socio_idade_atipica: { kind: 'bool', ref: 'selectedSocioIdadeAtipica' },
   socio_esocial: { kind: 'dropdown', ref: 'selectedSocioEsocial', value: SOCIO_ESOCIAL_DIRETO },
+  par_teia_n2: { kind: 'dropdown', ref: 'selectedParTeia', value: PAR_TEIA_N2 },
 };
 
 function isAlertaFiltroAtivo(alerta) {

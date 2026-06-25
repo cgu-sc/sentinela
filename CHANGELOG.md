@@ -5,6 +5,17 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.3.0] - 2026-06-25
+
+### Adicionado
+- **Novo alerta "CNPJ Nível 2 da Teia com PAR"** no card **Integridade / Quadro de Alertas** da HomeView. O alerta conta CNPJs alvo que possuem ao menos um CNPJ vinculado no nível 2 da teia societária com registro em Processo Administrativo de Responsabilização (PAR), usando o cache global `par_teia_alvos.smod` e a coluna obrigatória `has_par_n2`. Ao clicar no alerta, o sistema ativa automaticamente o filtro da sidebar `CNPJs com PAR = CNPJ Nível 2 da Teia com PAR`.
+
+### Alterado
+- **Filtro "CNPJs com PAR" refinado na sidebar**: removida a opção `Alvo com PAR`, que não possuía resultado útil para o fluxo atual. Os labels foram ajustados para `CNPJ Nível 2 da Teia com PAR`, `CNPJ Nível 4 da Teia com PAR` e `Qualquer CNPJ com PAR`.
+- **Labels dos filtros de integridade societária ajustados** para linguagem mais curta e direta: `Apenas CNPJs com CNAE incompatível`, `Apenas sócios < 21 ou > 80 anos` e `Apenas CNPJs com sócio falecido`.
+- **Labels do card Integridade atualizados**: `Sócio em programa social (CadÚnico/Defeso)` passou a `Sócio inscrito no CadÚnico/Defeso`, e `Sócio com idade atípica (< 21 ou > 80 anos)` passou a `Sócios < 21 ou > 80 anos`.
+
+
 ## [1.2.3] - 2026-06-24
 
 ### Adicionado

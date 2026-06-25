@@ -10,6 +10,7 @@ import polars as pl
 from data_cache import (
     get_df_perfil_estabelecimento,
     get_df_dados_socios,
+    get_df_par_teia_alvos,
     scan_geografico_origem_uf,
 )
 from ...schemas.analytics import AlertaPanoramaItemSchema, AlertasPanoramaResponse
@@ -278,6 +279,28 @@ def _ids_socio_esocial(id_cnpjs: pl.Series | None) -> pl.Series:
     return _distinct_id_cnpjs(df)
 
 
+def _ids_par_teia_n2(id_cnpjs: pl.Series | None) -> pl.Series:
+    """Conta CNPJs alvo com ao menos um CNPJ no nivel 2 da teia com PAR."""
+    par_teia = get_df_par_teia_alvos()
+    required = {"cnpj", "has_par_n2"}
+    missing = required - set(par_teia.columns)
+    if missing:
+        raise RuntimeError(
+            "par_teia_alvos sem colunas obrigatorias para alerta PAR N2: "
+            + ", ".join(sorted(missing))
+        )
+
+    cnpjs_par_n2 = (
+        par_teia
+        .filter(pl.col("has_par_n2") == True)  # noqa: E712
+        .select("cnpj")
+        .unique()
+        .get_column("cnpj")
+    )
+    ids_par_n2 = _ids_por_cnpj(cnpjs_par_n2)
+    return _intersect_id_cnpjs(id_cnpjs, ids_par_n2)
+
+
 def _ids_socio_idade_atipica(
     id_cnpjs: pl.Series | None,
     data_referencia: date,
@@ -393,6 +416,7 @@ def get_alertas_panorama(
         "socio_beneficio_social": _ids_socio_beneficio_social(id_cnpjs),
         "socio_idade_atipica": _ids_socio_idade_atipica(id_cnpjs, data_ref),
         "socio_esocial": _ids_socio_esocial(id_cnpjs),
+        "par_teia_n2": _ids_par_teia_n2(id_cnpjs),
     }
     contagens = {
         tipo: ids.n_unique()
@@ -404,9 +428,10 @@ def get_alertas_panorama(
         ("cnpj_dispersao_uf_nao_vizinha", "Vendas para UFs sem fronteira",              "critico"),
         ("cnpj_cnae_farmacia_ausente",    "CNAE incompatível",                            "atencao"),
         ("socio_falecido",                "Sócio ativo falecido",                         "atencao"),
-        ("socio_beneficio_social",        "Sócio em programa social (CadÚnico/Defeso)",   "atencao"),
-        ("socio_idade_atipica",           "Sócio com idade atípica (< 21 ou > 80 anos)", "atencao"),
+        ("socio_beneficio_social",        "Sócio inscrito no CadÚnico/Defeso",            "atencao"),
+        ("socio_idade_atipica",           "Sócios < 21 ou > 80 anos",                    "atencao"),
         ("socio_esocial",                 "Sócio com vínculo eSocial",                  "atencao"),
+        ("par_teia_n2",                    "CNPJ Nível 2 da Teia com PAR",               "atencao"),
     ]
 
     alertas = [

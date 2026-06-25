@@ -148,10 +148,9 @@ const socioEsocialOptions = FILTER_OPTIONS.socioEsocial;
 const clusterOptions = FILTER_OPTIONS.cluster;
 const rfaOptions = FILTER_OPTIONS.rfa;
 const parTeiaTooltip =
-  "Alvo com PAR: o próprio CNPJ filtrado possui PAR.\n" +
-  "Empresa N2 com PAR: empresa vinculada no nível 2 da teia possui PAR.\n" +
-  "Empresa N4 com PAR: empresa vinculada no nível 4 da teia possui PAR.\n" +
-  "Qualquer empresa com PAR: considera Alvo, N2 ou N4.";
+  "CNPJ Nível 2 da Teia com PAR: empresa vinculada no nível 2 da teia possui PAR.\n" +
+  "CNPJ Nível 4 da Teia com PAR: empresa vinculada no nível 4 da teia possui PAR.\n" +
+  "Qualquer CNPJ com PAR: considera CNPJs dos níveis 2 ou 4 da teia.";
 const socioBeneficioTooltip =
   "Sócio direto: vínculo ativo na farmácia alvo e cadastro no CadÚnico ou Seguro Defeso.\n" +
   "Sócio N3: vínculo ativo em empresa do nível 2 e cadastro no CadÚnico ou Seguro Defeso.\n" +
@@ -1488,7 +1487,7 @@ const clearSearch = () => {
         :class="{ 'filter-locked': allFiltersLocked }"
       >
         <label class="filter-label">
-          Empresas com PAR
+          CNPJs com PAR
           <i
             class="pi pi-info-circle filter-info-icon"
             v-tooltip.right="{ value: parTeiaTooltip, showDelay: 120, hideDelay: 80 }"
@@ -1540,7 +1539,7 @@ const clearSearch = () => {
               type="checkbox"
               class="filter-checkbox"
             />
-            <span>Mostrar apenas farmácias com CNAE incompatível</span>
+            <span>Apenas CNPJs com CNAE incompatível</span>
           </label>
         </div>
       </div>
@@ -1572,7 +1571,7 @@ const clearSearch = () => {
               type="checkbox"
               class="filter-checkbox"
             />
-            <span>Mostrar apenas farmácias com sócio PF &lt; 21 ou &gt; 80 anos</span>
+            <span>Apenas sócios &lt; 21 ou &gt; 80 anos</span>
           </label>
         </div>
       </div>
@@ -1604,7 +1603,7 @@ const clearSearch = () => {
               type="checkbox"
               class="filter-checkbox"
             />
-            <span>Mostrar apenas farmácias com sócio PF ativo falecido</span>
+            <span>Apenas CNPJs com sócio falecido</span>
           </label>
         </div>
       </div>

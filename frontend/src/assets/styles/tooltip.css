@@ -6,6 +6,8 @@
 .p-tooltip.sentinela-tooltip {
   max-width: min(22rem, calc(100vw - 2rem));
   padding: 0.3rem;
+  position: fixed;
+  pointer-events: none;
 }
 
 .p-tooltip.sentinela-tooltip .p-tooltip-text {

@@ -5,6 +5,21 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.1] - 2026-06-25
+
+### Adicionado
+- **Modal de estabelecimentos da rede ao clicar na badge "Grande Rede"** em `CnpjHeader.vue`. Quando `qtd_estabelecimentos_rede > 1`, abrir a badge exibe um modal fullscreen com a lista de todos os estabelecimentos da rede usando a tabela modelo `EstablishmentRiskTable.vue`. O modal reaproveita o endpoint existente `/api/v1/analytics/indicadores-analise/cnpjs` com `indicador=percentual_nao_comprovacao` + `cnpj_raiz` (zero alteracoes no backend). Clique na linha fecha o modal e navega para o detalhe do CNPJ (drill-down).
+- **Novo componente** `frontend/src/views/components/cnpj/RedeEstabelecimentosDialog.vue`: modal PrimeVue fullscreen com header, loading state, empty state e tabela reusada.
+- **Prop `compact` em `EstablishmentRiskTable.vue`**: quando `true`, a tabela assume sua altura natural em vez de reservar 20 linhas. Aplicado via `pt` do PrimeVue (inline style no `.p-datatable-wrapper`) para bypass de escopo de CSS scoped. Default `false` preserva o comportamento original em `/estabelecimentos`.
+
+### Alterado
+- **Badge "Grande Rede"** no `CnpjHeader.vue`: cursor pointer + hover com lift e box-shadow sutil via `.clickable-badge` (classe condicional antes inativa). Tooltip subiu de `.bottom` para `.top` para evitar que o texto mais longo estoure lateralmente.
+- **Tooltip global** em `assets/styles/tooltip.css`: adicionado `position: fixed` + `pointer-events: none` no `.p-tooltip.sentinela-tooltip` para evitar clipping por ancestrais com `overflow: hidden` ou `transform`.
+
+### Correcoes
+- **Modal de rede com altura limitada**: 70vw x 70vh via `style` do `<Dialog>`, com `pt` aplicado para sobrescrever o `min-height: 840px` da tabela compartilhada quando dentro do modal.
+
+
 ## [1.5.1] - 2026-06-25
 
 ### Corrigido

@@ -28,6 +28,13 @@ const props = defineProps({
   indicadorKey: { type: String, default: null },
   isLoading: { type: Boolean, default: false },
   indicadorLabel: { type: String, default: 'Indicador' },
+  /**
+   * Quando true, a tabela assume sua altura natural em vez de reservar
+   * espaco para 20 linhas. Usado em modais/containers com altura limitada.
+   * Aplicado via CSS variable `--risk-table-min-h` que sobrescreve o
+   * min-height do .p-datatable-wrapper.
+   */
+  compact: { type: Boolean, default: false },
   totalRecords: { type: Number, default: 0 },
   first: { type: Number, default: 0 },
   rows: { type: Number, default: 20 },
@@ -45,6 +52,23 @@ const auditHighValue = computed(() =>
     ? metodologiaConfig.auditHighValue
     : AUDIT_THRESHOLDS.HIGH_VALUE,
 );
+
+// `pt` (passthrough) do PrimeVue DataTable para sobrescrever o
+// min-height do .p-datatable-wrapper via inline style. Aplicado
+// diretamente no DOM gerado pelo PrimeVue, sem depender de CSS
+// variable, heranca ou cascata — funciona mesmo com Teleport e
+// Shadow DOM.
+// Quando `compact=true` (usado em modais/containers com altura
+// limitada), a tabela assume sua altura natural. Default preserva
+// o comportamento atual (reserva espaco para 20 linhas) na
+// EstablishmentsView.
+const dataTablePt = computed(() => ({
+  wrapper: {
+    style: {
+      minHeight: props.compact ? '0' : 'calc(20 * 2.625rem)',
+    },
+  },
+}));
 
 onMounted(() => {
   metodologiaConfig.ensureLoaded().catch((error) => {
@@ -386,6 +410,7 @@ const indicatorColumnHeader = computed(() => {
       :totalRecords="tableSnapshot.totalRecords"
       :sortField="tableSnapshot.sortField"
       :sortOrder="tableSnapshot.sortOrder"
+      :pt="dataTablePt"
       class="enterprise-table ind-cnpj-table clickable-rows"
       @page="onLazyLoad"
       @sort="onLazyLoad"
@@ -1321,7 +1346,7 @@ const indicatorColumnHeader = computed(() => {
 
 :deep(.p-datatable-wrapper) {
   border-radius: 0 0 12px 12px;
-  min-height: calc(20 * 2.625rem);
+  min-height: var(--risk-table-min-h, calc(20 * 2.625rem));
 }
 
 :deep(.p-tag) {

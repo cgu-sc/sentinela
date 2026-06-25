@@ -99,23 +99,25 @@ function onRowClick({ data: row }) {
       <span>Nenhum estabelecimento encontrado para esta rede.</span>
     </div>
 
-    <EstablishmentRiskTable
-      v-else
-      :cnpjs="data.items"
-      :formato="'pct'"
-      :indicador-key="'percentual_nao_comprovacao'"
-      :indicador-label="'Percentual Não Comprovação'"
-      :is-loading="isLoading"
-      :total-records="data.total"
-      :first="0"
-      :rows="data.items.length"
-      :sort-field="'val_sem_comp'"
-      :sort-order="-1"
-      :table-kpis="data.kpis"
-      :selected-regiao-nome="null"
-      :selected-municipio-nome="null"
-      @row-click="onRowClick"
-    />
+    <div v-else class="rede-dialog__table-wrapper">
+      <EstablishmentRiskTable
+        :cnpjs="data.items"
+        :formato="'pct'"
+        :indicador-key="'percentual_nao_comprovacao'"
+        :indicador-label="'Percentual Não Comprovação'"
+        :is-loading="isLoading"
+        :total-records="data.total"
+        :first="0"
+        :rows="data.items.length"
+        :sort-field="'val_sem_comp'"
+        :sort-order="-1"
+        :table-kpis="data.kpis"
+        :selected-regiao-nome="null"
+        :selected-municipio-nome="null"
+        compact
+        @row-click="onRowClick"
+      />
+    </div>
   </Dialog>
 </template>
 
@@ -151,14 +153,21 @@ function onRowClick({ data: row }) {
   font-size: 1.05rem;
 }
 
-/* Override da tabela compartilhada: ela reserva altura para 20 linhas
-   via min-height no .p-datatable-wrapper, o que estoura o modal de 70vh.
-   Aqui no modal a tabela assume sua altura natural. */
-.rede-dialog :deep(.p-datatable-wrapper) {
-  min-height: 0;
-}
+/* Wrapper da tabela: o EstablishmentRiskTable eh um componente separado
+   (com seu proprio data-v-), entao :deep() no .p-datatable-wrapper nao
+   funciona via CSS scoped. Aplicamos as restricoes no wrapper pai, que
+   esta dentro do nosso template e portanto compartilha nosso data-v-.
 
-.rede-dialog :deep(.p-datatable) {
+   min-height: 0 eh o truque-chave: faz o wrapper (e tudo dentro dele,
+   incluindo a DataTable) respeitar a altura fixa do modal (70vh) em vez
+   de crescer ate o conteudo. Combinado com flex: 1, o wrapper ocupa
+   todo o espaco restante do Dialog apos o header. O p-dialog-content
+   do PrimeVue tem overflow-y: auto nativo, entao se a tabela for
+   maior que o wrapper, o scroll aparece no dialog. */
+.rede-dialog__table-wrapper {
+  flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 </style>

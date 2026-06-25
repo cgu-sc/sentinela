@@ -8,9 +8,9 @@
   "download_url": "https://github.com/cgu-sc/sentinela/releases/download/v1.4.0/Sentinela.exe",
   "release_notes_url": "https://github.com/cgu-sc/sentinela/releases/tag/v1.4.0",
   "execution_policy": {
-    "blocked_execution": false,
+    "blocked_execution": true,
     "block_title": "Execução bloqueada",
-    "block_message": "Esta versão do Sentinela foi temporariamente bloqueada pela política de atualização. Atualize para a versão mais recente para continuar utilizando o sistema.",
+    "block_message": "O sistema Sentinela foi temporariamente bloqueado.",
     "blocked_since": null
   }
 }

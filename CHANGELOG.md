@@ -5,6 +5,19 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.5.1] - 2026-06-25
+
+### Corrigido
+- **Nota Técnica Preliminar não quebra mais quando a farmácia não tem repasses no SIAFI para o período.** Antes, `_build_repasses_anuais_context` em `backend/api/services/analytics/nota_tecnica_contexts.py` levantava `RuntimeError("Sem registros de repasses para CNPJ ... no período informado.")` e a geração da NT falhava. Agora retorna um contexto válido com `rows: []`, `total: 0.0`, `sem_repasses: True` e `periodo_fmt` calculado a partir do período informado (`"2020 a 2024"`, `"2024"`, `"a partir de 2020"`, `"até 2020"`, ou `"período analisado"` quando nenhum dos dois é fornecido).
+- **Tabela de ordens bancárias adaptada para o cenário sem repasses.** `_add_tabela_repasses_anuais` em `backend/api/services/analytics/nota_tecnica_quadros.py` agora detecta `sem_repasses` e gera uma linha informativa mesclada (`"Não foram identificadas ordens bancárias recebidas do Ministério da Saúde para o CNPJ X no período analisado."`) em vez de tabela vazia. O título da tabela vira `"Consulta a ordens bancárias do Ministério da Saúde para a Farmácia ..."` e o texto de ATENÇÃO é substituído por um parágrafo específico: `"Não foram identificadas ordens bancárias no período analisado; portanto, a comparação entre o faturamento declarado ao MS e os valores efetivamente repassados deve ser avaliada considerando o possível repasse dos recursos para o CNPJ da Matriz."`. Total permanece R$ 0,00 e a fonte SIAFI é mantida. A numeração das tabelas da NT não é quebrada.
+- **Texto introdutório da seção de ordens bancárias condicional** em `nota_tecnica.py`. Quando há repasses, mantém o texto original sobre valores efetivamente recebidos. Quando não há, vira `"Quanto aos valores efetivamente repassados pelo Ministério da Saúde, referentes ao PFPB, não foram identificados registros para o CNPJ, conforme tabela a seguir."`.
+
+### Comportamento preservado
+- Quando há repasses no período, a tabela, o título, o texto de ATENÇÃO sobre glosa e o comportamento dos números são idênticos à versão 1.5.0.
+- Erros legítimos (CNPJ fora do perfil, cache/schema indisponível, colunas obrigatórias ausentes) continuam sendo levantados como exceções.
+- Cobertura de testes isolados em `src/scripts/test_nota_tecnica_sem_repasses.py`: 3 cenários (sem repasses, com repasses, 5 variações de `periodo_fmt`).
+
+
 ## [1.5.0] - 2026-06-25
 
 ### Adicionado

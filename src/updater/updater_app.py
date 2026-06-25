@@ -9,6 +9,7 @@ Realiza as etapas de substituição e mostra progresso em janela gráfica.
 """
 
 import argparse
+import base64
 import shutil
 import socket
 import subprocess
@@ -22,6 +23,19 @@ import webview
 # ---------------------------------------------------------------------------
 # UI — HTML/CSS/JS inline
 # ---------------------------------------------------------------------------
+
+def _resource_path(relative_path: str) -> Path:
+    base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+    return base_path / relative_path
+
+
+def _sentinela_icon_data_uri() -> str:
+    icon_path = _resource_path("frontend/public/img/icon.ico")
+    if not icon_path.is_file():
+        raise FileNotFoundError(f"Icone do Sentinela nao encontrado no updater: {icon_path}")
+    encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
+    return f"data:image/x-icon;base64,{encoded}"
+
 
 HTML = r"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -76,14 +90,20 @@ HTML = r"""<!DOCTYPE html>
   .logo-icon {
     width: 42px;
     height: 42px;
-    background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
-    border-radius: 12px;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
     flex-shrink: 0;
-    box-shadow: 0 4px 16px rgba(14,165,233,0.35);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  }
+
+  .logo-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
   }
 
   .header-text .title {
@@ -179,18 +199,18 @@ HTML = r"""<!DOCTYPE html>
   .step-label {
     font-size: 13.5px;
     font-weight: 400;
-    color: #475569;
+    color: #64748b;
     transition: color 0.3s ease, font-weight 0.2s ease;
     line-height: 1.4;
   }
 
   .step-label.running {
-    color: #cbd5e1;
+    color: #e2e8f0;
     font-weight: 500;
   }
 
   .step-label.done {
-    color: #334155;
+    color: #94a3b8;
   }
 
   .step-label.error {
@@ -218,11 +238,15 @@ HTML = r"""<!DOCTYPE html>
   /* Status */
   .status-text {
     font-size: 12px;
-    color: #334155;
+    color: #94a3b8;
     text-align: center;
     min-height: 16px;
     margin-bottom: 4px;
     transition: color 0.3s;
+  }
+
+  .status-text.success {
+    color: #86efac;
   }
 
   /* Error message box */
@@ -244,17 +268,22 @@ HTML = r"""<!DOCTYPE html>
     margin-top: 18px;
     width: 100%;
     padding: 11px;
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
-    border: none;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.13);
     border-radius: 11px;
-    color: white;
+    color: #e2e8f0;
     font-size: 13.5px;
     font-weight: 500;
     cursor: pointer;
     letter-spacing: 0.01em;
-    transition: opacity 0.2s, transform 0.15s;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
   }
-  .btn-close:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn-close:hover {
+    background: rgba(255,255,255,0.10);
+    border-color: rgba(255,255,255,0.22);
+    transform: translateY(-1px);
+  }
   .btn-close:active { transform: translateY(0); }
   .btn-close.error-btn { background: linear-gradient(135deg, #ef4444, #b91c1c); }
 
@@ -264,7 +293,7 @@ HTML = r"""<!DOCTYPE html>
 <body>
 <div class="card">
   <div class="header">
-    <div class="logo-icon">🛡</div>
+    <div class="logo-icon"><img src="__SENTINELA_ICON_DATA_URI__" alt="Sentinela" /></div>
     <div class="header-text">
       <div class="title">Sentinela</div>
       <div class="subtitle" id="subtitle">Instalando atualização...</div>
@@ -328,8 +357,10 @@ function setProgress(pct) {
   document.getElementById('progress').style.width = pct + '%';
 }
 
-function setStatus(text) {
-  document.getElementById('status').textContent = text;
+function setStatus(text, tone) {
+  const status = document.getElementById('status');
+  status.textContent = text;
+  status.className = tone === 'success' ? 'status-text success' : 'status-text';
 }
 
 function showError(msg) {
@@ -351,7 +382,7 @@ function showClose() {
 </script>
 </body>
 </html>
-"""
+""".replace("__SENTINELA_ICON_DATA_URI__", _sentinela_icon_data_uri())
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +503,7 @@ def _run_update(window, exe_path: Path, tmp_path: Path) -> None:
         running(4, "Finalizando...")
         time.sleep(0.3)
         done(4)
-        _js(window, "setProgress(100); setStatus('Atualização instalada. Você já pode abrir o Sentinela.'); showClose();")
+        _js(window, "setProgress(100); setStatus('Atualização instalada. Você já pode abrir o Sentinela.', 'success'); showClose();")
 
     except Exception as exc:
         error(str(exc))

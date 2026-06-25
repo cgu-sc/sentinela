@@ -609,55 +609,12 @@ const FILTER_INDEX = [
   { id: "rfa", section: "geral", label: "RFA", keywords: "rfa receita federal ativos cnae" },
 ];
 
-const collapsedSections = ref(new Set());
+const collapsedSections = ref(new Set(["integridade"]));
 const sidebarSearch = ref("");
 
 // IDs válidos de seção. Usado pelo acordeão exclusivo: ao abrir uma seção,
 // as demais são marcadas como fechadas (Set contém os IDs colapsados).
 const SECTION_IDS = ["geral", "integridade"];
-
-// Persistência do estado colapsado em localStorage
-const COLLAPSED_KEY = "sentinela_sidebar_collapsed";
-
-const loadCollapsedFromStorage = () => {
-  try {
-    const raw = localStorage.getItem(COLLAPSED_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      // Migração: 'escopo', 'cadastro' e 'parametros' foram fundidos em 'geral' na v1.2.2
-      const migrated = parsed
-        .map((id) =>
-          id === "escopo" || id === "cadastro" || id === "parametros"
-            ? "geral"
-            : id,
-        );
-      collapsedSections.value = new Set(migrated);
-    }
-  } catch (_) {
-    // silencioso: localStorage indisponível ou JSON inválido
-  }
-};
-
-const persistCollapsed = (newSet) => {
-  try {
-    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...newSet]));
-  } catch (_) {
-    // silencioso
-  }
-};
-
-onMounted(() => {
-  loadCollapsedFromStorage();
-});
-
-watch(
-  collapsedSections,
-  (newSet) => {
-    persistCollapsed(newSet);
-  },
-  { deep: true },
-);
 
 const toggleSection = (id) => {
   const isOpen = !collapsedSections.value.has(id);

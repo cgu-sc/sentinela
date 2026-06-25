@@ -5,6 +5,13 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.3.1] - 2026-06-25
+
+### Alterado
+- **SentinelaUpdater.exe com visual mais neutro e alinhado à identidade do Sentinela**: o ícone azul genérico do topo foi substituído pelo ícone oficial do Sentinela, embutido no HTML do updater. O botão `Fechar` deixou de usar fundo azul em degradê e passou a usar estilo neutro translúcido, com borda sutil e hover discreto. Textos das etapas e status final ficaram mais claros no tema escuro; o status de conclusão agora usa tom de sucesso.
+- **Sidebar inicia sempre em estado previsível**: o grupo `Geral` abre por padrão e o grupo `Alertas` inicia fechado sempre que o sistema é carregado. A persistência do estado do acordeão da sidebar em `localStorage` foi removida; o usuário ainda pode abrir/fechar os grupos normalmente durante a sessão.
+
+
 ## [1.3.0] - 2026-06-25
 
 ### Adicionado

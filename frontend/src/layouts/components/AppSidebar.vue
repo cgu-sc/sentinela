@@ -598,7 +598,7 @@ const FILTER_INDEX = [
   { id: "cnaeIncompativel", section: "integridade", label: "CNAE Incompatível", keywords: "cnae incompativel cnae atividade economica incompatibilidade" },
   { id: "socioIdadeAtipica", section: "integridade", label: "Idade Atípica do Sócio", keywords: "idade atipica socio jovem idoso 21 80 anos" },
   { id: "socioFalecido", section: "integridade", label: "Sócio Falecido", keywords: "socio falecido obito morte cpf base obitos" },
-  { id: "socioBeneficio", section: "integridade", label: "Sócio em Programa Social", keywords: "socio beneficio programa social bolsa familia cadunico" },
+  { id: "socioBeneficio", section: "integridade", label: "Sócio no CadÚnico/Defeso", keywords: "socio beneficio bolsa familia cadunico seguro defeso pobreza" },
   { id: "socioEsocial", section: "integridade", label: "Sócio com Vínculo eSocial", keywords: "socio esocial vinculo emprego clt vinculo trabalhista" },
   { id: "dispersaoUf", section: "integridade", label: "Vendas para UFs sem Fronteira", keywords: "dispersao uf sem fronteira geografica distancia venda autorizado" },
   { id: "volumeAtipico", section: "integridade", label: "Aumento Semestral Atípico", keywords: "volume atipico crescimento semestral faturamento auditoria aumento anomalo" },
@@ -684,7 +684,12 @@ const normalize = (s) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const searchTerm = computed(() => normalize(sidebarSearch.value.trim()));
+// Busca só ativa a partir de 2 caracteres para evitar matches em 1 letra
+// (que retorna ruído em quase todos os grupos).
+const searchTerm = computed(() => {
+  const term = normalize(sidebarSearch.value.trim());
+  return term.length >= 2 ? term : "";
+});
 
 const filterMatchesSearch = (filterMeta) => {
   if (!searchTerm.value) return true;
@@ -836,7 +841,7 @@ const clearSearch = () => {
       </button>
 
       <!-- FILTROS GLOBAIS -->
-      <div v-show="!isSectionCollapsed('geral')">
+      <div v-show="!isSectionCollapsed('geral')" class="sidebar-section-body">
       <div
         v-show="shouldDisplayFilter('geral', 'uf')"
         class="filter-section"
@@ -2033,7 +2038,7 @@ const clearSearch = () => {
   padding: 0.75rem 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-color: color-mix(in srgb, var(--sidebar-bg) 70%, var(--sidebar-text)) var(--sidebar-bg) !important;
@@ -2080,15 +2085,12 @@ const clearSearch = () => {
   align-items: center;
   justify-content: flex-start;
   gap: 0.4rem;
-  min-height: 1.45rem;
+  min-height: 2rem;
   width: 100%;
   padding: 0.35rem 0.45rem 0.2rem 0.45rem;
-  border-top: 1px solid color-mix(in srgb, var(--sidebar-border) 82%, transparent);
-  background: transparent;
-  border-left: 0;
-  border-right: 0;
-  border-bottom: 0;
-  color: color-mix(in srgb, var(--sidebar-text) 74%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+  border: 0;
+  color: var(--sidebar-text);
   font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -2168,6 +2170,15 @@ const clearSearch = () => {
 }
 
 /* === BUSCA DE FILTROS === */
+/* Wrapper que envolve todos os filter-sections de uma seção colapsável.
+   Usa flex column com gap para garantir espaçamento consistente entre
+   os cards de filtro, mesmo quando dentro do wrapper. */
+.sidebar-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .sidebar-search {
   position: relative;
   display: flex;
@@ -2253,7 +2264,6 @@ const clearSearch = () => {
 }
 
 .filter-section {
-  margin-bottom: 0.15rem;
   padding: 0.35rem 0.48rem;
   border-radius: 7px;
   border-left: 2px solid transparent;

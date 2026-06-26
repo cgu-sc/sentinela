@@ -102,6 +102,75 @@ def _add_internal_hyperlink(
     return hyperlink
 
 
+def _mark_document_fields_for_update(doc) -> None:
+    """Marca campos do Word para atualizacao ao abrir/converter o documento."""
+    settings = doc.settings.element
+    for existing in settings.findall(qn('w:updateFields')):
+        settings.remove(existing)
+    update_fields = OxmlElement('w:updateFields')
+    update_fields.set(qn('w:val'), 'true')
+    settings.append(update_fields)
+
+
+def _add_word_toc_field(
+    paragraph,
+    *,
+    levels: str = '1-2',
+    fallback_entries: list[tuple[str, str, str]] | None = None,
+) -> None:
+    """Insere um campo nativo de sumario do Word no paragrafo informado."""
+    if not levels:
+        raise RuntimeError("Niveis do sumario obrigatorios para Nota Tecnica.")
+
+    begin_run = OxmlElement('w:r')
+    begin = OxmlElement('w:fldChar')
+    begin.set(qn('w:fldCharType'), 'begin')
+    begin_run.append(begin)
+    paragraph._p.append(begin_run)
+
+    instr_run = OxmlElement('w:r')
+    instr = OxmlElement('w:instrText')
+    instr.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+    instr.text = f'TOC \\o "{levels}" \\h \\z \\u'
+    instr_run.append(instr)
+    paragraph._p.append(instr_run)
+
+    separate_run = OxmlElement('w:r')
+    separate = OxmlElement('w:fldChar')
+    separate.set(qn('w:fldCharType'), 'separate')
+    separate_run.append(separate)
+    paragraph._p.append(separate_run)
+
+    entries = fallback_entries or [
+        ('', 'Sumário automático. Atualize os campos do documento no Word.', ''),
+    ]
+    for entry_index, (num, title, page) in enumerate(entries):
+        if entry_index:
+            br_run = OxmlElement('w:r')
+            br_run.append(OxmlElement('w:br'))
+            paragraph._p.append(br_run)
+
+        result_run = OxmlElement('w:r')
+        result_pr = OxmlElement('w:rPr')
+        size = OxmlElement('w:sz')
+        size.set(qn('w:val'), '24')
+        result_pr.append(size)
+        result_run.append(result_pr)
+
+        text = OxmlElement('w:t')
+        text.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        label = f"{num} {title}".strip()
+        text.text = f"{label}\t{page}" if page else label
+        result_run.append(text)
+        paragraph._p.append(result_run)
+
+    end_run = OxmlElement('w:r')
+    end = OxmlElement('w:fldChar')
+    end.set(qn('w:fldCharType'), 'end')
+    end_run.append(end)
+    paragraph._p.append(end_run)
+
+
 def _add_external_hyperlink(
     paragraph,
     text: str,

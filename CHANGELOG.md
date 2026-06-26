@@ -5,6 +5,19 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.4] - 2026-06-26
+
+### Alterado
+- **Nota Técnica com sumário nativo do Word.** O sumário manual com numeração de páginas hardcoded foi substituído por um campo nativo `TOC` no DOCX, com `updateFields=true`, para que o Word atualize automaticamente a paginação ao abrir o documento. A geração voltou a ser rápida, sem automação COM/abertura invisível do Word no backend.
+- **Refino tipográfico da Nota Técnica.** Removidos negritos remanescentes de textos corridos nas seções 3, 5.1, 5.2, 6 e nas criticidades, preservando títulos, cabeçalhos e estrutura das tabelas. O sumário permanece em fonte 12.
+- **Tabelas clínicas refinadas.** Removido o negrito dos dados das colunas `Valor incompatível` e `Part. valor mun.` nas tabelas de comparativo municipal e ranking municipal do recorte de Doença de Parkinson.
+
+### Corrigido
+- **Correção de encoding em textos da seção 7 da Nota Técnica.** Reparado mojibake em `nota_tecnica_criticidades.py`, evitando saídas como `patolÃ³gica`, `ticket mÃ©dio` e `regiÃ£o` no documento gerado.
+
+### Pendência operacional (fora do versionamento)
+- O arquivo `docs/updates/manifest.sig` precisa ser refeito com a chave privada Ed25519 antes da publicação do manifesto no GitHub Pages.
+
 ## [1.6.3] - 2026-06-26
 
 ### Corrigido

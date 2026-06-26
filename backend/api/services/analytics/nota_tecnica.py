@@ -97,10 +97,12 @@ from .nota_tecnica_formatters import (
 from .nota_tecnica_docx_utils import (
     _add_bookmark,
     _add_external_hyperlink,
+    _add_word_toc_field,
     _cell_bg,
     _cell_bg_run,
     _cell_borders,
     _footnote_ref,
+    _mark_document_fields_for_update,
     _resolve_brasao_republica_path,
     _run,
     _set_table_fixed_widths,
@@ -582,37 +584,43 @@ def _build_sumario(
     cnpj_fmt: str,
     criticidade_order: list[str],
 ):
-    """Constrói a página de sumário dinâmica."""
+    """Constrói a página de sumário com campo nativo do Word."""
+    _mark_document_fields_for_update(doc)
+
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_title, 'SUMÁRIO', color='0F172A', size=14, bold=True)
     doc.add_paragraph()
 
-    _add_toc_entry(doc, '1.', 'ASSUNTO', page='3')
-    _add_toc_entry(doc, '2.', 'REFERÊNCIAS', page='3')
-    _add_toc_entry(doc, '3.', 'INTRODUÇÃO', page='4')
-    _add_toc_entry(doc, '4.', 'SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', page='5')
-    _add_toc_entry(doc, '  4.1', 'Sobre o Programa Farmácia Popular do Brasil', page='5')
-    _add_toc_entry(doc, '  4.2', 'Sobre a metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', page='5')
-
-    _add_toc_entry(doc, '5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', page='6')
-    _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
-    _add_toc_entry(doc, '  5.2', 'Vínculos Trabalhistas', page='6')
-    _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='7')
-    _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='7')
-
-    _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='8')
-    criticidade_start = 1
+    fallback_entries = [
+        ('1.', 'ASSUNTO', '3'),
+        ('2.', 'REFERÊNCIAS', '3'),
+        ('3.', 'INTRODUÇÃO', '4'),
+        ('4.', 'SÍNTESE DO PROGRAMA FARMÁCIA POPULAR DO BRASIL E DA METODOLOGIA DESENVOLVIDA PELA CGU PARA SEU MONITORAMENTO', '5'),
+        ('  4.1', 'Sobre o Programa Farmácia Popular do Brasil', '5'),
+        ('  4.2', 'Sobre a metodologia desenvolvida pela CGU para apuração de possíveis “vendas sem comprovação”', '5'),
+        ('5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', '6'),
+        ('  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', '6'),
+        ('  5.2', 'Vínculos Trabalhistas', '6'),
+        ('6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', '7'),
+        ('  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', '7'),
+        ('7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', '8'),
+    ]
     criticidade_items = _iter_criticidade_items(
         criticos,
         razao_social,
-        start_index=criticidade_start,
+        start_index=1,
         ordered_keys=criticidade_order,
     )
-    for _, num, full_title in criticidade_items:
-        _add_toc_entry(doc, f'  {num}', full_title, page='8')
+    fallback_entries.extend((f'  {num}', full_title, '8') for _, num, full_title in criticidade_items)
+    fallback_entries.append(('8.', 'CONCLUSÃO E ENCAMINHAMENTO', '9'))
 
-    _add_toc_entry(doc, '8.', 'CONCLUSÃO E ENCAMINHAMENTO', page='9')
+    toc_paragraph = doc.add_paragraph()
+    toc_paragraph.paragraph_format.right_indent = Inches(0.7)
+    toc_paragraph.paragraph_format.tab_stops.add_tab_stop(
+        Inches(6.4), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS
+    )
+    _add_word_toc_field(toc_paragraph, levels='1-2', fallback_entries=fallback_entries)
     doc.add_page_break()
 
 

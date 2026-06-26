@@ -5,6 +5,27 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.3] - 2026-06-26
+
+### Corrigido
+- **Tooltip da badge "Estabelecimentos" no header do CNPJ reposicionado para `bottom-right`** em `frontend/src/views/components/cnpj/CnpjHeader.vue`. A versão 1.6.2 havia mudado para `bottom` (centralizado com a badge), mas como a badge está no canto esquerdo do header, a metade esquerda do tooltip saía do viewport. Agora usa `v-tooltip.bottom-right` (tooltip ancorado ao canto inferior-direito da badge, alinhado para dentro da viewport). Tooltip text agora é controlado por `redeBadgeTooltip` computed: `"Clique para ver todos os estabelecimentos desta rede"` quando `qtd > 1`, `"Esta farmácia é a única da rede"` quando `qtd === 1`.
+
+### Alterado
+- **Modal "Estabelecimentos da Rede" (`RedeEstabelecimentosDialog.vue`) agora usa paginação e ordenação server-side.** Antes o modal fazia 1 única chamada com `page_size: 200` (limitado a 200 CNPJs) e a tabela só ordenava localmente nos 200 itens (sem chamar o backend ao clicar no header de uma coluna). Agora o modal usa o mesmo padrão de `/estabelecimentos`: `paginator=true` + `lazy=true` no `DataTable`, com `@page` e `@sort` ambos chamando `fetchPage(page)` que repassa `page`, `page_size: 50`, `sort_field` e `sort_order` para o endpoint `/api/v1/analytics/indicadores-analise/cnpjs`. O sort padrão é `val_sem_comp desc`; clicar em qualquer header ordenável faz fetch do servidor (não local). Sort novo reseta para página 1. Paginator no rodapé mostra total e navegação `[« 1 2 3 ... »]`. Suporta redes com qualquer quantidade de CNPJs (sem o limite de 200).
+- **Overlay de loading inicial no modal "Estabelecimentos"** em `RedeEstabelecimentosDialog.vue` agora segue exatamente o mesmo padrão visual e markup do overlay usado em `IndicatorDetailPanel.vue` (classe `.indicator-loading-overlay`, `position: absolute; inset: 0`, `backdrop-filter: blur(2px)`, `z-index: 5`, transition `ind-overlay-fade` com fade in/out de 0.18s, box centralizado com spinner + texto "Carregando os dados..."). Aparece quando o modal abre (clique na badge) e some quando o primeiro fetch termina. Mantido o `pt-options` no Dialog (correção de prop type feita anteriormente) e o `compact` prop no `EstablishmentRiskTable` para a tabela caber no modal de 70vh.
+
+### Pendência operacional (fora do versionamento)
+- O arquivo `docs/updates/manifest.sig` foi regenerado durante os ciclos de teste. A re-assinatura Ed25519 com a chave privada (que **não** fica no repositório) precisa ser refeita em conjunto com o `manifest.json` desta versão antes de publicar no GitHub Pages.
+
+
+## [1.6.2] - 2026-06-26
+
+### Corrigido
+- **Badge "Estabelecimentos" no header do CNPJ agora aparece sempre** em `frontend/src/views/components/cnpj/CnpjHeader.vue`. Antes a badge só era renderizada quando `qtd_estabelecimentos_rede > 1` (farmácia como única da rede ficava sem a informação visível). Agora a condição é `>= 1` e a badge sempre aparece. Quando `qtd === 1`, a classe `clickable-badge` não é aplicada e o cursor permanece padrão (sem affordance de clique), e o tooltip passa a exibir `"Esta farmácia é a única da rede"` em vez de `"Clique para ver todos os estabelecimentos desta rede"`. O badge continua abrindo o modal `RedeEstabelecimentosDialog` quando clicado (com mais de 1 na rede).
+- **Tooltip da badge "Estabelecimentos" reposicionado** para `v-tooltip.bottom-right` (era `top`, que empurrava o tooltip para fora do viewport no canto superior-esquerdo do header) e tooltip das badges da mesma linha padronizadas em `.bottom`. Adicionado `position: fixed !important` na regra `.p-tooltip.sentinela-tooltip` em `frontend/src/assets/styles/tooltip.css` para sobrepor o `position: relative` + `overflow: hidden` do `.detail-header-new` que estava criando um novo contexto de posicionamento e cortando o tooltip pela metade.
+- **KeyError `'cnaes_secundarios'` ao carregar grafo N3 ou N4 da teia societária.** O schema dos Parquets de expansão N3 em `cache_registry.py:500-515` não inclui a coluna `cnaes_secundarios` (apenas N2/N4 a têm), mas `_build_network_nodes` em `backend/api/services/analytics/network.py:225` fazia `row["cnaes_secundarios"]` direto, gerando `KeyError: 'cnaes_secundarios'` → `RuntimeError: Erro batch N3 na teia ...` → HTTP 500 nos endpoints `GET /api/v1/analytics/cnpj/{cnpj}/network/level/3` e `/level/4`. Trocado para `row.get("cnaes_secundarios", [])` (defensivo, mantém compatibilidade com N2/N4 que têm a coluna). Comportamento de N2 e N4 inalterado.
+
+
 ## [1.6.1] - 2026-06-26
 
 ### Adicionado

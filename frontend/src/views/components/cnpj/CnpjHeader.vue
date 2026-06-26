@@ -216,6 +216,12 @@ const redeDialogCnpjRaiz = computed(() =>
   extractCnpjRaiz(props.cnpj ?? "")
 );
 
+const redeBadgeTooltip = computed(() =>
+  (props.cnpjData?.qtd_estabelecimentos_rede ?? 0) > 1
+    ? "Clique para ver todos os estabelecimentos desta rede"
+    : "Esta farmácia é a única da rede"
+);
+
 const showObsDialog = ref(false);
 const openObsDialog = () => {
   showObsDialog.value = true;
@@ -390,11 +396,12 @@ const pdfTooltip = computed(() => {
 
         <!-- Linha 2: Risco | Status Cadastral -->
         <div class="status-chips-row">
-          <!-- Estabelecimentos (clicável quando há mais de 1 na rede) -->
+          <!-- Estabelecimentos (sempre visível; clicável quando há mais de 1 na rede) -->
           <div
-            v-if="cnpjData.qtd_estabelecimentos_rede > 1"
-            class="institution-chip status-info clickable-badge"
-            v-tooltip.top="'Clique para ver todos os estabelecimentos desta rede'"
+            v-if="cnpjData.qtd_estabelecimentos_rede >= 1"
+            class="institution-chip status-info"
+            :class="{ 'clickable-badge': cnpjData.qtd_estabelecimentos_rede > 1 }"
+            v-tooltip.bottom-right="redeBadgeTooltip"
             @click="openRedeDialog"
           >
             <span class="institution-label">Estabelecimentos</span>

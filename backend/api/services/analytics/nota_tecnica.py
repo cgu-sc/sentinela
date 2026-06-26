@@ -598,10 +598,10 @@ def _build_sumario(
     _add_toc_entry(doc, '5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', page='6')
     _add_toc_entry(doc, '  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', page='6')
     _add_toc_entry(doc, '  5.2', 'Vínculos Trabalhistas', page='6')
-    _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='6')
-    _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='6')
+    _add_toc_entry(doc, '6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', page='7')
+    _add_toc_entry(doc, '  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', page='7')
 
-    _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='7')
+    _add_toc_entry(doc, '7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', page='8')
     criticidade_start = 1
     criticidade_items = _iter_criticidade_items(
         criticos,
@@ -610,9 +610,9 @@ def _build_sumario(
         ordered_keys=criticidade_order,
     )
     for _, num, full_title in criticidade_items:
-        _add_toc_entry(doc, f'  {num}', full_title, page='7')
+        _add_toc_entry(doc, f'  {num}', full_title, page='8')
 
-    _add_toc_entry(doc, '8.', 'CONCLUSÃO E ENCAMINHAMENTO', page='8')
+    _add_toc_entry(doc, '8.', 'CONCLUSÃO E ENCAMINHAMENTO', page='9')
     doc.add_page_break()
 
 
@@ -930,7 +930,7 @@ def generate_nota_tecnica(
     timing.mark("capa e sumario")
 
     # ── 5. Seção 2: Assunto e Referências (Rodapé 1) ────────────────────
-    sec_ref = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_ref = doc.add_section(WD_SECTION.NEW_PAGE)
     sec_ref.footer.is_linked_to_previous = False
     sec_ref.footer.paragraphs[0].text = ''
     
@@ -1055,7 +1055,7 @@ def generate_nota_tecnica(
     )
 
     # ── 7. Seção 4.1: Sobre o Programa ─────────────────────────────────────
-    sec_41 = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_41 = doc.add_section(WD_SECTION.NEW_PAGE)
     sec_41.footer.is_linked_to_previous = False
     sec_41.footer.paragraphs[0].text = ''
     sec_41.top_margin = Inches(0.5); sec_41.bottom_margin = Inches(0.5)
@@ -1166,7 +1166,7 @@ def generate_nota_tecnica(
     _run(p_42_fim2, f'A seguir, são apresentadas informações sobre a Farmácia {razao_social} e o resultado das análises dos alertas extraídos para ela do Sentinela, tanto em relação a possíveis “vendas sem comprovação” quanto a outras criticidades que corroboram esse achado principal.', color='0F172A', size=12)
 
     # ── Seção 5 intro (sem rodapé) ────────────────────────────────────────
-    sec_5_intro = doc.add_section(WD_SECTION.CONTINUOUS)
+    sec_5_intro = doc.add_section(WD_SECTION.NEW_PAGE)
     sec_5_intro.footer.is_linked_to_previous = False
     sec_5_intro.top_margin = Inches(0.5); sec_5_intro.bottom_margin = Inches(0.5)
     sec_5_intro.left_margin = Inches(0.7); sec_5_intro.right_margin = Inches(0.7)
@@ -1263,7 +1263,7 @@ def generate_nota_tecnica(
     timing.mark("secao 5 contexto esocial")
 
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
-    _start_section(doc)
+    _start_section(doc, start=WD_SECTION.NEW_PAGE)
 
     h6 = _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
     _add_bookmark(h6, "secao6_percentual_nao_comprovacao")
@@ -1478,7 +1478,7 @@ def generate_nota_tecnica(
     timing.mark("quadros e figura evolucao financeira")
 
     # Seção 7 sem rodapé herdado da seção 6.
-    _start_section(doc)
+    _start_section(doc, start=WD_SECTION.NEW_PAGE)
     _format_main_heading(doc.add_heading(f'7. SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB.', level=1))
     p_criticidades_intro = doc.add_paragraph()
     _run(
@@ -1758,7 +1758,8 @@ def generate_nota_tecnica(
         )
     timing.mark("secao 7 fechamento criticidades")
 
-    # 8. CONCLUSÃO
+    # 8. CONCLUSÃO (página nova)
+    _start_section(doc, start=WD_SECTION.NEW_PAGE)
     h8 = _format_main_heading(doc.add_heading('8. CONCLUSÃO E ENCAMINHAMENTO', level=1))
     total_mov_conclusao = float(cnpj_data.get('totalMov') or 0.0)
     val_sem_comp_conclusao = float(cnpj_data.get('valSemComp') or 0.0)

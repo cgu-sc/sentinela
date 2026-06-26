@@ -493,7 +493,6 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
     _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='334155', size=10, bold=True)
-    _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=12)
 
     tbl = doc.add_table(rows=0, cols=2)
     tbl.style = 'Table Grid'

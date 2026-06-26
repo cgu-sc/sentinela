@@ -35,6 +35,7 @@ from .nota_tecnica_docx_utils import (
     _set_table_fixed_widths,
     _set_table_open_borders,
 )
+from .nota_tecnica_quadros import _format_quadro_footnote
 from .nota_tecnica_charts import (
     _add_mapa_geografico_origem_uf,
     _add_figura_parkinson_comparacao,
@@ -903,10 +904,7 @@ def _add_indicador_regional_table(doc, context: dict[str, Any], tabela_num: int)
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         f'Fonte: Sentinela, a partir da matriz de risco consolidada. Posição e percentil calculados pelo valor do indicador entre as farmácias com dado válido na região de saúde ID {context["id_regiao_saude"]}.',
@@ -988,10 +986,7 @@ def _add_indicadores_criticos_quadro(doc, rows: list[dict[str, Any]], tabela_num
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sentinela, a partir da matriz de risco consolidada. O risco regional corresponde ao multiplicador entre o indicador da farmácia e a mediana dos estabelecimentos de sua região de saúde.',
@@ -1266,10 +1261,7 @@ def _add_clinica_evolucao_anual_table(doc, item: dict[str, Any], tabela_num: int
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica.',
@@ -1336,10 +1328,7 @@ def _add_clinica_municipio_resumo_table(doc, item: dict[str, Any], tabela_num: i
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica. Valores consolidados para o período selecionado.',
@@ -1406,10 +1395,7 @@ def _add_clinica_municipio_top20_table(doc, item: dict[str, Any], tabela_num: in
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das regras clínicas do indicador de incompatibilidade patológica. Ranking ordenado pelo valor incompatível consolidado no período selecionado.',
@@ -1576,10 +1562,7 @@ def _add_parkinson_demografia_table(doc, demografia: dict[str, Any], tabela_num:
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
@@ -2794,10 +2777,7 @@ def _add_dispersao_geografica_origem_uf_table(doc, razao_social: str, dispersao_
                 p.paragraph_format.space_after = Pt(1)
 
     p_foot = doc.add_paragraph()
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.paragraph_format.keep_together = True
-    p_foot.paragraph_format.space_before = Pt(3)
-    p_foot.paragraph_format.space_after = Pt(8)
+    _format_quadro_footnote(p_foot)
     _run(
         p_foot,
         'Fonte: Sentinela, a partir das autorizações registradas no SAV/PFPB e da UF de residência do beneficiário constante na base de CPFs da Receita Federal do Brasil, utilizada no indicador geográfico.',

@@ -202,7 +202,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
         p_intro,
         "Detalhamento da memória de cálculo dos GTINs que apresentaram vendas sem comprovação",
         color="0F172A",
-        size=9,
+        size=12,
         bold=True,
     )
 
@@ -242,7 +242,7 @@ def _add_anexo_ii_detalhamento(doc, detalhes: list[dict[str, Any]], timing: Any 
             p_title,
             f"Tabela 3.{idx} - Memória de cálculo do GTIN {detalhe.get('gtin') or ''} - {detalhe.get('medicamento') or 'NÃO IDENTIFICADO'}",
             color="334155",
-            size=12,
+            size=10,
             bold=True,
         )
 
@@ -336,12 +336,12 @@ def _add_anexo_ii_memoria_calculo(
         p_intro,
         f"O presente anexo apresenta a memória de cálculo utilizada para identificação das dispensações de medicamentos sem comprovação de estoque da Farmácia {razao_social} (CNPJ {cnpj_fmt}), no período {periodo_txt}, a partir do confronto entre as vendas informadas no SAV e as notas fiscais eletrônicas de aquisição de medicamentos.",
         color="0F172A",
-        size=9,
+        size=12,
     )
 
     p_title = doc.add_paragraph()
     _format_block_title(p_title, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title, "Tabela 1 - Resumo geral da memória de cálculo", color="334155", size=12, bold=True)
+    _run(p_title, "Tabela 1 - Resumo geral da memória de cálculo", color="334155", size=10, bold=True)
 
     summary_headers = [
         "Total de medicamentos dispensados",
@@ -374,7 +374,7 @@ def _add_anexo_ii_memoria_calculo(
 
     p_title2 = doc.add_paragraph()
     _format_block_title(p_title2, space_before=16, space_after=8, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    _run(p_title2, "Tabela 2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=12, bold=True)
+    _run(p_title2, "Tabela 2 - Medicamentos com vendas sem comprovação, por GTIN", color="334155", size=10, bold=True)
 
     headers = [
         "GTIN",
@@ -441,7 +441,7 @@ def _add_anexo_ii_memoria_calculo(
     _run(
         p_foot,
         "Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.",
-        color="64748B",
+        color="0F172A",
         size=10,
     )
 

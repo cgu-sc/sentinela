@@ -51,6 +51,14 @@ def _validate_assinantes_tecnicos(value: Any) -> list[dict[str, str]]:
     return normalized
 
 
+def _validate_gerar_pdf_visualizacao(value: Any) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise HTTPException(status_code=422, detail="gerar_pdf_visualizacao deve ser booleano.")
+    return value
+
+
 @router.get("", response_model=PreferencesSchema)
 def get_preferences():
     return PreferencesService.read()
@@ -86,6 +94,9 @@ def save_nota_tecnica(payload: NotaTecnicaPayload):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     payload.nota_tecnica["assinantes_tecnicos"] = _validate_assinantes_tecnicos(
         payload.nota_tecnica.get("assinantes_tecnicos")
+    )
+    payload.nota_tecnica["gerar_pdf_visualizacao"] = _validate_gerar_pdf_visualizacao(
+        payload.nota_tecnica.get("gerar_pdf_visualizacao")
     )
     return PreferencesService.update_nota_tecnica(payload.nota_tecnica)
 

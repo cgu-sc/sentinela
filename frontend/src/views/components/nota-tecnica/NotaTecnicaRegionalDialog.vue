@@ -125,7 +125,7 @@ watch(
       numeroProcesso.value = notaTecnicaConfig.ultimoNumeroProcesso || "";
       numeroProcessoDigitsRaw.value = String(numeroProcesso.value || "").replace(/\D/g, "").slice(0, 17);
       numeroProcesso.value = formatProcessoDigits(numeroProcessoDigitsRaw.value);
-      gerarPdf.value = true;
+      gerarPdf.value = notaTecnicaConfig.gerarPdfVisualizacao === true;
       assinantesTecnicos.value = normalizeAssinantes(notaTecnicaConfig.assinantesTecnicos);
     } catch (error) {
       toast.add({
@@ -155,6 +155,7 @@ async function save() {
       numeroNota: numeroNota.value,
       numeroProcesso: processoFormatado.value,
       assinantes,
+      gerarPdf: gerarPdf.value,
     });
     emit("saved", {
       regional,

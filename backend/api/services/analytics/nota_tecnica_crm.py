@@ -1158,36 +1158,36 @@ def _add_crm_intensiva_complementar_text(
         p,
         f"Na Farmácia {razao_social}, {_plural(qtd_medicos, 'foi identificado', 'foram identificados')} ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
-    _run(p, f" {_plural(qtd_medicos, 'CRM com média', 'CRMs com média')} superior a ", color="0F172A", size=10)
-    _run(p, "30 prescrições por dia", color="334155", size=10, bold=True)
+    _run(p, f"{qtd_medicos}", color="334155", size=12, bold=True)
+    _run(p, f" {_plural(qtd_medicos, 'CRM com média', 'CRMs com média')} superior a ", color="0F172A", size=12)
+    _run(p, "30 prescrições por dia", color="334155", size=12, bold=True)
     _run(
         p,
         " no próprio estabelecimento, indicando uso intensivo do mesmo registro médico nas autorizações do SAV. ",
         color="0F172A",
-        size=10,
+        size=12,
     )
     if maior_media_local > 0:
-        _run(p, "A maior média local observada foi de ", color="0F172A", size=10)
-        _run(p, f"{_format_decimal_pt(maior_media_local, 2)} prescrições/dia", color="334155", size=10, bold=True)
+        _run(p, "A maior média local observada foi de ", color="0F172A", size=12)
+        _run(p, f"{_format_decimal_pt(maior_media_local, 2)} prescrições/dia", color="334155", size=12, bold=True)
         if qtd_brasil > 0 and maior_media_brasil > 0:
             _run(
                 p,
                 f"; considerando todas as autorizações associadas {_plural(qtd_medicos, 'a esse CRM', 'a esses CRMs')} no Brasil, a maior média chegou a ",
                 color="0F172A",
-                size=10,
+                size=12,
             )
-            _run(p, f"{_format_decimal_pt(maior_media_brasil, 2)} prescrições/dia", color="334155", size=10, bold=True)
-        _run(p, ".", color="0F172A", size=10)
+            _run(p, f"{_format_decimal_pt(maior_media_brasil, 2)} prescrições/dia", color="334155", size=12, bold=True)
+        _run(p, ".", color="0F172A", size=12)
 
     if not rows:
         return
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais médicos com volume médio diário superior a 30 prescrições.", color="334155", size=12, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais médicos com volume médio diário superior a 30 prescrições.", color="334155", size=10, bold=True)
 
     headers = ["CRM/UF", "Nome", "Tipo", "Presc./dia local", "Presc./dia Brasil", "Autorizações", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
@@ -1216,7 +1216,7 @@ def _add_crm_intensiva_complementar_text(
     _run(
         fonte,
         "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
-        color="475569",
+        color="0F172A",
         size=10,
         italic=True,
     )
@@ -1244,23 +1244,23 @@ def _add_crm_unico_complementar_text(
     _add_crm_subheading(doc, f"{letra}) Autorizações concentradas para um único CRM")
 
     p = doc.add_paragraph()
-    _run(p, f"{_plural(qtd_alertas, 'Foi identificado', 'Foram identificados')} ", color="0F172A", size=10)
-    _run(p, f"{qtd_alertas}", color="334155", size=10, bold=True)
+    _run(p, f"{_plural(qtd_alertas, 'Foi identificado', 'Foram identificados')} ", color="0F172A", size=12)
+    _run(p, f"{qtd_alertas}", color="334155", size=12, underline=True)
     _run(
         p,
         f" {_plural(qtd_alertas, 'episódio', 'episódios')} em que autorizações vinculadas a um mesmo CRM foram registradas em curto intervalo de tempo, envolvendo ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
+    _run(p, f"{qtd_medicos}", color="334155", size=12, underline=True)
     _run(
         p,
         f" {_plural(qtd_medicos, 'médico', 'médicos')}. Esse padrão indica concentração incomum de lançamentos no SAV e pode sugerir uso sequencial {_plural(qtd_medicos, 'desse registro profissional', 'desses registros profissionais')} em operações de balcão. ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p, "O episódio de maior ritmo observado concentrou ", color="0F172A", size=10)
-    _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=10, bold=True)
+    _run(p, "O episódio de maior ritmo observado concentrou ", color="0F172A", size=12)
+    _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=12, underline=True)
     ritmo_principal = (
         _required_positive_float(principal.get("taxa_hora"), "taxa_hora", "principal alerta de CRM unico")
         if principal
@@ -1273,7 +1273,7 @@ def _add_crm_unico_complementar_text(
             f"o que corresponde a um ritmo de {_format_decimal_pt(ritmo_principal, 1)} autorizações por hora."
         ),
         color="0F172A",
-        size=10,
+        size=12,
     )
 
     if not rows:
@@ -1281,7 +1281,7 @@ def _add_crm_unico_complementar_text(
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas para um único CRM.", color="334155", size=12, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas para um único CRM.", color="334155", size=10, bold=True)
 
     headers = ["Início", "Fim", "Médico/CRM", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
     table = doc.add_table(rows=1, cols=len(headers))
@@ -1323,7 +1323,7 @@ def _add_crm_unico_complementar_text(
     _run(
         fonte,
         "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
-        color="475569",
+        color="0F172A",
         size=10,
         italic=True,
     )
@@ -1350,42 +1350,42 @@ def _add_crms_multiplos_complementar_text(
         p,
         f"No nível do estabelecimento, {_plural(qtd_surtos, 'foi identificado', 'foram identificados')} ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p, f"{qtd_surtos}", color="334155", size=10, bold=True)
+    _run(p, f"{qtd_surtos}", color="334155", size=12, underline=True)
     _run(
         p,
         f" {_plural(qtd_surtos, 'episódio', 'episódios')} em que autorizações associadas a diferentes CRMs foram registradas em curto intervalo, com participação de ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p, f"{qtd_medicos}", color="334155", size=10, bold=True)
+    _run(p, f"{qtd_medicos}", color="334155", size=12, underline=True)
     _run(
         p,
         f" {_plural(qtd_medicos, 'médico', 'médicos')} entre os principais prescritores analisados. Esse comportamento sugere concentração operacional de lançamentos e pode indicar processamento sequencial de autorizações com alternância de registros profissionais. ",
         color="0F172A",
-        size=10,
+        size=12,
     )
     if maior_qtd > 0:
-        _run(p, "O principal episódio reuniu ", color="0F172A", size=10)
-        _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=10, bold=True)
-        _run(p, " autorizações", color="0F172A", size=10)
+        _run(p, "O principal episódio reuniu ", color="0F172A", size=12)
+        _run(p, f"{_as_int(principal.get('nu_prescricoes')) or maior_qtd}", color="334155", size=12, underline=True)
+        _run(p, " autorizações", color="0F172A", size=12)
         if principal:
-            _run(p, ", envolvendo ", color="0F172A", size=10)
-            _run(p, f"{_as_int(principal.get('nu_crms'))}", color="334155", size=10, bold=True)
+            _run(p, ", envolvendo ", color="0F172A", size=12)
+            _run(p, f"{_as_int(principal.get('nu_crms'))}", color="334155", size=12, underline=True)
             _run(
                 p,
                 f" CRMs distintos em {_format_janela_minutos(principal.get('nu_minutos'))}.",
                 color="0F172A",
-                size=10,
+                size=12,
             )
         else:
-            _run(p, ".", color="0F172A", size=10)
+            _run(p, ".", color="0F172A", size=12)
 
     if eventos:
         title = doc.add_paragraph()
         _format_crm_table_title(title)
-        _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="334155", size=12, bold=True)
+        _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="334155", size=10, bold=True)
 
         headers = ["Início", "Fim", "CRMs", "CRM mais usado", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
@@ -1423,7 +1423,7 @@ def _add_crms_multiplos_complementar_text(
         _run(
             fonte,
             "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
-            color="475569",
+            color="0F172A",
             size=10,
             italic=True,
         )
@@ -1448,37 +1448,37 @@ def _add_crm_volume_horario_complementar_text(
         p,
         f"Na Farmácia {razao_social}, {_plural(qtd_alertas, 'foi identificado', 'foram identificados')} ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p, f"{qtd_alertas}", color="334155", size=10, bold=True)
+    _run(p, f"{qtd_alertas}", color="334155", size=12, underline=True)
     _run(
         p,
         f" {_plural(qtd_alertas, 'horário', 'horários')} com volume de autorizações acima do padrão histórico do próprio estabelecimento para a mesma faixa horária. A tabela exibe ",
         color="0F172A",
-        size=10,
+        size=12,
     )
     qtd_exibida = len(rows)
     _run(
         p,
         f"{qtd_exibida} {_plural(qtd_exibida, 'principal horário', 'principais horários')}",
         color="334155",
-        size=10,
-        bold=True,
+        size=12,
+        underline=True,
     )
     _run(
         p,
         ", ordenados pelo multiplicador em relação à mediana histórica da respectiva faixa horária. ",
         color="0F172A",
-        size=10,
+        size=12,
     )
     if principal:
-        _run(p, "O principal horário concentrou ", color="0F172A", size=10)
-        _run(p, f"{_as_int(principal.get('nu_prescricoes'))}", color="334155", size=10, bold=True)
+        _run(p, "O principal horário concentrou ", color="0F172A", size=12)
+        _run(p, f"{_as_int(principal.get('nu_prescricoes'))}", color="334155", size=12, underline=True)
         _run(
             p,
             f" autorizações em {_format_date_br(principal.get('dt'))}, às {_format_time_hour(principal.get('hr'))}",
             color="0F172A",
-            size=10,
+            size=12,
         )
         mediana_principal = _as_optional_float(principal.get("mediana_hora"))
         multiplicador_principal = _volume_horario_multiplicador_value(principal)
@@ -1487,36 +1487,36 @@ def _add_crm_volume_horario_complementar_text(
                 p,
                 ". Como a mediana histórica desse horário é de ",
                 color="0F172A",
-                size=10,
+                size=12,
             )
-            _run(p, "0,0 autorização", color="334155", size=10, bold=True)
+            _run(p, "0,0 autorização", color="334155", size=12, underline=True)
             _run(
                 p,
                 ", o multiplicador exibido na tabela foi calculado com denominador mínimo de 1 autorização, resultando em volume ",
                 color="0F172A",
-                size=10,
+                size=12,
             )
-            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
-            _run(p, " superior à mediana histórica para o horário.", color="0F172A", size=10)
+            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=12, bold=True)
+            _run(p, " superior à mediana histórica para o horário.", color="0F172A", size=12)
         else:
-            _run(p, ", volume ", color="0F172A", size=10)
-            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=10, bold=True)
-            _run(p, " a mediana histórica de ", color="0F172A", size=10)
+            _run(p, ", volume ", color="0F172A", size=12)
+            _run(p, f"{_format_decimal_pt(multiplicador_principal, 1)} vezes", color="334155", size=12, bold=True)
+            _run(p, " a mediana histórica de ", color="0F172A", size=12)
             _run(
                 p,
                 f"{_format_optional_decimal_pt(mediana_principal, 1)} {_plural(int(round(mediana_principal or 0.0)), 'autorização', 'autorizações')}",
                 color="334155",
-                size=10,
-                bold=True,
+                size=12,
+                underline=True,
             )
-            _run(p, " para esse horário.", color="0F172A", size=10)
+            _run(p, " para esse horário.", color="0F172A", size=12)
 
     if not rows:
         return
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais horários com volume anômalo de autorizações.", color="334155", size=12, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais horários com volume anômalo de autorizações.", color="334155", size=10, bold=True)
 
     headers = ["Data", "Hora", "Autorizações", "CRMs", "Mediana", "Multiplicador"]
     table = doc.add_table(rows=1, cols=len(headers))
@@ -1542,7 +1542,7 @@ def _add_crm_volume_horario_complementar_text(
     _run(
         fonte,
         "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
-        color="475569",
+        color="0F172A",
         size=10,
         italic=True,
     )
@@ -1566,19 +1566,19 @@ def _add_principais_crms_contexto_text(
         p,
         f"Para contextualizar os achados, a tabela a seguir apresenta os 10 principais CRMs utilizados pela Farmácia {razao_social}, ordenados pelo valor autorizado no SAV.",
         color="0F172A",
-        size=10,
+        size=12,
     )
     if qtd_com_alerta > 0:
         _run(
             p,
             " CRMs fora do top 10 também são exibidos quando possuem alertas ou anomalias relevantes para a análise; nesses casos, as linhas aparecem destacadas.",
             color="0F172A",
-            size=10,
+            size=12,
         )
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
-    _run(title, f"Tabela {tabela_num} - Principais CRMs do estabelecimento por valor autorizado.", color="334155", size=12, bold=True)
+    _run(title, f"Tabela {tabela_num} - Principais CRMs do estabelecimento por valor autorizado.", color="334155", size=10, bold=True)
 
     headers = [
         "Médico/CRM",
@@ -1644,7 +1644,7 @@ def _add_principais_crms_contexto_text(
     _run(
         fonte,
         "Fonte: Bases de Dados do CFM e Sistema Autorizador de Vendas (SAV).",
-        color="475569",
+        color="0F172A",
         size=10,
         italic=True,
     )
@@ -1661,7 +1661,7 @@ def _add_crm_evidencias_complementares_body(
         p_intro,
         "Além dos indicadores críticos apresentados nos subitens anteriores, foram identificadas evidências operacionais complementares relacionadas ao uso de CRMs no SAV. Tais evidências não correspondem, isoladamente, a indicadores da matriz de risco, mas ajudam a contextualizar a dinâmica dos lançamentos realizados pelo estabelecimento.",
         color="0F172A",
-        size=10,
+        size=12,
     )
 
     principais_crms_comp = evidencias_comp.get("principais_crms_contexto")
@@ -1727,48 +1727,48 @@ def _add_hhi_crm_text(
         p1,
         "Este indicador mede o grau de concentração das autorizações registradas no SAV em um conjunto restrito de médicos, identificados pelos respectivos CRMs. A métrica utilizada para essa análise é o Índice Herfindahl-Hirschman (HHI), que aumenta quando as autorizações se concentram em poucos prescritores e é menor quando os registros estão distribuídos de forma mais homogênea entre diversos médicos. Em um padrão ordinário, espera-se maior dispersão dos prescritores, pois os beneficiários tendem a apresentar receitas emitidas por diferentes profissionais, unidades de saúde e momentos de atendimento. Quando parcela relevante das dispensações da farmácia se concentra em poucos CRMs, em patamar superior ao observado para o conjunto de estabelecimentos comparáveis, o achado sugere dependência atípica da farmácia em relação a um grupo limitado de prescritores ou uso recorrente de determinadas identificações médicas nos registros de autorização.",
         color="0F172A",
-        size=10,
+        size=12,
     )
 
     p_comparativo = doc.add_paragraph()
-    _run(p_comparativo, f"Em relação à Farmácia {razao_social}, verificou-se o índice HHI de ", color="0F172A", size=10)
-    _run(p_comparativo, _format_decimal_pt(hhi_crm_comp["indice_hhi"], 2), color="334155", size=10, bold=True)
-    _run(p_comparativo, ", correspondente a ", color="0F172A", size=10)
+    _run(p_comparativo, f"Em relação à Farmácia {razao_social}, verificou-se o índice HHI de ", color="0F172A", size=12)
+    _run(p_comparativo, _format_decimal_pt(hhi_crm_comp["indice_hhi"], 2), color="334155", size=12, underline=True)
+    _run(p_comparativo, ", correspondente a ", color="0F172A", size=12)
     _run(
         p_comparativo,
         f'{_format_decimal_pt(hhi_crm_comp["multiplicador_regiao"], 2)} vezes',
         color="334155",
-        size=10,
-        bold=True,
+        size=12,
+        underline=True,
     )
-    _run(p_comparativo, " a mediana do índice HHI das farmácias de sua região. Ampliando-se o comparativo geográfico, o índice equivale a ", color="0F172A", size=10)
+    _run(p_comparativo, " a mediana do índice HHI das farmácias de sua região. Ampliando-se o comparativo geográfico, o índice equivale a ", color="0F172A", size=12)
     _run(
         p_comparativo,
         f'{_format_decimal_pt(hhi_crm_comp["multiplicador_uf"], 2)} vezes',
         color="334155",
-        size=10,
-        bold=True,
+        size=12,
+        underline=True,
     )
-    _run(p_comparativo, " a mediana das farmácias de seu Estado e a ", color="0F172A", size=10)
+    _run(p_comparativo, " a mediana das farmácias de seu Estado e a ", color="0F172A", size=12)
     _run(
         p_comparativo,
         f'{_format_decimal_pt(hhi_crm_comp["multiplicador_brasil"], 2)} vezes',
         color="334155",
-        size=10,
-        bold=True,
+        size=12,
+        underline=True,
     )
-    _run(p_comparativo, " a mediana das farmácias de todo o Brasil.", color="0F172A", size=10)
+    _run(p_comparativo, " a mediana das farmácias de todo o Brasil.", color="0F172A", size=12)
 
     regional_table_renderer()
 
     p2 = doc.add_paragraph()
-    _run(p2, f"No período {periodo_intervalo}, foram identificados ", color="0F172A", size=10)
-    _run(p2, f"{total_medicos}", color="334155", size=10, bold=True)
+    _run(p2, f"No período {periodo_intervalo}, foram identificados ", color="0F172A", size=12)
+    _run(p2, f"{total_medicos}", color="334155", size=12, underline=True)
     _run(
         p2,
         f" médicos lançados pela Farmácia {razao_social} como responsáveis pelas receitas prescritas de medicamentos supostamente retirados no estabelecimento. A tabela a seguir apresenta os principais CRMs por valor pago, com indicação da participação individual de cada um na produção total da farmácia, observado o mínimo de 5 e o máximo de 10 médicos:",
         color="0F172A",
-        size=10,
+        size=12,
     )
 
     title = doc.add_paragraph()
@@ -1777,7 +1777,7 @@ def _add_hhi_crm_text(
         title,
         f"Tabela {tabela_num} - Médicos/CRMs com maiores valores pagos pelo PFPB em vendas lançadas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}) no Sistema Autorizador de Vendas, no período {periodo_intervalo}.",
         color="334155",
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -1830,42 +1830,42 @@ def _add_hhi_crm_text(
     )
 
     p3 = doc.add_paragraph()
-    _run(p3, f"Conforme a Tabela {tabela_num}, observa-se concentração relevante das dispensações no médico ", color="0F172A", size=10)
-    _run(p3, nome_medico, color="334155", size=10, bold=True)
-    _run(p3, ", CRM ", color="0F172A", size=10)
-    _run(p3, crm_ident, color="334155", size=10, bold=True)
-    _run(p3, f". Embora tenham sido identificados {total_medicos} médicos no período analisado, esse CRM concentrou ", color="0F172A", size=10)
-    _run(p3, f"{principal_autorizacoes}", color="334155", size=10, bold=True)
-    _run(p3, f" das {total_autorizacoes} autorizações verificadas, volume ", color="0F172A", size=10)
+    _run(p3, f"Conforme a Tabela {tabela_num}, observa-se concentração relevante das dispensações no médico ", color="0F172A", size=12)
+    _run(p3, nome_medico, color="334155", size=12, underline=True)
+    _run(p3, ", CRM ", color="0F172A", size=12)
+    _run(p3, crm_ident, color="334155", size=12, underline=True)
+    _run(p3, f". Embora tenham sido identificados {total_medicos} médicos no período analisado, esse CRM concentrou ", color="0F172A", size=12)
+    _run(p3, f"{principal_autorizacoes}", color="334155", size=12, underline=True)
+    _run(p3, f" das {total_autorizacoes} autorizações verificadas, volume ", color="0F172A", size=12)
     mult_autorizacoes = _as_float(hhi_crm_comp["mult_autorizacoes"])
     mult_autorizacoes_fmt = _format_decimal_pt(mult_autorizacoes, 2)
     _run(
         p3,
         f'{mult_autorizacoes_fmt} {_vez_ou_vezes(mult_autorizacoes)} superior',
         color="334155",
-        size=10,
-        bold=True,
+        size=12,
+        underline=True,
     )
     _run(
         p3,
         f" à média de {_format_decimal_pt(media_autorizacoes, 2)} autorizações por CRM.",
         color="0F172A",
-        size=10,
+        size=12,
     )
 
     p4 = doc.add_paragraph()
-    _run(p4, "Sob o aspecto financeiro, as vendas associadas ao referido CRM somaram ", color="0F172A", size=10)
-    _run(p4, f"R$ {_format_decimal_pt(principal_valor, 2)}", color="334155", size=10, bold=True)
-    _run(p4, ", correspondendo a ", color="0F172A", size=10)
-    _run(p4, f'{_format_decimal_pt(hhi_crm_comp["pct_valor"], 2)}%', color="334155", size=10, bold=True)
+    _run(p4, "Sob o aspecto financeiro, as vendas associadas ao referido CRM somaram ", color="0F172A", size=12)
+    _run(p4, f"R$ {_format_decimal_pt(principal_valor, 2)}", color="334155", size=12, underline=True)
+    _run(p4, ", correspondendo a ", color="0F172A", size=12)
+    _run(p4, f'{_format_decimal_pt(hhi_crm_comp["pct_valor"], 2)}%', color="334155", size=12, underline=True)
     _run(
         p4,
         f" dos R$ {_format_decimal_pt(valor_total, 2)} pagos pelo PFPB à farmácia no período e superando em ",
         color="0F172A",
-        size=10,
+        size=12,
     )
-    _run(p4, f'{_format_decimal_pt(hhi_crm_comp["mult_valor"], 2)} vezes', color="334155", size=10, bold=True)
-    _run(p4, f" a média de R$ {_format_decimal_pt(media_valor, 2)} por CRM. A presença simultânea de concentração em autorizações e em valores reforça o caráter atípico do padrão observado.", color="0F172A", size=10)
+    _run(p4, f'{_format_decimal_pt(hhi_crm_comp["mult_valor"], 2)} vezes', color="334155", size=12, underline=True)
+    _run(p4, f" a média de R$ {_format_decimal_pt(media_valor, 2)} por CRM. A presença simultânea de concentração em autorizações e em valores reforça o caráter atípico do padrão observado.", color="0F172A", size=12)
 
 def _add_crms_irregulares_text(
     doc,
@@ -1901,30 +1901,30 @@ def _add_crms_irregulares_text(
         p1,
         "No âmbito do PFPB, as dispensações devem estar respaldadas por prescrições emitidas por médicos com registro ativo e regular no Conselho Regional de Medicina (CRM). Para este indicador, foram consideradas duas situações de irregularidade: CRMs inválidos ou não localizados na base do Conselho Federal de Medicina (CFM), e prescrições com data anterior à primeira inscrição do médico na UF do respectivo CRM. A ocorrência de qualquer dessas situações aponta para o processamento de dispensações com prescrição médica incompatível com os requisitos legais do Programa.",
         color="0F172A",
-        size=10,
+        size=12,
     )
 
     p2 = doc.add_paragraph()
-    _run(p2, f"Em relação à Farmácia {razao_social}, verificou-se que, do total de ", color="0F172A", size=10)
-    _run(p2, f"R$ {_format_decimal_pt(total_financeiro_base, 2)}", color="334155", size=10, bold=True)
-    _run(p2, f" em vendas de medicamentos efetivadas no âmbito do PFPB no período {periodo_intervalo}, ", color="0F172A", size=10)
-    _run(p2, f"{_format_decimal_pt(pct_irregular, 2)}%", color="334155", size=10, bold=True)
-    _run(p2, " (", color="0F172A", size=10)
-    _run(p2, f"R$ {_format_decimal_pt(valor_irregular, 2)}", color="334155", size=10, bold=True)
-    _run(p2, ") foram realizadas com receitas prescritas por médicos com CRMs irregulares ou inválidos", color="0F172A", size=10)
+    _run(p2, f"Em relação à Farmácia {razao_social}, verificou-se que, do total de ", color="0F172A", size=12)
+    _run(p2, f"R$ {_format_decimal_pt(total_financeiro_base, 2)}", color="334155", size=12, bold=True)
+    _run(p2, f" em vendas de medicamentos efetivadas no âmbito do PFPB no período {periodo_intervalo}, ", color="0F172A", size=12)
+    _run(p2, f"{_format_decimal_pt(pct_irregular, 2)}%", color="334155", size=12, bold=True)
+    _run(p2, " (", color="0F172A", size=12)
+    _run(p2, f"R$ {_format_decimal_pt(valor_irregular, 2)}", color="334155", size=12, bold=True)
+    _run(p2, ") foram realizadas com receitas prescritas por médicos com CRMs irregulares ou inválidos", color="0F172A", size=12)
     if has_detalhe_irregulares:
-        _run(p2, ", sendo ", color="0F172A", size=10)
-        _run(p2, f"{qtd_invalidos}", color="334155", size=10, bold=True)
-        _run(p2, " com números inválidos e ", color="0F172A", size=10)
-        _run(p2, f"{qtd_antes_registro}", color="334155", size=10, bold=True)
-        _run(p2, " com prescrição médica emitida antes da primeira inscrição do CRM na UF", color="0F172A", size=10)
-    _run(p2, ". Tal percentual corresponde a ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=10, bold=True)
-    _run(p2, " o percentual mediano de vendas com essa mesma criticidade entre as farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_uf_fmt} {multiplicador_uf_unidade}", color="334155", size=10, bold=True)
-    _run(p2, " o percentual mediano das farmácias de seu Estado e a ", color="0F172A", size=10)
-    _run(p2, f"{multiplicador_br_fmt} {multiplicador_br_unidade}", color="334155", size=10, bold=True)
-    _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=10)
+        _run(p2, ", sendo ", color="0F172A", size=12)
+        _run(p2, f"{qtd_invalidos}", color="334155", size=12, bold=True)
+        _run(p2, " com números inválidos e ", color="0F172A", size=12)
+        _run(p2, f"{qtd_antes_registro}", color="334155", size=12, bold=True)
+        _run(p2, " com prescrição médica emitida antes da primeira inscrição do CRM na UF", color="0F172A", size=12)
+    _run(p2, ". Tal percentual corresponde a ", color="0F172A", size=12)
+    _run(p2, f"{multiplicador_reg_fmt} {multiplicador_reg_unidade}", color="334155", size=12, bold=True)
+    _run(p2, " o percentual mediano de vendas com essa mesma criticidade entre as farmácias de sua região. Ampliando-se o comparativo geográfico, o percentual equivale a ", color="0F172A", size=12)
+    _run(p2, f"{multiplicador_uf_fmt} {multiplicador_uf_unidade}", color="334155", size=12, bold=True)
+    _run(p2, " o percentual mediano das farmácias de seu Estado e a ", color="0F172A", size=12)
+    _run(p2, f"{multiplicador_br_fmt} {multiplicador_br_unidade}", color="334155", size=12, bold=True)
+    _run(p2, " o das farmácias de todo o Brasil.", color="0F172A", size=12)
 
     title = doc.add_paragraph()
     _format_crm_table_title(title)
@@ -1999,6 +1999,6 @@ def _add_crms_irregulares_text(
         fonte,
         "Fonte: Consulta ao CFM (https://portal.cfm.org.br/busca-medicos) e Sistema Autorizador de Vendas (SAV).",
         color="475569",
-        size=8,
+        size=10,
         italic=True,
     )

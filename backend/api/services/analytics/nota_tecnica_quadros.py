@@ -96,7 +96,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         p_title,
         f'Tabela {tabela_num} - Ingressos societários próximos a semestres com aumento atípico das transferências',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -143,7 +143,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
         for col_idx, value in enumerate(values):
             para = cells[col_idx].paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in (1, 2, 3, 4) else WD_ALIGN_PARAGRAPH.LEFT
-            _run(para, value, color='0F172A', size=10, bold=col_idx == 3 and taxa is not None)
+            _run(para, value, color='0F172A', size=10)
 
     for row in table.rows:
         for cell in row.cells:
@@ -156,7 +156,7 @@ def _add_quadro_socios_volume_atipico(doc, socios_volume_atipico: list[dict[str,
     _run(
         p_foot,
         'Fonte: Sentinela, a partir do quadro societário cadastral e da evolução semestral das transferências do PFPB. A distância temporal considera o mesmo semestre de entrada e até dois semestres posteriores.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
@@ -170,7 +170,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
         p_title,
         f'Tabela {tabela_num} - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -197,7 +197,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
         _run(cells[0].paragraphs[0], label, color='475569', size=10)
         value_para = cells[1].paragraphs[0]
         value_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(value_para, value, color='0F172A', size=10, bold=True)
+        _run(value_para, value, color='0F172A', size=10)
 
     for row in table.rows:
         for cell in row.cells:
@@ -207,7 +207,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, f'Fonte: Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='64748B', size=10)
+    _run(p_foot, f'Fonte: Sentinela, com base no SAV/PFPB e em NF-e, no período analisado ({periodo_txt}).', color='0F172A', size=10)
     _keep_small_table_together(p_title, table, [p_foot])
 
 
@@ -219,7 +219,7 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
         p_title,
         f'Tabela {tabela_num} - Relação de medicamentos supostamente distribuídos pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem estoque amparado em notas fiscais de aquisição, no período de {periodo_txt}.',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -290,7 +290,7 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, f'Fonte: informações sobre as dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='64748B', size=10)
+    _run(p_foot, f'Fonte: informações sobre as dispensações informadas mensalmente pelas farmácias no Sistema Autorizador de Vendas do PFPB, no período de {periodo_txt}.', color='0F172A', size=10)
 
 
 def _add_quadro_evolucao_financeira(
@@ -312,7 +312,7 @@ def _add_quadro_evolucao_financeira(
         p_title,
         f'Tabela {tabela_num} - Evolução semestral do faturamento junto ao Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
     _add_bookmark(p_title, "tabela_evolucao_financeira")
@@ -354,7 +354,6 @@ def _add_quadro_evolucao_financeira(
             f'{_format_decimal_pt(item["pct_irregular"], 2)}%',
             color=pct_color,
             size=9,
-            bold=item["pct_irregular"] >= 50,
         )
         cells[5].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         if has_aumento_atipico:
@@ -383,7 +382,7 @@ def _add_quadro_evolucao_financeira(
     ]
     for col_idx, value in enumerate(totals, start=1):
         total_cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT if col_idx < 4 else WD_ALIGN_PARAGRAPH.CENTER
-        _run(total_cells[col_idx].paragraphs[0], value, color='0F172A', size=9, bold=True)
+        _run(total_cells[col_idx].paragraphs[0], value, color='0F172A', size=9, bold=col_idx != 4)
     for cell in total_cells:
         _cell_bg(cell, 'F8FAFC')
 
@@ -398,7 +397,7 @@ def _add_quadro_evolucao_financeira(
     _run(
         p_foot,
         'Fonte: Sistema Sentinela, com base nas dispensações registradas no SAV/PFPB e nas notas fiscais eletrônicas de aquisição de medicamentos.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
@@ -415,7 +414,7 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
         p_title,
         f'Tabela {tabela_num} - Medicamentos associados aos semestres com aumento atípico de volume financeiro',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -470,7 +469,6 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
             aumento_txt,
             color=increase_color,
             size=9,
-            bold=True,
         )
 
     for row in table.rows:
@@ -484,7 +482,7 @@ def _add_tabela_medicamentos_aumento_atipico(doc, medicamentos_aumento_atipico: 
     _run(
         p_foot,
         'Fonte: Sentinela, a partir da evolução mensal por GTIN. O percentual indicado no campo “Aumento no semestre” representa o crescimento do GTIN em relação ao semestre anterior e é exibido apenas quando o valor anterior é superior a R$ 1,00. GTINs com participação individual menor ou igual a 0,1% no aumento positivo do semestre são consolidados em uma linha agregada.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
@@ -494,7 +492,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     """Adiciona o Quadro 01 com as informações detalhadas da farmácia."""
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='334155', size=12, bold=True)
+    _run(p_title, f"Quadro 01 - Informações detalhadas da Farmácia {data.get('razao_social') or ''}", color='334155', size=10, bold=True)
     _run(p_title, f"\n(CNPJ {data.get('cnpj_fmt') or ''})", color='475569', size=12)
 
     tbl = doc.add_table(rows=0, cols=2)
@@ -548,33 +546,16 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         p1.paragraph_format.space_before = Pt(2)
         p1.paragraph_format.space_after = Pt(2)
 
-    # Nota de Rodapé do Quadro
-    total_mov = Decimal(str(data.get('total_mov') or 0.0))
-    cap_social_dec = Decimal(str(capital_social))
-    relacao_pct = (total_mov / cap_social_dec * 100) if capital_social > 0 else 0
-    vezes = (total_mov / cap_social_dec) if capital_social > 0 else 0
-    
-    p_nota = doc.add_paragraph()
-    p_nota.paragraph_format.space_before = Pt(6)
-    p_nota.paragraph_format.space_after = Pt(2)
-    relacao_txt = f"{relacao_pct:,.2f}%".replace(',', 'X').replace('.', ',').replace('X', '.')
-    total_mov_txt = f"R$ {total_mov:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-    _run(p_nota, f"* A relação do valor de vendas no âmbito do PFPB sobre o capital social é de {relacao_txt}, ou seja, ela recebeu ", color='475569', size=8)
-    _run(p_nota, total_mov_txt, color='0F172A', size=8, bold=True)
-    _run(p_nota, f" do Programa, no período de {periodo_txt}, o que corresponde ", color='475569', size=8)
-    _run(p_nota, f"{vezes:,.1f} vezes".replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=8, bold=True)
-    _run(p_nota, " o valor do seu capital social.", color='475569', size=8)
-
     p_fonte = doc.add_paragraph()
     _format_quadro_footnote(p_fonte)
     dt_extracao = data.get('data_processamento')
     dt_extracao_txt = dt_extracao.strftime('%d/%m/%Y') if dt_extracao else date.today().strftime('%d/%m/%Y')
-    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='94A3B8', size=10, italic=True)
+    _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='0F172A', size=10, italic=True)
 
     # ── Quadro Societário Atual ──────────────────────────────────────────
     p_socio_intro = doc.add_paragraph()
     p_socio_intro.paragraph_format.space_before = Pt(12)
-    _run(p_socio_intro, f"O quadro societário atual da Farmácia {data.get('razao_social') or ''} conta com os seguintes sócios:", color='0F172A', size=10)
+    _run(p_socio_intro, f"O quadro societário atual da Farmácia {data.get('razao_social') or ''} conta com os seguintes sócios:", color='0F172A', size=12)
 
     if data.get('socios_ativos'):
         for s in data['socios_ativos']:
@@ -582,20 +563,20 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
             p_s.paragraph_format.left_indent = Inches(0.5)
             cpf_fmt = _format_cpf_cnpj(s.cpf_cnpj_socio)
             entrada_fmt = s.data_entrada_sociedade.strftime('%d/%m/%Y') if s.data_entrada_sociedade else '—'
-            _run(p_s, f"{s.nome_socio}, CPF: {cpf_fmt} (entrada em {entrada_fmt})", color='0F172A', size=10)
+            _run(p_s, f"{s.nome_socio}, CPF: {cpf_fmt} (entrada em {entrada_fmt})", color='0F172A', size=12)
     else:
         p_s = doc.add_paragraph(style='List Bullet')
-        _run(p_s, "Informação de sócios não disponível ou nenhum sócio ativo identificado.", color='475569', size=10, italic=True)
+        _run(p_s, "Informação de sócios não disponível ou nenhum sócio ativo identificado.", color='475569', size=12, italic=True)
 
     p_socio_alerta = doc.add_paragraph()
     p_socio_alerta.paragraph_format.space_before = Pt(6)
     p_socio_alerta.paragraph_format.space_after = Pt(2)
-    _run(p_socio_alerta, 'ATENÇÃO: ', color='DC2626', size=10, bold=True, italic=True)
+    _run(p_socio_alerta, 'ATENÇÃO: ', color='DC2626', size=12, bold=True, italic=True)
     _run(
         p_socio_alerta,
         'Caso sejam identificadas criticidades em relação ao estabelecimento (sócio com características de “laranja”, endereço inexistente, alteração de endereço para outro município, sócio com vínculo empregatício, etc.), sugere-se trazer tais apontamentos na sequência do parágrafo anterior.',
         color='DC2626',
-        size=10,
+        size=12,
         italic=True,
     )
 
@@ -614,7 +595,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
         p_title,
         f'Tabela {tabela_num} - Vínculos trabalhistas identificados durante o ano no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -659,7 +640,7 @@ def _add_quadro_esocial(doc, razao_social: str, cnpj_fmt: str, esocial_comp: dic
     _run(
         p_foot,
         f'Fonte: Sentinela, a partir de dados do eSocial. Data de carga mais recente da base eSocial disponível: {esocial_comp.get("dt_carga_fonte_txt") or "—"}.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
@@ -677,7 +658,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
         p_title,
         f'Quadro 01-B - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -727,7 +708,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     _run(
         p_foot,
         f'Fonte: Sentinela, a partir de dados do eSocial. {escopo}',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
     _keep_small_table_together(p_title, table, [p_foot])
@@ -736,7 +717,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
 def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_num: int):
     p_title = doc.add_paragraph()
     _format_quadro_title(p_title)
-    _run(p_title, f'Tabela {tabela_num} – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=12, bold=True)
+    _run(p_title, f'Tabela {tabela_num} – Dispensações de medicamentos informadas no Sistema Autorizador de Vendas (SAV) pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), sem comprovação em notas fiscais de aquisição (período de {periodo_txt}).', color='334155', size=10, bold=True)
     
     table = doc.add_table(rows=4, cols=3)
     _set_table_open_borders(table)
@@ -753,18 +734,18 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_n
 
     r1 = table.rows[1].cells
     _run(r1[0].paragraphs[0], 'Dispensações totais informadas no SAV pela farmácia', color='475569', size=10)
-    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=10, bold=True)
-    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'), color='0F172A', size=10, bold=True)
+    _run(r1[1].paragraphs[0], f'{cnpj_data.get("totalMov", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=10)
+    _run(r1[2].paragraphs[0], f'{cnpj_data.get("totalQtde", 0):,.0f}'.replace(',', '.'), color='0F172A', size=10)
     
     r2 = table.rows[2].cells
     _run(r2[0].paragraphs[0], 'Valor de dispensações sem comprovação (R$)', color='475569', size=10)
-    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=10, bold=True)
-    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'), color='0F172A', size=10, bold=True)
+    _run(r2[1].paragraphs[0], f'{cnpj_data.get("valSemComp", 0):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.'), color='0F172A', size=10)
+    _run(r2[2].paragraphs[0], f'{cnpj_data.get("qtdeSemComp", 0):,.0f}'.replace(',', '.'), color='0F172A', size=10)
 
     r3 = table.rows[3].cells
     _run(r3[0].paragraphs[0], '% de vendas no Programa Farmácia Popular sem comprovação', color='475569', size=10)
-    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=10, bold=True)
-    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=10, bold=True)
+    _run(r3[1].paragraphs[0], f'{cnpj_data.get("percValSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=10)
+    _run(r3[2].paragraphs[0], f'{cnpj_data.get("percQtdeSemComp", 0):.2f}%'.replace('.', ','), color='0F172A', size=10)
     
     for row in table.rows[1:]:
         row.cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -778,7 +759,7 @@ def _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_n
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='64748B', size=10)
+    _run(p_foot, 'Fonte: Relatório de Autorizações Consolidadas, emitido pelo Departamento de Assistência Farmacêutica - DAF/SCTICS/MS, e base de dados das notas fiscais eletrônicas (NF-e), mantida pela Receita Federal do Brasil.', color='0F172A', size=10)
     _keep_small_table_together(p_title, table, [p_foot])
 
 
@@ -807,7 +788,7 @@ def _add_tabela_repasses_anuais(
             p_title,
             f'Tabela {tabela_num} – Consulta a ordens bancárias do Ministério da Saúde para a Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_fmt}.',
             color='334155',
-            size=12,
+            size=10,
             bold=True,
         )
     else:
@@ -815,7 +796,7 @@ def _add_tabela_repasses_anuais(
             p_title,
             f'Tabela {tabela_num} – Valores consolidados de ordens bancárias recebidas pela Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_fmt}.',
             color='334155',
-            size=12,
+            size=10,
             bold=True,
         )
 
@@ -873,19 +854,19 @@ def _add_tabela_repasses_anuais(
 
     p_foot = doc.add_paragraph()
     _format_quadro_footnote(p_foot)
-    _run(p_foot, 'Fonte: Sistema Integrado de Administração Financeira do Governo Federal (SIAFI).', color='64748B', size=10)
+    _run(p_foot, 'Fonte: Sistema Integrado de Administração Financeira do Governo Federal (SIAFI).', color='0F172A', size=10)
     _keep_small_table_together(p_title, table, [p_foot])
 
     p_atencao = doc.add_paragraph()
     p_atencao.paragraph_format.space_before = Pt(8)
     p_atencao.paragraph_format.space_after = Pt(4)
-    _run(p_atencao, 'ATENÇÃO: ', color='C0392B', size=10, bold=True, italic=True)
+    _run(p_atencao, 'ATENÇÃO: ', color='C0392B', size=12, bold=True, italic=True)
     if sem_repasses:
         _run(
             p_atencao,
             'Não foram identificadas ordens bancárias no período analisado; portanto, a comparação entre o faturamento declarado ao MS e os valores efetivamente repassados deve ser avaliada considerando o possível repasse dos recursos para o CNPJ da Matriz.',
             color='C0392B',
-            size=10,
+            size=12,
             italic=True,
         )
     else:
@@ -893,6 +874,6 @@ def _add_tabela_repasses_anuais(
             p_atencao,
             f'Como o Sistema Sentinela se concentra apenas nos medicamentos previstos no rol do PFPB, o comportamento esperado é de que o valor total identificado pelo Sistema de faturamento da empresa junto ao MS (valor total da segunda coluna da Tabela {tabela_num - 1}) seja inferior ou no máximo igual ao valor total das ordens bancárias recebidas do MS (total do quadro anterior, que inclui pagamentos de medicamentos e também fraldas geriátricas e absorventes higiênicos). Valores totais de ordens bancárias menores do que os faturados indicam a possibilidade de glosa por parte do Ministério da Saúde e, consequentemente, de não efetivação total ou parcial de tentativas de fraude ao Programa. Neste caso, sugere-se alterar o texto padrão da "conclusão e encaminhamento" sugerido no item "8" desta Nota Técnica.',
             color='C0392B',
-            size=10,
+            size=12,
             italic=True,
         )

@@ -174,7 +174,7 @@ def _add_anexo_falecidos(
         f'Detalhamento de transações agrupadas por CPF relativas à Farmácia {razao_social} (CNPJ {cnpj_fmt}), '
         f'{falecidos_comp.get("periodo_desc") or "no período analisado"}.',
         color='0F172A',
-        size=10,
+        size=12,
     )
 
     headers = [
@@ -201,7 +201,7 @@ def _add_anexo_falecidos(
         'Tabela 1 - Detalhamento de vendas para pessoas falecidas, por CPF',
         bold=True,
         color='334155',
-        size=12,
+        size=10,
     )
 
     table = doc.add_table(rows=1, cols=len(headers))
@@ -294,7 +294,7 @@ def _add_anexo_falecidos(
     _run(
         p_source,
         'Fonte: Sentinela, a partir dos registros do SAV/PFPB e das bases SIRC/SISOBI.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
     if timing:

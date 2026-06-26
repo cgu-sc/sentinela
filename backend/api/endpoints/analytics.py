@@ -30,6 +30,7 @@ from loguru import logger
 from request_logging import FrontendPerformanceEvent, log_frontend_performance
 import json
 import time
+import traceback
 import urllib.parse
 
 router = APIRouter()
@@ -829,7 +830,19 @@ def get_nota_tecnica(
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro inesperado ao gerar Nota Tecnica: {exc}") from exc
+        tb_str = traceback.format_exc()
+        logger.bind(sentinela_log="nota_tecnica_error").error(
+            "cnpj={} | erro inesperado ao gerar Nota Tecnica\n{}",
+            cnpj,
+            tb_str,
+        )
+        last_frames = traceback.format_tb(exc.__traceback__)
+        last_frame = last_frames[-1] if last_frames else ""
+        detail = (
+            f"Erro inesperado ao gerar Nota Tecnica: {exc}\n\n"
+            f"Arquivo: {last_frame}"
+        )
+        raise HTTPException(status_code=500, detail=detail) from exc
     
     filename = f"Nota_Tecnica_{cnpj}_{date.today().isoformat()}.docx"
     # Encode filename for header

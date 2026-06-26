@@ -9,6 +9,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
   const ultimoNumeroNota = ref("");
   const ultimoNumeroProcesso = ref("");
   const assinantesTecnicos = ref([]);
+  const gerarPdfVisualizacao = ref(false);
   const loading = ref(false);
   const saving = ref(false);
   const loaded = ref(false);
@@ -46,6 +47,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
       assinantesTecnicos.value = normalizeAssinantes(
         preferencesResponse.data?.nota_tecnica?.assinantes_tecnicos ?? [],
       );
+      gerarPdfVisualizacao.value = preferencesResponse.data?.nota_tecnica?.gerar_pdf_visualizacao === true;
       loaded.value = true;
     } finally {
       loading.value = false;
@@ -68,6 +70,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
     numeroNota = ultimoNumeroNota.value,
     numeroProcesso = ultimoNumeroProcesso.value,
     assinantes = assinantesTecnicos.value,
+    gerarPdf = gerarPdfVisualizacao.value,
   }) {
     const normalized = String(regionalCodigo || "").trim().toUpperCase();
     if (!normalized) {
@@ -87,6 +90,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
         ultimo_numero_nota: String(numeroNota || "").trim(),
         ultimo_numero_processo: String(numeroProcesso || "").trim(),
         assinantes_tecnicos: assinantesNormalizados,
+        gerar_pdf_visualizacao: gerarPdf === true,
       };
       const { data } = await axios.put(API_ENDPOINTS.preferencesNotaTecnica, {
         nota_tecnica: notaTecnica,
@@ -98,6 +102,8 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
       assinantesTecnicos.value = normalizeAssinantes(
         data?.nota_tecnica?.assinantes_tecnicos ?? notaTecnica.assinantes_tecnicos,
       );
+      gerarPdfVisualizacao.value =
+        data?.nota_tecnica?.gerar_pdf_visualizacao ?? notaTecnica.gerar_pdf_visualizacao;
       loaded.value = true;
       return selectedRegional.value;
     } finally {
@@ -115,6 +121,7 @@ export const useNotaTecnicaConfigStore = defineStore("notaTecnicaConfig", () => 
     ultimoNumeroNota,
     ultimoNumeroProcesso,
     assinantesTecnicos,
+    gerarPdfVisualizacao,
     selectedRegional,
     selectedRegionalLabel,
     loading,

@@ -71,7 +71,7 @@ def _add_movimentacao_sem_funcionario_table(
         p_title,
         f'Tabela {tabela_num} - Síntese da movimentação após o último mês com trabalhador ativo',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -127,7 +127,7 @@ def _add_legal_context(doc):
         p_leg,
         'A ausência de vínculo identificado no eSocial para trabalhador com CBO de farmacêutico indica possível fragilidade na regularidade técnico-operacional do estabelecimento, uma vez que a atividade farmacêutica exige responsabilidade e assistência técnica de profissional habilitado durante o horário de funcionamento.',
         color='0F172A',
-        size=10,
+        size=12,
     )
 
 
@@ -171,20 +171,20 @@ def _add_movimentacao_sem_funcionario_alerta(doc, esocial_comp: dict[str, Any], 
         p,
         f'Observa-se, adicionalmente, que o último mês com movimentação de venda registrada no PFPB para o estabelecimento foi {periodo_txt}, enquanto o último mês com trabalhador ativo vinculado ao estabelecimento na base do eSocial foi {ultimo_mes_ativo_txt}. ',
         color='0F172A',
-        size=10,
+        size=12,
     )
     _run(
         p,
         f'Assim, foram identificados {qtd_meses_txt} {_plural(qtd_meses_sem_funcionario, "mês", "meses")} sem trabalhador ativo no estabelecimento até a última movimentação registrada. Nesse período, a farmácia apresentou faturamento de R$ {valor_periodo_txt} e {qtd_autorizacoes_periodo_txt} {_plural(qtd_autorizacoes_periodo, "autorização", "autorizações")} no PFPB.',
         color='0F172A',
-        size=10,
+        size=12,
     )
     if sem_esocial_no_ano and ano_ultima_mov and ano_ref_esocial:
         _run(
             p,
             f' Não foram identificados vínculos no eSocial para {ano_ultima_mov}; por isso, a verificação considerou o último ano trabalhista disponível, {ano_ref_esocial}.',
             color='0F172A',
-            size=10,
+            size=12,
         )
     tabela_num += 1
     _add_movimentacao_sem_funcionario_table(
@@ -210,7 +210,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
             p,
             f'Não foram identificados registros anuais de vínculos trabalhistas no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt}) no período analisado.',
             color='0F172A',
-            size=10,
+            size=12,
         )
         return tabela_num
 
@@ -235,34 +235,33 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
             p_intro,
             f'Com base nos dados do eSocial incorporados às análises do Sentinela, atualizados até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} somente durante o ano de {ano}. ',
             color='0F172A',
-            size=10,
+            size=12,
         )
         if qtd_farm_vinculo > 0:
             _run(
                 p_intro,
                 f'Para esse exercício, foram apurados {qtd_trab_vinculo} {_plural(qtd_trab_vinculo, "trabalhador com vínculo", "trabalhadores com vínculo")}, com identificação de {qtd_farm_vinculo} {_plural(qtd_farm_vinculo, "trabalhador", "trabalhadores")} com CBO de farmacêutico (223405).',
                 color='0F172A',
-                size=10,
+                size=12,
             )
         else:
             _run(
                 p_intro,
                 f'Para esse exercício, foram apurados {qtd_trab_vinculo} {_plural(qtd_trab_vinculo, "trabalhador com vínculo", "trabalhadores com vínculo")}, ',
                 color='0F172A',
-                size=10,
+                size=12,
             )
             _run(
                 p_intro,
                 'nenhum deles com CBO de farmacêutico',
                 color='0F172A',
-                size=10,
-                underline=True,
+                size=12,
             )
             _run(
                 p_intro,
                 ' (223405).',
                 color='0F172A',
-                size=10,
+                size=12,
             )
             _add_legal_context(doc)
         if qtd_trab_ativo > 0 and (qtd_trab_ativo != qtd_trab_vinculo or qtd_farm_ativo != qtd_farm_vinculo):
@@ -272,7 +271,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
                 p_ativos,
                 f'Na competência-base de {competencia_txt}, permaneciam ativos {qtd_trab_ativo} {_plural(qtd_trab_ativo, "trabalhador", "trabalhadores")}, sendo {qtd_farm_ativo} com CBO de farmacêutico (223405).',
                 color='0F172A',
-                size=10,
+                size=12,
             )
     else:
         periodo_anos_txt = esocial_comp.get("periodo_anos_txt") or "período analisado"
@@ -280,11 +279,11 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
             p_intro,
             f'Com base nos dados do eSocial incorporados às análises do Sentinela, atualizados até {dt_carga_txt}, foram identificados vínculos trabalhistas associados à Farmácia {razao_social} entre {periodo_anos_txt}. ',
             color='0F172A',
-            size=10,
+            size=12,
         )
-        _run(p_intro, 'No período, os registros indicam a seguinte composição anual: ', color='0F172A', size=10)
-        _run(p_intro, annual_summary, color='334155', size=10, bold=True)
-        _run(p_intro, '.', color='0F172A', size=10)
+        _run(p_intro, 'No período, os registros indicam a seguinte composição anual: ', color='0F172A', size=12)
+        _run(p_intro, annual_summary, color='334155', size=12, underline=True)
+        _run(p_intro, '.', color='0F172A', size=12)
 
         if qtd_anos_sem_farm == qtd_anos:
             p_status = doc.add_paragraph()
@@ -293,7 +292,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
                 p_status,
                 'Em nenhum dos anos considerados foi identificado trabalhador com CBO de farmacêutico (223405).',
                 color='0F172A',
-                size=10,
+                size=12,
             )
             _add_legal_context(doc)
         elif anos_sem_farm:
@@ -304,7 +303,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
                 p_status,
                 f'Nos anos de {anos_txt}, não foi identificado trabalhador com CBO de farmacêutico (223405).',
                 color='0F172A',
-                size=10,
+                size=12,
             )
             _add_legal_context(doc)
         else:
@@ -314,7 +313,7 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
                 p_status,
                 'Em todos os anos considerados, houve identificação de ao menos um trabalhador com CBO de farmacêutico (223405). A informação é apresentada como elemento de contexto sobre a força de trabalho registrada para o estabelecimento.',
                 color='0F172A',
-                size=10,
+                size=12,
             )
 
     anos_um_trabalhador = list(esocial_comp.get("anos_um_trabalhador") or [])
@@ -325,20 +324,19 @@ def _add_esocial_context_text(doc, razao_social: str, cnpj_fmt: str, esocial_com
             p_unico,
             'Também se observa que, em ',
             color='0F172A',
-            size=10,
+            size=12,
         )
         _run(
             p_unico,
             _format_single_worker_summary(anos_um_trabalhador),
             color='334155',
-            size=10,
-            bold=True,
+            size=12,
         )
         _run(
             p_unico,
             ', havia registro anual de apenas um trabalhador vinculado ao estabelecimento.',
             color='0F172A',
-            size=10,
+            size=12,
         )
 
     tabela_num += 1

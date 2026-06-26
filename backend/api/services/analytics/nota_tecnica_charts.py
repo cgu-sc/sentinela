@@ -1307,7 +1307,7 @@ def _add_mapa_geografico_origem_uf(doc, razao_social: str, dispersao_comp: dict[
         p_title,
         f'Mapa 01 - Distribuição do valor autorizado por UF de residência do paciente vinculada à Farmácia {razao_social}.',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -1322,7 +1322,7 @@ def _add_mapa_geografico_origem_uf(doc, razao_social: str, dispersao_comp: dict[
     _run(
         p_foot,
         'Fonte: Sentinela, a partir das autorizações registradas no SAV/PFPB e da UF de residência do beneficiário constante na base de CPFs da Receita Federal do Brasil, utilizada no indicador geográfico. A escala representa a participação financeira de cada UF no valor autorizado total da farmácia no período analisado.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
 
@@ -1335,7 +1335,7 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
         p_title,
         f'Figura {figure_number:02d} - Posicionamento regional da Farmácia {razao_social} (CNPJ {cnpj_fmt}) em relação aos estabelecimentos da mesma Região de Saúde.',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -1350,7 +1350,7 @@ def _add_figura_posicionamento_regional(doc, razao_social: str, cnpj_fmt: str, p
     _run(
         p_foot,
         'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
 
@@ -1371,7 +1371,7 @@ def _add_figura_percentil_risco(
             p_title,
             f'Figura {figure_number:02d} - Posição percentílica da Farmácia {razao_social} (CNPJ {cnpj_fmt}) quanto ao percentual de vendas sem comprovação na Região de Saúde.',
             color='334155',
-            size=12,
+            size=10,
             bold=True,
         )
 
@@ -1391,7 +1391,7 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
         p_title,
         f'Figura {figure_number:02d} - Evolução semestral do faturamento e das "vendas sem comprovação" da Farmácia {razao_social} (CNPJ {cnpj_fmt}).',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -1406,7 +1406,7 @@ def _add_figura_evolucao_financeira(doc, razao_social: str, cnpj_fmt: str, evolu
     _run(
         p_foot,
         'Fonte: Dispensações informadas no SAV e NF-e de aquisição de medicamentos.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
 
@@ -1419,7 +1419,7 @@ def _add_figura_parkinson_comparacao(doc, demografia: dict[str, Any], figure_num
         p_title,
         f'Figura {figure_number:02d} - Comparação entre casos esperados de doença de Parkinson no município e CPFs observados com dispensação na farmácia.',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -1434,7 +1434,7 @@ def _add_figura_parkinson_comparacao(doc, demografia: dict[str, Any], figure_num
     _run(
         p_foot,
         'Fonte: Sentinela, IBGE/Censo e prevalência nacional ajustada divulgada pelo Hospital de Clínicas de Porto Alegre com base na coorte ELSI-Brasil.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )
 
@@ -1447,7 +1447,7 @@ def _add_figura_parkinson_faixas_etarias(doc, demografia: dict[str, Any], figure
         p_title,
         f'Figura {figure_number:02d} - Distribuição etária da população municipal utilizada como base para estimativa epidemiológica de doença de Parkinson.',
         color='334155',
-        size=12,
+        size=10,
         bold=True,
     )
 
@@ -1462,6 +1462,6 @@ def _add_figura_parkinson_faixas_etarias(doc, demografia: dict[str, Any], figure
     _run(
         p_foot,
         'Fonte: IBGE/Censo.',
-        color='64748B',
+        color='0F172A',
         size=10,
     )

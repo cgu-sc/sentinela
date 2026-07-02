@@ -5,6 +5,15 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.5] - 2026-07-02
+
+### Alterado
+- **Orientação sobre o comparativo entre faturamento e repasses na Nota Técnica.** O texto de atenção exibido após a tabela de ordens bancárias foi revisado para orientar a análise do montante faturado em relação ao valor efetivamente pago pelo Ministério da Saúde, distinguindo situações em que a possível fraude logrou sucesso daquelas em que permaneceu apenas na tentativa e indicando a avaliação correspondente na seção “Conclusão e Encaminhamento”.
+
+### Corrigido
+- **Referência à tabela de dispensações na seção de medicamentos sem comprovação.** O texto introdutório deixou de apontar incorretamente para o `Quadro 01` e agora referencia a tabela de dispensações do SAV, utilizando sua numeração dinâmica para permanecer correto mesmo quando tabelas opcionais alterarem a sequência do documento.
+
+
 ## [1.6.4] - 2026-06-26
 
 ### Alterado

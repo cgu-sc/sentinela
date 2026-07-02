@@ -1289,7 +1289,8 @@ def generate_nota_tecnica(
     _run(p_53, 'A tabela, a seguir, consolida os valores apurados para todas as dispensações de medicamentos realizadas pelo estabelecimento:', color='0F172A', size=12)
         
     tabela_num += 1
-    _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_num)
+    tabela_dispensacoes_num = tabela_num
+    _add_quadro_53(doc, razao_social, cnpj_fmt, cnpj_data, periodo_txt, tabela_dispensacoes_num)
     
     p_conclusao_53 = doc.add_paragraph()
     _run(p_conclusao_53, f'Depreende-se da tabela anterior que a quantidade de dispensações de medicamentos informadas pela Farmácia {razao_social} no SAV não se encontra compatível com seus estoques, contabilizados de acordo com a metodologia adotada pela CGU, o que levou à estimativa de não comprovação de vendas no percentual de ', color='0F172A', size=12)
@@ -1359,7 +1360,7 @@ def generate_nota_tecnica(
     gtin_comp = _build_gtin_sem_comprovacao_context(cnpj, data_inicio, data_fim)
     timing.mark("contexto GTIN sem comprovacao")
     p_gtin_intro = doc.add_paragraph()
-    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoque amparado em notas fiscais de aquisição, constantes do levantamento apresentado no Quadro 01, destacam-se os seguintes:', color='0F172A', size=12)
+    _run(p_gtin_intro, f'Do rol de medicamentos distribuídos pela Farmácia {razao_social} sem estoque amparado em notas fiscais de aquisição, constantes do levantamento apresentado na Tabela {tabela_dispensacoes_num}, destacam-se os seguintes:', color='0F172A', size=12)
 
     tabela_num += 1
     tabela_gtins_num = tabela_num

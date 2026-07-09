@@ -14,6 +14,7 @@ import { useSliderPeriodLogic } from "@/composables/useSliderPeriodLogic";
 import { useFilterParameters } from "@/composables/useFilterParameters";
 import { FILTER_OPTIONS } from "@/config/filterOptions";
 import Button from "primevue/button";
+import Checkbox from "primevue/checkbox";
 import Dropdown from "primevue/dropdown";
 import Slider from "primevue/slider";
 import InputText from "primevue/inputtext";
@@ -1491,10 +1492,10 @@ const clearSearch = () => {
         </label>
         <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedCnaeIncompativel') }">
           <label class="checkbox-label">
-            <input
+            <Checkbox
               v-model="filterStore.selectedCnaeIncompativel"
-              type="checkbox"
               class="filter-checkbox"
+              binary
             />
             <span>Apenas CNPJs com CNAE incompatível</span>
           </label>
@@ -1523,10 +1524,10 @@ const clearSearch = () => {
         </label>
         <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioIdadeAtipica') }">
           <label class="checkbox-label">
-            <input
+            <Checkbox
               v-model="filterStore.selectedSocioIdadeAtipica"
-              type="checkbox"
               class="filter-checkbox"
+              binary
             />
             <span>Apenas sócios &lt; 21 ou &gt; 80 anos</span>
           </label>
@@ -1555,10 +1556,10 @@ const clearSearch = () => {
         </label>
         <div class="filter-checkbox-wrapper" :class="{ 'filter-active-box': isFilterActive('selectedSocioFalecido') }">
           <label class="checkbox-label">
-            <input
+            <Checkbox
               v-model="filterStore.selectedSocioFalecido"
-              type="checkbox"
               class="filter-checkbox"
+              binary
             />
             <span>Apenas CNPJs com sócio falecido</span>
           </label>
@@ -2854,11 +2855,37 @@ const clearSearch = () => {
   width: 1.125rem;
   height: 1.125rem;
   cursor: pointer;
-  accent-color: var(--primary-color);
-  border-radius: 0.25rem;
 }
 
-.filter-checkbox:focus-visible {
+:global(.filter-checkbox.p-checkbox .p-checkbox-box) {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.25rem;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-input-bg);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+:global(.checkbox-label:hover .filter-checkbox.p-checkbox .p-checkbox-box) {
+  border-color: color-mix(in srgb, var(--primary-color) 55%, var(--sidebar-border));
+  background: color-mix(in srgb, var(--sidebar-input-bg) 86%, var(--primary-color));
+}
+
+:global(.filter-checkbox.p-checkbox.p-highlight .p-checkbox-box),
+:global(.filter-checkbox.p-checkbox-checked .p-checkbox-box) {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+}
+
+:global(.filter-checkbox.p-checkbox .p-checkbox-icon) {
+  color: var(--color-on-primary, #ffffff);
+}
+
+:global(.filter-checkbox.p-checkbox.p-focus .p-checkbox-box),
+:global(.filter-checkbox.p-checkbox:has(.p-checkbox-input:focus-visible) .p-checkbox-box) {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }

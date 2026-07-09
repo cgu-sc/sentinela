@@ -304,9 +304,9 @@ onMounted(() => {});
 :global(.admin-layout) .p-dropdown,
 :global(.admin-layout) .p-calendar .p-inputtext,
 :global(.admin-layout) .p-multiselect {
-  background: var(--card-bg) !important;
+  background: var(--sidebar-input-bg) !important;
   border-color: var(--sidebar-border) !important;
-  color: var(--text-color-85) !important;
+  color: var(--sidebar-text) !important;
 }
 
 :global(.admin-layout) .p-inputtext:enabled:hover,

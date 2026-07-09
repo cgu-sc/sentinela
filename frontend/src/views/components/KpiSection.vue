@@ -67,7 +67,7 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr)); /* TRAVA DE LARGURA: Garante colunas de exatos 20% sempre */
-  gap: 1.15rem;
+  gap: 0.75rem;
   width: 100%;
   transition: opacity 0.25s ease;
 }
@@ -118,14 +118,14 @@ watch([enrichedKpis, isLoading], ([newKpis, loading]) => {
 }
 
 .kpi-icon-bg {
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  font-size: 1.25rem;
+  font-size: 1rem;
 }
 
 .is-refreshing {

@@ -1,0 +1,35 @@
+https://console.cloud.google.com/bigquery?p=basedosdados&d=br_ibge_censo_2022&t=populacao_grupo_idade_sexo_raca&page=table&project=fifth-legacy-464613-e1&ws=!1m18!1m5!4m3!1sbasedosdados!2sbr_ibge_censo_2022!3spopulacao_grupo_idade_sexo_raca!23sLEGACY_URL_PARAM!1m5!4m3!1sbasedosdados!2sbr_ibge_censo_2022!3spopulacao_grupo_idade_uf!23sTREE_NODE_SELECTION!1m5!1m3!1sfifth-legacy-464613-e1!2sbquxjob_97c7d9d_19e4b87c525!3sUS!23sQUERY_RESOURCE
+
+
+
+SELECT
+    dados.id_municipio AS id_municipio,
+    diretorio_id_municipio.nome AS nome_municipio,
+    diretorio_id_municipio.nome_uf AS estado,
+    dados.grupo_idade AS grupo_idade,
+    dados.sexo AS sexo,
+    SUM(dados.populacao) AS populacao,
+    dados.ano
+FROM `basedosdados.br_ibge_censo_2022.populacao_grupo_idade_sexo_raca` AS dados
+LEFT JOIN (
+    SELECT DISTINCT id_municipio, nome, nome_uf 
+    FROM `basedosdados.br_bd_diretorios_brasil.municipio`
+) AS diretorio_id_municipio
+    ON dados.id_municipio = diretorio_id_municipio.id_municipio
+WHERE dados.ano = 2022
+GROUP BY 
+    dados.id_municipio, 
+    diretorio_id_municipio.nome, 
+    diretorio_id_municipio.nome_uf,
+    dados.grupo_idade, 
+    dados.ano,
+    dados.sexo
+ORDER BY 
+    diretorio_id_municipio.nome_uf,
+    diretorio_id_municipio.nome,
+    dados.grupo_idade,
+    dados.sexo;
+	
+	
+	
+	

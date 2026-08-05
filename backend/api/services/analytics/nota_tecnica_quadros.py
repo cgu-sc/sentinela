@@ -168,7 +168,7 @@ def _add_quadro_comparativo_regional(doc, regional_comp: dict[str, Any], cnpj_da
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Tabela {tabela_num} - Comparativo do percentual de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
+        f'Tabela {tabela_num} - Comparativo do percentual de registros de vendas sem comprovação da farmácia auditada em relação à Região de Saúde',
         color='334155',
         size=10,
         bold=True,
@@ -237,7 +237,7 @@ def _add_tabela_gtins_sem_comprovacao(doc, razao_social: str, cnpj_fmt: str, gti
         'Descrição',
         'Patologia associada',
         'Qtd de medicamentos sem comprovação',
-        'Valor de vendas sem comprovação (R$)',
+        'Valor dos registros de vendas sem comprovação (R$)',
         'Percentual sem comprovação',
     ]
     for idx, header in enumerate(headers):
@@ -310,7 +310,7 @@ def _add_quadro_evolucao_financeira(
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Tabela {tabela_num} - Evolução semestral do faturamento junto ao Ministério da Saúde e das “vendas sem comprovação” da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
+        f'Tabela {tabela_num} - Evolução semestral do faturamento junto ao Ministério da Saúde e dos registros de "vendas sem comprovação" da Farmácia {razao_social} (CNPJ {cnpj_fmt}), {periodo_semestres}.',
         color='334155',
         size=10,
         bold=True,
@@ -504,7 +504,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     _set_table_fixed_widths(tbl, [col_label_w, col_value_w])
 
     data_abertura = data.get('data_abertura')
-    abertura_txt = data_abertura.strftime('%d/%m/%Y') if data_abertura is not None else '—'
+    abertura_txt = data_abertura.strftime('%d.%m.%Y') if data_abertura is not None else '—'
 
     rows_to_add = [
         ('CNPJ', data.get('cnpj_fmt')),
@@ -548,7 +548,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
     p_fonte = doc.add_paragraph()
     _format_quadro_footnote(p_fonte)
     dt_extracao = data.get('data_processamento')
-    dt_extracao_txt = dt_extracao.strftime('%d/%m/%Y') if dt_extracao else date.today().strftime('%d/%m/%Y')
+    dt_extracao_txt = dt_extracao.strftime('%d.%m.%Y') if dt_extracao else date.today().strftime('%d.%m.%Y')
     _run(p_fonte, f"Fonte: Dados registrados no Cadastro Nacional de Pessoas Jurídicas da RFB, com atualização em {dt_extracao_txt}.", color='0F172A', size=10, italic=True)
 
     # ── Quadro Societário Atual ──────────────────────────────────────────
@@ -561,7 +561,7 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
             p_s = doc.add_paragraph(style='List Bullet')
             p_s.paragraph_format.left_indent = Inches(0.5)
             cpf_fmt = _format_cpf_cnpj(s.cpf_cnpj_socio)
-            entrada_fmt = s.data_entrada_sociedade.strftime('%d/%m/%Y') if s.data_entrada_sociedade else '—'
+            entrada_fmt = s.data_entrada_sociedade.strftime('%d.%m.%Y') if s.data_entrada_sociedade else '—'
             _run(p_s, f"{s.nome_socio}, CPF: {cpf_fmt} (entrada em {entrada_fmt})", color='0F172A', size=12)
     else:
         p_s = doc.add_paragraph(style='List Bullet')
@@ -578,6 +578,33 @@ def _add_quadro_identificacao(doc, data: dict, capital_social: Decimal, periodo_
         size=12,
         italic=True,
     )
+
+    # ── Figura 01: Vista do estabelecimento ────────────────────────────────
+    p_fig_title = doc.add_paragraph()
+    p_fig_title.paragraph_format.space_before = Pt(12)
+    p_fig_title.paragraph_format.space_after = Pt(2)
+    _run(p_fig_title, f"Figura 01 – Vista do estabelecimento constante no endereço indicado no CNPJ para a Farmácia {data.get('razao_social') or ''}.", color='0F172A', size=12, bold=True)
+
+    endereco_completo = data.get('endereco_completo') or ''
+    if endereco_completo:
+        p_fig_addr = doc.add_paragraph()
+        p_fig_addr.paragraph_format.space_after = Pt(2)
+        _run(p_fig_addr, f"({endereco_completo}).", color='0F172A', size=12)
+
+    p_fig_alerta = doc.add_paragraph()
+    p_fig_alerta.paragraph_format.space_before = Pt(4)
+    p_fig_alerta.paragraph_format.space_after = Pt(2)
+    _run(p_fig_alerta, 'ATENÇÃO: ', color='DC2626', size=12, bold=True, italic=True)
+    _run(p_fig_alerta, 'inserir aqui figura captada do Google Maps ou obtida em inspeção de campo.', color='DC2626', size=12, italic=True)
+
+    _MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+    hoje = date.today()
+    dt_hoje_txt = hoje.strftime('%d.%m.%Y')
+    mes_ano_txt = f'{_MESES_PT[hoje.month - 1]} de {hoje.year}'
+    p_fig_fonte = doc.add_paragraph()
+    p_fig_fonte.paragraph_format.space_before = Pt(2)
+    p_fig_fonte.paragraph_format.space_after = Pt(6)
+    _run(p_fig_fonte, f'Fonte: Google Maps (https://www.google.com/maps), consulta realizada em {dt_hoje_txt}, sendo a referência da foto de {mes_ano_txt}.', color='0F172A', size=10, italic=True)
 
     # Contexto trabalhista/eSocial é renderizado fora do quadro cadastral.
 
@@ -655,7 +682,7 @@ def _add_quadro_esocial_trabalhadores(doc, razao_social: str, cnpj_fmt: str, eso
     _format_quadro_title(p_title)
     _run(
         p_title,
-        f'Quadro 01-B - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
+        f'Quadro 02 - Vínculos trabalhistas identificados no eSocial para a Farmácia {razao_social} (CNPJ {cnpj_fmt})',
         color='334155',
         size=10,
         bold=True,

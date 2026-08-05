@@ -879,7 +879,10 @@ INNER JOIN dbo.dimfuncionalprogramaticaresumida prog
     AND pt.codprograma = prog.codprograma 
     AND pt.codacao = prog.codacao
     AND pt.numano = prog.numano
-WHERE prog.codacao IN ('20YR', '20YS'); 
+WHERE prog.codacao IN ('20YR', '20YS')
+GROUP BY 
+    fob.skordembancaria,
+    prog.codacao; 
 
 CREATE CLUSTERED INDEX IX_OB_Orcamento ON #Orcamento_Blindado (skordembancaria);
 
@@ -908,6 +911,7 @@ INNER JOIN dbo.dimordembancaria ob ON flc.skordembancaria = ob.skordembancaria
 INNER JOIN dbo.dimunidadegestora ug ON flc.skug = ug.skug
 LEFT JOIN #Orcamento_Blindado orc ON flc.skordembancaria = orc.skordembancaria 
 INNER JOIN temp_CGUSC.fp.dados_farmacia df ON fav.codfavorecido = df.cnpj -- <-- Alterado para a nova tabela
+WHERE ug.codug = '257001'
 
 GROUP BY 
     flc.skdattransacao,

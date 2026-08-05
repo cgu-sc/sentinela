@@ -1235,6 +1235,15 @@ def _build_repasses_anuais_context(
         }
 
     rows = [{"ano": int(r["ano"]), "valor": round(float(r["valor"]), 2)} for r in df.to_dicts()]
+
+    # Preenche anos do período de análise sem recebimentos com R$ 0,00
+    if data_inicio and data_fim:
+        anos_existentes = {r["ano"] for r in rows}
+        for ano in range(data_inicio.year, data_fim.year + 1):
+            if ano not in anos_existentes:
+                rows.append({"ano": ano, "valor": 0.0})
+        rows = sorted(rows, key=lambda r: r["ano"])
+
     total = round(sum(r["valor"] for r in rows), 2)
     anos = [r["ano"] for r in rows]
     periodo_fmt = str(anos[0]) if len(anos) == 1 else f"{anos[0]} a {anos[-1]}"

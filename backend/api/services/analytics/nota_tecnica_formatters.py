@@ -24,10 +24,10 @@ def _format_date_pt(value: Any) -> str:
     if not value:
         return "—"
     if hasattr(value, "strftime"):
-        return value.strftime("%d/%m/%Y")
+        return value.strftime("%d.%m.%Y")
     text = str(value)
     if len(text) >= 10 and text[4:5] == "-" and text[7:8] == "-":
-        return f"{text[8:10]}/{text[5:7]}/{text[:4]}"
+        return f"{text[8:10]}.{text[5:7]}.{text[:4]}"
     return text
 
 

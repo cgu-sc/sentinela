@@ -46,16 +46,16 @@ def _parse_period_date(value: Any) -> tuple[datetime, str] | None:
     if not value:
         return None
     if hasattr(value, "strftime"):
-        return datetime(value.year, value.month, value.day), value.strftime("%d/%m/%Y")
+        return datetime(value.year, value.month, value.day), value.strftime("%d.%m.%Y")
 
     text = str(value).strip()
     if not text or text in {"-", "—"}:
         return None
 
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+    for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d"):
         try:
             parsed = datetime.strptime(text[:10], fmt)
-            return parsed, parsed.strftime("%d/%m/%Y")
+            return parsed, parsed.strftime("%d.%m.%Y")
         except ValueError:
             continue
     return None

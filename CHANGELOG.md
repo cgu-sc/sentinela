@@ -5,6 +5,25 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.8] - 2026-08-05
+
+### Corrigido
+- **Parágrafo inicial da "Conclusão e Encaminhamento" exibia "recebeu do Ministério da Saúde R$ 0,00" para CNPJs filiais sem ordens bancárias diretas.** Quando o CNPJ analisado é uma filial da rede e não há registros de ordens bancárias do PFPB vinculados diretamente a ele no SIAFI (`repasses_ctx["sem_repasses"]`), o valor efetivamente repassado é R$ 0,00 mesmo havendo faturamento declarado via SAV — porque o Ministério frequentemente registra os repasses no CNPJ da matriz da rede, como já era ressalvado no subitem 6 do documento. O texto da Conclusão, porém, seguia afirmando que a farmácia "recebeu R$ 0,00, correspondentes a supostas dispensações", uma frase contraditória. Em `backend/api/services/analytics/nota_tecnica.py`, o parágrafo agora usa uma redação alternativa para esse cenário: informa que não foram identificadas ordens bancárias diretamente vinculadas ao CNPJ da filial, aponta a possibilidade de repasse ao CNPJ da matriz e ancora o restante do raciocínio (percentual de "vendas sem comprovação") no valor faturado declarado via SAV, em vez do valor de repasse. O texto para CNPJs com repasses identificados e para CNPJs matriz sem repasses permanece inalterado.
+
+## [1.6.7] - 2026-08-05
+
+### Corrigido
+- **Pontuação incorreta nos resumos de falecidos e de concentração de CRM na seção "Conclusão e Encaminhamento" da Nota Técnica.** Em `_build_resumo_falecidos` e em `_build_resumo_criticidade` (indicador `hhi_crm`), dois literais de string f-string adjacentes eram concatenados implicitamente pelo Python antes da chamada `.replace(',', '.')`, que deveria formatar apenas o separador de milhar do número seguinte. Isso fazia com que vírgulas do texto anterior (ex.: `"Registros, {período}, de"` e `"CRM {crm}, com"`) também fossem convertidas em ponto, gerando trechos como `"Registros. no período de julho de 2015 a dezembro de 2024. de 9 vendas..."`. Corrigido em `backend/api/services/analytics/nota_tecnica.py` pré-calculando o número formatado em uma variável separada antes de montar a string final, isolando o `.replace()` do texto ao redor.
+
+## [1.6.6] - 2026-07-09
+
+### Alterado
+- **Home reorganizada para priorizar o mapa de risco territorial.** O mapa passou a ocupar a coluna direita da área analítica, atravessando verticalmente as duas linhas de gráficos, enquanto os gráficos de evolução semestral, ranking de UFs e faixas de não comprovação ficaram agrupados na coluna esquerda.
+- **Proporção dos gráficos da Home ajustada.** A coluna esquerda agora divide a altura igualmente entre o gráfico de evolução semestral e a linha inferior com `Top 10 UFs` e `Estabelecimentos por faixa de não comprovação`.
+- **Cards superiores da Home refinados.** A altura mínima dos cards de Sistema, Integridade, Escopo monitorado e Produção foi ajustada para preservar o layout compacto após a reorganização dos gráficos.
+- **KPIs da tela de estabelecimentos compactados.** O espaçamento entre cards e o bloco visual dos ícones foram reduzidos para melhorar o encaixe dos KPIs em telas menores, mantendo todos os cards em uma única linha.
+
+
 ## [1.6.5] - 2026-07-02
 
 ### Alterado

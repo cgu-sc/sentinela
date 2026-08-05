@@ -107,3 +107,13 @@ roteiro_apresentacao_sentinela.md
 # Chave privada usada para assinar manifestos de atualizacao
 /secrets/
 sentinela.zip
+cloudflare/sentinela-auth-worker/README.md
+cloudflare/sentinela-auth-worker/wrangler.toml
+cloudflare/sentinela-auth-worker/.wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite
+cloudflare/sentinela-auth-worker/.wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite-shm
+cloudflare/sentinela-auth-worker/.wrangler/state/v3/cache/miniflare-CacheObject/metadata.sqlite-wal
+cloudflare/sentinela-auth-worker/.wrangler/state/v3/kv/miniflare-KVNamespaceObject/metadata.sqlite
+cloudflare/sentinela-auth-worker/.wrangler/state/v3/kv/miniflare-KVNamespaceObject/metadata.sqlite-shm
+cloudflare/sentinela-auth-worker/.wrangler/state/v3/kv/miniflare-KVNamespaceObject/metadata.sqlite-wal
+cloudflare/sentinela-auth-worker/src/index.js
+docs/updates/manifest.sig

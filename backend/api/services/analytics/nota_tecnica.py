@@ -433,11 +433,12 @@ def _add_resumo_criticidades_conclusao(doc, resumos: list[str]):
 
 def _build_resumo_falecidos(num: str, falecidos_comp: dict[str, Any]) -> str:
     periodo_txt = str(falecidos_comp.get("periodo_desc") or "").strip().rstrip(".")
+    total_autorizacoes_fmt = f'{falecidos_comp["total_autorizacoes"]:,}'.replace(',', '.')
+    cpfs_distintos_fmt = f'{falecidos_comp["cpfs_distintos"]:,}'.replace(',', '.')
     return (
-        f'[Subitem {num}]: Registros, {periodo_txt}, de '
-        f'{falecidos_comp["total_autorizacoes"]:,}'.replace(',', '.')
+        f'[Subitem {num}]: Registros, {periodo_txt}, de {total_autorizacoes_fmt}'
         + ' vendas de medicamentos em data igual e/ou posterior ao registro de morte de '
-        + f'{falecidos_comp["cpfs_distintos"]:,}'.replace(',', '.')
+        + f'{cpfs_distintos_fmt}'
         + ' beneficiários. Estas vendas representaram um valor total de '
         + f'R$ {_format_decimal_pt(falecidos_comp["valor_total"], 2)};'
     )
@@ -518,9 +519,9 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
     if key == "hhi_crm":
         principal = comp.get("principal") or {}
         crm_ident = str(principal.get("id_medico") or "não informado")
+        autorizacoes_fmt = f'{comp.get("principal_autorizacoes") or 0:,}'.replace(',', '.')
         return (
-            f'[Subitem {num}]: Concentração atípica de registros vinculados ao CRM {crm_ident}, com '
-            f'{comp.get("principal_autorizacoes") or 0:,}'.replace(',', '.')
+            f'[Subitem {num}]: Concentração atípica de registros vinculados ao CRM {crm_ident}, com {autorizacoes_fmt}'
             + f' autorizações e valor associado de R$ {_format_decimal_pt(comp.get("principal_valor") or 0.0, 2)}, '
             + f'equivalente a {_format_decimal_pt(comp.get("pct_valor") or 0.0, 2)}% do valor faturado pela farmácia junto ao PFPB no período;'
         )
@@ -1781,17 +1782,32 @@ def generate_nota_tecnica(
     perc_sem_comp_conclusao = float(cnpj_data.get('percValSemComp') or 0.0)
     total_repasses_conclusao = float(repasses_ctx.get('total') or 0.0)
     periodo_conclusao_txt = periodo_txt.replace('/', '.')
+    is_matriz_conclusao = bool(cadastro.get('is_matriz'))
+    sem_repasses_filial_conclusao = bool(repasses_ctx.get('sem_repasses')) and not is_matriz_conclusao
 
     p_conclusao = doc.add_paragraph()
-    _run(p_conclusao, f'Conforme detalhado no subitem 6 desta Nota Técnica, a Farmácia {razao_social} recebeu do Ministério da Saúde, no período de ', color='0F172A', size=12)
-    _run(p_conclusao, periodo_conclusao_txt, color='334155', size=12, underline=True)
-    _run(p_conclusao, ', ', color='0F172A', size=12)
-    _run(p_conclusao, f'R$ {_format_decimal_pt(total_repasses_conclusao, 2)}', color='334155', size=12, underline=True)
-    _run(p_conclusao, ', correspondentes a supostas dispensações de itens de medicamentos constantes do rol do Programa Farmácia Popular do Brasil. Nesse período, foi identificado o indicador de registros de “vendas sem comprovação” (tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque para suportá-la) no valor total de ', color='0F172A', size=12)
-    _run(p_conclusao, f'R$ {_format_decimal_pt(val_sem_comp_conclusao, 2)}', color='334155', size=12, underline=True)
-    _run(p_conclusao, ' (', color='0F172A', size=12)
-    _run(p_conclusao, f'{_format_decimal_pt(perc_sem_comp_conclusao, 2)}%', color='334155', size=12, underline=True)
-    _run(p_conclusao, f' do valor total faturado pelo estabelecimento junto ao Ministério, de R$ {_format_decimal_pt(total_mov_conclusao, 2)}).', color='0F172A', size=12)
+    if sem_repasses_filial_conclusao:
+        _run(p_conclusao, 'Conforme detalhado no subitem 6 desta Nota Técnica, não foram identificadas ordens bancárias do Ministério da Saúde emitidas diretamente em favor do CNPJ ', color='0F172A', size=12)
+        _run(p_conclusao, cnpj_fmt, color='334155', size=12, underline=True)
+        _run(p_conclusao, f' da Farmácia {razao_social}, filial da rede, no período de ', color='0F172A', size=12)
+        _run(p_conclusao, periodo_conclusao_txt, color='334155', size=12, underline=True)
+        _run(p_conclusao, ', sendo possível que os repasses referentes às dispensações abaixo tenham sido efetuados ao CNPJ da matriz. Nesse período, a Farmácia declarou ao Ministério, por meio do Sistema Autorizador de Vendas (SAV), faturamento de ', color='0F172A', size=12)
+        _run(p_conclusao, f'R$ {_format_decimal_pt(total_mov_conclusao, 2)}', color='334155', size=12, underline=True)
+        _run(p_conclusao, ', correspondente a supostas dispensações de itens de medicamentos constantes do rol do Programa Farmácia Popular do Brasil. Desse total, foi identificado o indicador de registros de “vendas sem comprovação” (tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque para suportá-la) no valor de ', color='0F172A', size=12)
+        _run(p_conclusao, f'R$ {_format_decimal_pt(val_sem_comp_conclusao, 2)}', color='334155', size=12, underline=True)
+        _run(p_conclusao, ' (', color='0F172A', size=12)
+        _run(p_conclusao, f'{_format_decimal_pt(perc_sem_comp_conclusao, 2)}%', color='334155', size=12, underline=True)
+        _run(p_conclusao, ' do valor total faturado).', color='0F172A', size=12)
+    else:
+        _run(p_conclusao, f'Conforme detalhado no subitem 6 desta Nota Técnica, a Farmácia {razao_social} recebeu do Ministério da Saúde, no período de ', color='0F172A', size=12)
+        _run(p_conclusao, periodo_conclusao_txt, color='334155', size=12, underline=True)
+        _run(p_conclusao, ', ', color='0F172A', size=12)
+        _run(p_conclusao, f'R$ {_format_decimal_pt(total_repasses_conclusao, 2)}', color='334155', size=12, underline=True)
+        _run(p_conclusao, ', correspondentes a supostas dispensações de itens de medicamentos constantes do rol do Programa Farmácia Popular do Brasil. Nesse período, foi identificado o indicador de registros de “vendas sem comprovação” (tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque para suportá-la) no valor total de ', color='0F172A', size=12)
+        _run(p_conclusao, f'R$ {_format_decimal_pt(val_sem_comp_conclusao, 2)}', color='334155', size=12, underline=True)
+        _run(p_conclusao, ' (', color='0F172A', size=12)
+        _run(p_conclusao, f'{_format_decimal_pt(perc_sem_comp_conclusao, 2)}%', color='334155', size=12, underline=True)
+        _run(p_conclusao, f' do valor total faturado pelo estabelecimento junto ao Ministério, de R$ {_format_decimal_pt(total_mov_conclusao, 2)}).', color='0F172A', size=12)
 
     _add_resumo_criticidades_conclusao(doc, resumos_criticidades)
 

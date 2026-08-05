@@ -519,13 +519,15 @@ function handleRefreshCheck(event) {
       </div>
     </section>
 
-    <div class="charts-row">
-      <SemesterProductionChart />
+    <div class="dashboard-analytics-grid">
+      <div class="analytics-main-column">
+        <SemesterProductionChart />
+        <div class="analytics-insights-row">
+          <TopUfRiskChart />
+          <RiskChart />
+        </div>
+      </div>
       <BrazilMap />
-    </div>
-    <div class="insight-charts-row">
-      <TopUfRiskChart />
-      <RiskChart />
     </div>
   </div>
 </template>
@@ -576,7 +578,7 @@ function handleRefreshCheck(event) {
   border-radius: 8px;
   color: inherit;
   overflow: hidden;
-  min-height: 16rem;
+  min-height: 14rem;
 }
 
 .priority-card::before {
@@ -867,21 +869,29 @@ function handleRefreshCheck(event) {
   overflow: hidden;
 }
 
-.charts-row {
+.dashboard-analytics-grid {
   display: grid;
-  grid-template-columns: 12fr 8fr;
+  grid-template-columns: minmax(0, 7fr) minmax(20rem, 3fr);
   gap: 1rem;
-  flex: 1.12 1 0;
+  flex: 1 1 0;
   min-height: 0;
 }
 
-.insight-charts-row {
+.analytics-main-column {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 1rem;
+  min-height: 0;
+  min-width: 0;
+}
+
+.analytics-insights-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   align-items: stretch;
-  flex: 0.88 1 0;
   min-height: 0;
+  min-width: 0;
 }
 
 /* ── Card Sistema dedicado ── */
@@ -1461,10 +1471,14 @@ function handleRefreshCheck(event) {
     overflow: visible;
   }
 
-  .charts-row,
-  .insight-charts-row {
+  .dashboard-analytics-grid,
+  .analytics-insights-row {
     grid-template-columns: 1fr;
     flex: none;
+  }
+
+  .analytics-main-column {
+    grid-template-rows: auto;
   }
 }
 

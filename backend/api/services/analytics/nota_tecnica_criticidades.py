@@ -46,20 +46,20 @@ from .nota_tecnica_formatters import _format_date_month_year_long_pt, _format_de
 # ── Mapeamento da Seção 5 ──────────────────────────────────────────────────
 
 _SECAO5_MAP = [
-    ('falecidos',                    '5.5',  'Vendas de medicamentos para pessoas falecidas'),
-    ('incompatibilidade_patologica', '5.6',  'Vendas de medicamentos com incompatibilidade patológica'),
-    ('teto',                         '5.7',  'Vendas no “teto máximo” para clientes da Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('polimedicamento',              '5.8',  'Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
+    ('falecidos',                    '5.5',  'Registros de vendas de medicamentos para pessoas falecidas'),
+    ('incompatibilidade_patologica', '5.6',  'Registros de vendas de medicamentos com incompatibilidade patológica'),
+    ('teto',                         '5.7',  'Registros de vendas no “teto máximo” para clientes da Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
+    ('polimedicamento',              '5.8',  'Registro de vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('ticket_medio',                 '5.10', 'Valor do “ticket médio” dos medicamentos vendidos pela Farmácia {farmacia} muito superior ao dos estabelecimentos de sua região'),
     ('receita_paciente',             '5.11', 'Faturamento médio mensal por cliente, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
     ('per_capita',                   '5.12', 'Faturamento mensal per capita, obtido pela Farmácia {farmacia}, muito superior ao dos estabelecimentos de sua região'),
-    ('alto_custo',                   '5.13', 'Vendas de medicamentos de alto custo realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('vendas_rapidas',               '5.14', 'Vendas de medicamentos em tempo inferior a 60 segundos'),
-    ('recorrencia_sistemica',        '5.15', 'Vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('dias_pico',                    '5.16', 'Vendas de medicamentos em dias de pico realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
-    ('dispersao_geografica',         '5.17', 'Vendas para pessoas residentes em outros Estados realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
+    ('alto_custo',                   '5.13', 'Registros de vendas de medicamentos de alto custo realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
+    ('vendas_rapidas',               '5.14', 'Registros de vendas de medicamentos em tempo inferior a 60 segundos'),
+    ('recorrencia_sistemica',        '5.15', 'Registros de vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
+    ('dias_pico',                    '5.16', 'Registros de vendas de medicamentos em dias de pico realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
+    ('dispersao_geografica',         '5.17', 'Registros de vendas para pessoas residentes em outros Estados realizadas pela Farmácia {farmacia} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região'),
     ('hhi_crm',                      '5.19', 'Concentração atípica de registros do mesmo médico (CRM) no Sistema Autorizador de Vendas do PFPB'),
-    ('crms_irregulares',             '5.21', 'Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
+    ('crms_irregulares',             '5.21', 'Registros de vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs'),
 ]
 _SECAO5_ORDER = {key: idx for idx, (key, _, _) in enumerate(_SECAO5_MAP)}
 _FORCAR_TODOS_CRITICOS_NOTA_TECNICA = False
@@ -1071,7 +1071,7 @@ def _add_falecidos_criticidade_text(
     valor_total = falecidos_comp["valor_total"]
     periodo_desc = falecidos_comp["periodo_desc"]
 
-    heading = doc.add_heading(f'{num} Vendas de medicamentos para pessoas falecidas', level=2)
+    heading = doc.add_heading(f'{num} Registros de vendas de medicamentos para pessoas falecidas', level=2)
     if bookmark_name:
         _add_bookmark(heading, bookmark_name)
     p1 = doc.add_paragraph()
@@ -1100,7 +1100,7 @@ def _add_falecidos_criticidade_text(
     p2 = doc.add_paragraph()
     _run(
         p2,
-        f'O ANEXO {anexo_num} desta Nota Técnica traz o detalhamento de todas as vendas realizadas pela Farmácia {razao_social}, '
+        f'O ANEXO {anexo_num} desta Nota Técnica traz o detalhamento de todos os registros de vendas realizadas pela Farmácia {razao_social}, '
         f'{periodo_desc}, na data do óbito da pessoa e/ou posteriormente a essa data.',
         color='0F172A',
         size=12,
@@ -1180,6 +1180,7 @@ def _build_incompatibilidade_patologica_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_clinico"),
+        "valor_suspeito": as_float("clinico_valor_suspeito"),
         "mediana_regiao": as_float("med_clinico_reg"),
         "mediana_uf": as_float("med_clinico_uf"),
         "mediana_brasil": as_float("med_clinico_br"),
@@ -1661,11 +1662,13 @@ def _add_incompatibilidade_patologica_text(
     """Adiciona texto analitico de incompatibilidade patologica e ranking interno."""
     periodo_desc = clinico_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(clinico_comp["percentual"], 2)
+    valor_suspeito = clinico_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(clinico_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(clinico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(clinico_comp["multiplicador_brasil"], 2)
     ranking_patologias = clinico_comp.get("ranking_patologias") or []
-    heading = doc.add_heading(f'{num} Vendas de medicamentos com incompatibilidade patológica', level=2)
+    heading = doc.add_heading(f'{num} Registros de vendas de medicamentos com incompatibilidade patológica', level=2)
     if bookmark_name:
         _add_bookmark(heading, bookmark_name)
 
@@ -1684,8 +1687,10 @@ def _add_incompatibilidade_patologica_text(
     )
 
     p2 = doc.add_paragraph()
-    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se, {periodo_desc}, percentual atípico de vendas desses medicamentos, correspondente a ', color='0F172A', size=12)
+    _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se, {periodo_desc}, percentual atípico de registros de vendas desses medicamentos, correspondente a ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
     _run(p2, ' das vendas monitoradas pelo indicador. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' a mediana dos percentuais de vendas com essa mesma criticidade realizadas pelas farmácias de sua região. ', color='0F172A', size=12)
@@ -1848,6 +1853,7 @@ def _build_teto_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_teto"),
+        "valor_suspeito": as_float("teto_valor"),
         "mediana_regiao": as_float("med_teto_reg"),
         "mediana_uf": as_float("med_teto_uf"),
         "mediana_brasil": as_float("med_teto_br"),
@@ -1861,12 +1867,14 @@ def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any], 
     """Adiciona texto analitico de vendas no teto maximo usando a matriz atual."""
     periodo_desc = teto_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(teto_comp["percentual"], 2)
+    valor_suspeito = teto_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(teto_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(teto_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(teto_comp["multiplicador_brasil"], 2)
 
     heading = doc.add_heading(
-        f'{num} Vendas no “teto máximo” para clientes da Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        f'{num} Registros de vendas no “teto máximo” para clientes da Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:
@@ -1895,7 +1903,9 @@ def _add_teto_text(doc, num: str, razao_social: str, teto_comp: dict[str, Any], 
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas no “teto máximo”. Tal percentual corresponde a ', color='0F172A', size=12)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
+    _run(p2, ' dos registros de vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas no “teto máximo”. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' o percentual mediano de vendas com essa configuração das farmácias de sua região. ', color='0F172A', size=12)
     _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
@@ -1934,6 +1944,7 @@ def _build_polimedicamento_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_polimedicamento"),
+        "valor_suspeito": as_float("polimedicamento_valor"),
         "mediana_regiao": as_float("med_polimedicamento_reg"),
         "mediana_uf": as_float("med_polimedicamento_uf"),
         "mediana_brasil": as_float("med_polimedicamento_br"),
@@ -1947,12 +1958,14 @@ def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_
     """Adiciona texto analitico de cupons com quatro ou mais medicamentos usando a matriz atual."""
     periodo_desc = polimedicamento_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(polimedicamento_comp["percentual"], 2)
+    valor_suspeito = polimedicamento_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(polimedicamento_comp["multiplicador_brasil"], 2)
 
     heading = doc.add_heading(
-        f'{num} Vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        f'{num} Registro de vendas de quatro ou mais itens de medicamentos por cupom realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:
@@ -1975,7 +1988,9 @@ def _add_polimedicamento_text(doc, num: str, razao_social: str, polimedicamento_
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a cupons de venda contendo quatro ou mais medicamentos. Tal percentual corresponde a ', color='0F172A', size=12)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
+    _run(p2, ' dos registros de vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a cupons de venda contendo quatro ou mais medicamentos. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' o percentual mediano de vendas com o mesmo perfil das farmácias de sua região. ', color='0F172A', size=12)
     _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
@@ -2254,6 +2269,7 @@ def _build_alto_custo_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_alto_custo"),
+        "valor_suspeito": as_float("alto_custo_valor"),
         "mediana_regiao": as_float("med_alto_custo_reg"),
         "mediana_uf": as_float("med_alto_custo_uf"),
         "mediana_brasil": as_float("med_alto_custo_br"),
@@ -2267,12 +2283,14 @@ def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict
     """Adiciona texto analitico de medicamentos de alto custo usando a matriz atual."""
     periodo_desc = alto_custo_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(alto_custo_comp["percentual"], 2)
+    valor_suspeito = alto_custo_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(alto_custo_comp["multiplicador_brasil"], 2)
 
     heading = doc.add_heading(
-        f'{num} Vendas de medicamentos de alto custo realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        f'{num} Registros de vendas de medicamentos de alto custo realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:
@@ -2295,7 +2313,9 @@ def _add_alto_custo_text(doc, num: str, razao_social: str, alto_custo_comp: dict
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a medicamentos de alto custo. Tal percentual corresponde a ', color='0F172A', size=12)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
+    _run(p2, ' dos registros de vendas de medicamentos por ela efetivadas no âmbito do PFPB correspondem a medicamentos de alto custo. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' o percentual mediano de vendas com o mesmo perfil das farmácias de sua região. ', color='0F172A', size=12)
     _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
@@ -2334,6 +2354,7 @@ def _build_vendas_rapidas_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_vendas_rapidas"),
+        "valor_suspeito": as_float("vendas_rapidas_valor"),
         "mediana_regiao": as_float("med_vendas_rapidas_reg"),
         "mediana_uf": as_float("med_vendas_rapidas_uf"),
         "mediana_brasil": as_float("med_vendas_rapidas_br"),
@@ -2347,11 +2368,13 @@ def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_co
     """Adiciona texto analitico de vendas em menos de 60 segundos usando a matriz atual."""
     periodo_desc = vendas_rapidas_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(vendas_rapidas_comp["percentual"], 2)
+    valor_suspeito = vendas_rapidas_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(vendas_rapidas_comp["multiplicador_brasil"], 2)
 
-    heading = doc.add_heading(f'{num} Vendas de medicamentos em tempo inferior a 60 segundos', level=2)
+    heading = doc.add_heading(f'{num} Registros de vendas de medicamentos em tempo inferior a 60 segundos', level=2)
     if bookmark_name:
         _add_bookmark(heading, bookmark_name)
 
@@ -2379,7 +2402,9 @@ def _add_vendas_rapidas_text(doc, num: str, razao_social: str, vendas_rapidas_co
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em tempo inferior a 60 segundos. Tal percentual corresponde a ', color='0F172A', size=12)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
+    _run(p2, ' dos registros de vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em tempo inferior a 60 segundos. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=12)
     _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
@@ -2418,6 +2443,7 @@ def _build_recorrencia_sistemica_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_recorrencia_sistemica"),
+        "valor_suspeito": as_float("recorrencia_valor_sistemico"),
         "mediana_regiao": as_float("med_recorrencia_sistemica_reg"),
         "mediana_uf": as_float("med_recorrencia_sistemica_uf"),
         "mediana_brasil": as_float("med_recorrencia_sistemica_br"),
@@ -2431,12 +2457,14 @@ def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrenci
     """Adiciona texto analitico de recorrencia sistemica de 30 dias usando a matriz atual."""
     periodo_desc = recorrencia_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(recorrencia_comp["percentual"], 2)
+    valor_suspeito = recorrencia_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(recorrencia_comp["multiplicador_brasil"], 2)
 
     heading = doc.add_heading(
-        f'{num} Vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        f'{num} Registros de vendas de medicamentos com precisão absoluta de 30 dias realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:
@@ -2459,7 +2487,9 @@ def _add_recorrencia_sistemica_text(doc, num: str, razao_social: str, recorrenci
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas com prazos precisos de 30 dias. Tal percentual corresponde a ', color='0F172A', size=12)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
+    _run(p2, ' dos registros de vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas com prazos precisos de 30 dias. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=12)
     _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
@@ -2498,6 +2528,7 @@ def _build_dias_pico_context(
     return {
         "periodo_desc": periodo_desc,
         "percentual": as_float("pct_pico"),
+        "valor_suspeito": as_float("pico_valor_top3_dias"),
         "mediana_regiao": as_float("med_pico_reg"),
         "mediana_uf": as_float("med_pico_uf"),
         "mediana_brasil": as_float("med_pico_br"),
@@ -2511,12 +2542,14 @@ def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[s
     """Adiciona texto analitico de vendas em dias de pico usando a matriz atual."""
     periodo_desc = dias_pico_comp["periodo_desc"]
     percentual_fmt = _format_decimal_pt(dias_pico_comp["percentual"], 2)
+    valor_suspeito = dias_pico_comp.get("valor_suspeito") or 0.0
+    valor_suspeito_fmt = _format_decimal_pt(valor_suspeito, 2)
     multiplicador_reg_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_regiao"], 2)
     multiplicador_uf_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_uf"], 2)
     multiplicador_br_fmt = _format_decimal_pt(dias_pico_comp["multiplicador_brasil"], 2)
 
     heading = doc.add_heading(
-        f'{num} Vendas de medicamentos em dias de pico realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        f'{num} Registros de vendas de medicamentos em dias de pico realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:
@@ -2539,7 +2572,9 @@ def _add_dias_pico_text(doc, num: str, razao_social: str, dias_pico_comp: dict[s
     p2 = doc.add_paragraph()
     _run(p2, f'Em relação à Farmácia {razao_social}, verificou-se que, {periodo_desc}, ', color='0F172A', size=12)
     _run(p2, f'{percentual_fmt}%', color='334155', size=12, underline=True)
-    _run(p2, ' das vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em dias de pico. Tal percentual corresponde a ', color='0F172A', size=12)
+    if valor_suspeito > 0:
+        _run(p2, f' (R$ {valor_suspeito_fmt})', color='334155', size=12, underline=True)
+    _run(p2, ' dos registros de vendas de medicamentos por ela efetivadas no âmbito do PFPB foram realizadas em dias de pico. Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p2, f'{multiplicador_reg_fmt} {_vez_ou_vezes(multiplicador_reg_fmt)}', color='334155', size=12, underline=True)
     _run(p2, ' o percentual mediano de vendas com essa mesma criticidade das farmácias de sua região. ', color='0F172A', size=12)
     _run(p2, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
@@ -2795,7 +2830,7 @@ def _add_dispersao_geografica_text(doc, num: str, razao_social: str, dispersao_c
     total_valor_outra = _format_brl_pt(dispersao_comp["total_valor_outra_uf"])
 
     heading = doc.add_heading(
-        f'{num} Vendas de medicamentos para pessoas residentes em outros Estados realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
+        f'{num} Registros de vendas para pessoas residentes em outros Estados realizadas pela Farmácia {razao_social} com percentual sobre suas vendas totais muito superior ao dos estabelecimentos de sua região',
         level=2,
     )
     if bookmark_name:

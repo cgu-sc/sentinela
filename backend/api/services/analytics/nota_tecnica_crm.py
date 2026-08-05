@@ -126,15 +126,15 @@ def _format_date_br(value: Any) -> str:
     if value is None:
         return "Não localizada"
     if isinstance(value, datetime):
-        return value.strftime("%d/%m/%Y")
+        return value.strftime("%d.%m.%Y")
     if isinstance(value, date):
-        return value.strftime("%d/%m/%Y")
+        return value.strftime("%d.%m.%Y")
     text = str(value).strip()
     if not text:
         return "Não localizada"
-    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y"):
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d.%m.%Y", "%d/%m/%Y"):
         try:
-            return datetime.strptime(text[:19], fmt).strftime("%d/%m/%Y")
+            return datetime.strptime(text[:19], fmt).strftime("%d.%m.%Y")
         except ValueError:
             continue
     return text
@@ -1387,26 +1387,18 @@ def _add_crms_multiplos_complementar_text(
         _format_crm_table_title(title)
         _run(title, f"Tabela {tabela_num} - Principais episódios de autorizações concentradas envolvendo múltiplos CRMs.", color="334155", size=10, bold=True)
 
-        headers = ["Início", "Fim", "CRMs", "CRM mais usado", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
+        headers = ["Início", "Fim", "CRMs", "Autorizações", "Intervalo", "Taxa/hora", "Valor"]
         table = doc.add_table(rows=1, cols=len(headers))
-        widths = [Inches(1.03), Inches(1.03), Inches(0.50), Inches(1.03), Inches(0.90), Inches(0.68), Inches(0.93), Inches(1.20)]
+        widths = [Inches(1.18), Inches(1.18), Inches(0.60), Inches(1.05), Inches(0.80), Inches(1.05), Inches(1.44)]
         _crm_table_header(table, headers, widths, size=9.0)
         for evento in eventos:
             cells = table.add_row().cells
-            crm_principal = str(evento.get("crm_principal") or "N/d")
-            crm_principal_aut = _as_int(evento.get("crm_principal_autorizacoes"))
-            crm_principal_txt = (
-                f"{crm_principal} ({crm_principal_aut})"
-                if crm_principal_aut > 0 and crm_principal != "N/d"
-                else crm_principal
-            )
             dt_inicio = evento.get("dt_ini_hora") or evento.get("dt")
             dt_fim = evento.get("dt_fim_hora") or evento.get("dt")
             _write_date_cell_with_weekend_marker(cells[0], dt_inicio, _format_datetime_br_minute)
             _write_date_cell_with_weekend_marker(cells[1], dt_fim, _format_datetime_br_minute)
             values = [
                 str(_as_int(evento.get("nu_crms"))),
-                crm_principal_txt,
                 str(_as_int(evento.get("nu_prescricoes"))),
                 _format_janela_minutos(evento.get("nu_minutos")),
                 f'{_format_decimal_pt(_as_float(evento.get("taxa_hora")), 1)}/h',
@@ -1415,7 +1407,7 @@ def _add_crms_multiplos_complementar_text(
                 else "N/d",
             ]
             for col_idx, value in enumerate(values, start=2):
-                align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (2, 4, 6, 7) else WD_ALIGN_PARAGRAPH.CENTER
+                align = WD_ALIGN_PARAGRAPH.RIGHT if col_idx in (3, 5, 6) else WD_ALIGN_PARAGRAPH.CENTER
                 _write_cell(cells[col_idx], value, size=9.0, align=align)
 
         fonte = doc.add_paragraph()
@@ -1892,7 +1884,7 @@ def _add_crms_irregulares_text(
     multiplicador_uf_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_uf"]))
     multiplicador_br_unidade = _vez_ou_vezes(_as_float(irregulares_comp["multiplicador_brasil"]))
 
-    heading = doc.add_heading(f"{num} Vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs", level=2)
+    heading = doc.add_heading(f"{num} Registros de vendas de medicamentos prescritos por médicos com irregularidade em seus CRMs", level=2)
     if bookmark_name:
         _add_bookmark(heading, bookmark_name)
 

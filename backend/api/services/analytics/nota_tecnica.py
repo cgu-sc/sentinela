@@ -432,8 +432,9 @@ def _add_resumo_criticidades_conclusao(doc, resumos: list[str]):
 
 
 def _build_resumo_falecidos(num: str, falecidos_comp: dict[str, Any]) -> str:
+    periodo_txt = str(falecidos_comp.get("periodo_desc") or "").strip().rstrip(".")
     return (
-        f'[Subitem {num}]: Registros, {falecidos_comp["periodo_desc"]}, de '
+        f'[Subitem {num}]: Registros, {periodo_txt}, de '
         f'{falecidos_comp["total_autorizacoes"]:,}'.replace(',', '.')
         + ' vendas de medicamentos em data igual e/ou posterior ao registro de morte de '
         + f'{falecidos_comp["cpfs_distintos"]:,}'.replace(',', '.')
@@ -450,7 +451,7 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
         ranking_patologias = comp.get("ranking_patologias")
         if not ranking_patologias:
             return (
-                f'[Subitem {num}]: Vendas de medicamentos com incompatibilidade patológica com percentual de '
+                f'[Subitem {num}]: Registros de vendas de medicamentos com incompatibilidade patológica com percentual de '
                 f'{_format_decimal_pt(percentual, 2)}% das vendas monitoradas pelo indicador, superior em '
                 f'{_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região;'
             )
@@ -467,20 +468,20 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
                 ) from exc
 
         return (
-            f'[Subitem {num}]: Vendas de medicamentos com incompatibilidade patológica com percentual de '
+            f'[Subitem {num}]: Registros de vendas de medicamentos com incompatibilidade patológica com percentual de '
             f'{_format_decimal_pt(percentual, 2)}% das vendas monitoradas pelo indicador, superior em '
             f'{_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região. '
-            f'Estas vendas representaram um valor total identificado de R$ {_format_decimal_pt(valor_identificado, 2)};'
+            f'Estes registros de vendas representaram um valor total identificado de R$ {_format_decimal_pt(valor_identificado, 2)};'
         )
 
     percentuais_templates = {
-        "teto": "Vendas correspondentes ao limite máximo de retirada mensal de medicamento por cliente",
-        "polimedicamento": "Vendas correspondentes a quatro ou mais itens de medicamentos por cupom",
-        "alto_custo": "Vendas de medicamentos de alto custo",
-        "vendas_rapidas": "Vendas de medicamentos em tempo inferior a 60 segundos",
-        "recorrencia_sistemica": "Vendas de medicamentos com precisão absoluta de 30 dias",
-        "dias_pico": "Vendas de medicamentos em dias de pico",
-        "dispersao_geografica": "Vendas para pessoas residentes em outros Estados",
+        "teto": "Registros de vendas correspondentes ao limite máximo de retirada mensal de medicamento por cliente",
+        "polimedicamento": "Registros de vendas correspondentes a quatro ou mais itens de medicamentos por cupom",
+        "alto_custo": "Registros de vendas de medicamentos de alto custo",
+        "vendas_rapidas": "Registros de vendas de medicamentos em tempo inferior a 60 segundos",
+        "recorrencia_sistemica": "Registros de vendas de medicamentos com precisão absoluta de 30 dias",
+        "dias_pico": "Registros de vendas de medicamentos em dias de pico",
+        "dispersao_geografica": "Registros de vendas para pessoas residentes em outros Estados",
     }
     if key == "dispersao_geografica":
         percentual_financeiro = float(comp.get("percentual_financeiro_outra_uf") or 0.0)
@@ -488,7 +489,7 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
         return (
             f'[Subitem {num}]: {percentuais_templates[key]} com percentual financeiro de '
             f'{_format_decimal_pt(percentual_financeiro, 2)}% do valor autorizado total da farmácia no período. '
-            f'Estas vendas representaram valor autorizado de R$ {_format_decimal_pt(valor_outra_uf, 2)};'
+            f'Estes registros de vendas representaram valor autorizado de R$ {_format_decimal_pt(valor_outra_uf, 2)};'
         )
     if key in percentuais_templates:
         valor_estimado = _valor_estimado_por_percentual(total_mov, percentual)
@@ -496,7 +497,7 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
             f'[Subitem {num}]: {percentuais_templates[key]} com percentual de '
             f'{_format_decimal_pt(percentual, 2)}% de suas vendas totais, superior em '
             f'{_format_decimal_pt(multiplicador, 2)} vezes à mediana correspondente aos estabelecimentos de sua região. '
-            f'Estas vendas representaram um valor total estimado de R$ {_format_decimal_pt(valor_estimado, 2)};'
+            f'Estes registros de vendas representaram um valor total estimado de R$ {_format_decimal_pt(valor_estimado, 2)};'
         )
 
     if key == "ticket_medio":
@@ -521,13 +522,13 @@ def _build_resumo_criticidade(num: str, key: str, comp: dict[str, Any], total_mo
             f'[Subitem {num}]: Concentração atípica de registros vinculados ao CRM {crm_ident}, com '
             f'{comp.get("principal_autorizacoes") or 0:,}'.replace(',', '.')
             + f' autorizações e valor associado de R$ {_format_decimal_pt(comp.get("principal_valor") or 0.0, 2)}, '
-            + f'equivalente a {_format_decimal_pt(comp.get("pct_valor") or 0.0, 2)}% do valor pago pelo PFPB à farmácia no período;'
+            + f'equivalente a {_format_decimal_pt(comp.get("pct_valor") or 0.0, 2)}% do valor faturado pela farmácia junto ao PFPB no período;'
         )
     if key == "crms_irregulares":
         return (
-            f'[Subitem {num}]: Vendas de medicamentos prescritos por médicos com CRMs irregulares ou inválidos, equivalentes a '
+            f'[Subitem {num}]: Registros de vendas de medicamentos prescritos por médicos com CRMs irregulares ou inválidos, equivalentes a '
             f'{_format_decimal_pt(comp.get("pct_irregular") or 0.0, 2)}% das vendas totais. '
-            f'Estas vendas representaram um valor total de R$ {_format_decimal_pt(comp.get("valor_irregular") or 0.0, 2)};'
+            f'Estes registros de vendas representaram um valor total de R$ {_format_decimal_pt(comp.get("valor_irregular") or 0.0, 2)};'
         )
     return None
 
@@ -602,7 +603,7 @@ def _build_sumario(
         ('5.', f'SOBRE A FARMÁCIA {razao_social} (CNPJ {cnpj_fmt})', '6'),
         ('  5.1', f'Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', '6'),
         ('  5.2', 'Vínculos Trabalhistas', '6'),
-        ('6.', f'SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', '7'),
+        ('6.', f'SOBRE REGISTROS DE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', '7'),
         ('  6.1', f'Evolução das transferências do Programa Farmácia Popular do Brasil para a Farmácia {razao_social} e das possíveis “vendas sem comprovação” por ela realizadas', '7'),
         ('7.', f'SOBRE OUTRAS CRITICIDADES RELATIVAS À FARMÁCIA {razao_social}, NO ÂMBITO DO PFPB', '8'),
     ]
@@ -691,11 +692,11 @@ def generate_nota_tecnica(
     risco_hex, risco_label = _risk_color(classificacao, score)
 
     if data_inicio is not None and data_fim is not None:
-        periodo_txt = f'{data_inicio.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}'
+        periodo_txt = f'{data_inicio.strftime("%d.%m.%Y")} a {data_fim.strftime("%d.%m.%Y")}'
     elif data_inicio is not None:
-        periodo_txt = f'A partir de {data_inicio.strftime("%d/%m/%Y")}'
+        periodo_txt = f'A partir de {data_inicio.strftime("%d.%m.%Y")}'
     elif data_fim is not None:
-        periodo_txt = f'Até {data_fim.strftime("%d/%m/%Y")}'
+        periodo_txt = f'Até {data_fim.strftime("%d.%m.%Y")}'
     else:
         periodo_txt = 'Histórico completo'
 
@@ -905,7 +906,7 @@ def generate_nota_tecnica(
     p_ts.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_ts.paragraph_format.space_before = Pt(0)
     _run(p_ts, '\n\n\n\n', color='94A3B8', size=8)
-    _run(p_ts, f'Relatório extraído do Sentinela em {generated_at.strftime("%d/%m/%Y às %H:%M")}\n', color='94A3B8', size=8, italic=True)
+    _run(p_ts, f'Relatório extraído do Sentinela em {generated_at.strftime("%d.%m.%Y às %H:%M")}\n', color='94A3B8', size=8, italic=True)
     _run(p_ts, f'Código de verificação: {codigo_verificacao}', color='64748B', size=8, bold=True)
 
     # ── 4. Seção 1: Sumário (Sem Rodapé) ──────────────────────────────────
@@ -958,7 +959,7 @@ def generate_nota_tecnica(
         1,
         'De acordo com informações contidas no site do Ministério da Saúde a respeito do Programa Farmácia Popular do Brasil: '
         'https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular/legislacao '
-        f'(acessado em {date.today().strftime("%d/%m/%Y")}).',
+        f'(acessado em {date.today().strftime("%d.%m.%Y")}).',
     )
     p_ref_intro = doc.add_paragraph()
     _run(p_ref_intro, 'As principais referências normativas e técnicas utilizadas nesta análise incluem:', color='0F172A', size=12)
@@ -1038,11 +1039,11 @@ def generate_nota_tecnica(
     if any(k in criticos for k in ['hhi_crm', 'crms_irregulares']): fontes.append('cadastros de médicos do Conselho Regional de Medicina (CRM)')
     fontes_txt = ("; ".join(fontes[:-1]) + "; e " + fontes[-1]) if len(fontes) > 1 else fontes[0]
     p_fontes = doc.add_paragraph()
-    _run(p_fontes, f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas à aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.', color='0F172A', size=12)
+    _run(p_fontes, f'Os achados advindos das análises realizadas, consignados nos itens 5, 6 e 7 desta Nota Técnica, tomaram por base informações registradas pela Farmácia {razao_social} no Sistema Autorizador de Vendas (SAV) do Programa Farmácia Popular do Brasil e cópias de notas fiscais eletrônicas relativas às aquisições de medicamentos por ela realizadas, compartilhadas pela Receita Federal do Brasil. Além dessas informações, foram utilizados dados extraídos das seguintes fontes: {fontes_txt}.', color='0F172A', size=12)
 
     nota_pfpb_2 = (
         'Consulta ao site https://www.gov.br/saude/pt-br/composicao/sectics/farmacia-popular, '
-        f'em {date.today().strftime("%d/%m/%Y")}.'
+        f'em {date.today().strftime("%d.%m.%Y")}.'
     )
     nota_pfpb_3 = (
         'A lista dos medicamentos e produtos do PFPB, atualizada em 02.09.2025, pode ser obtida no endereço: '
@@ -1050,8 +1051,8 @@ def generate_nota_tecnica(
     )
     nota_pfpb_4 = (
         'Após um intervalo sem exigência de renovação anual obrigatória do credenciamento desde 2018, conforme o artigo 15 '
-        'do Anexo LXXVII da Portaria de Consolidação nº 5, de 28 de setembro de 2017, o Ministério da Saúde '
-        'retomou essa exigência a partir de 17 de abril de 2025.'
+        'do Anexo LXXVII da Portaria de Consolidação nº 5, de 28.09.2017, o Ministério da Saúde '
+        'retomou essa exigência a partir de 17.04.2025.'
     )
     nota_pfpb_5 = (
         'Cabe informar que existia também a modalidade de copagamento (em que o beneficiário arcava com uma parte '
@@ -1111,7 +1112,7 @@ def generate_nota_tecnica(
         if not run.font.superscript:
             run.font.size = Pt(12)
 
-    p_sav = doc.add_paragraph('As informações sobre as dispensações são encaminhadas mensalmente pelas drogarias credenciadas ao MS por meio do Sistema Autorizador de Vendas (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e normas anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos')
+    p_sav = doc.add_paragraph('As informações sobre as dispensações são encaminhadas mensalmente pelas drogarias credenciadas ao MS por meio do (SAV), conforme disposto na Portaria de Consolidação GM/MS nº 5, de 28.09.2017, e normas anteriores. Por sua vez, o art. 22 da Portaria GM/MS nº 2.898, de 03.11.2021, dispõe que o estabelecimento deve manter por 10 (dez) anos')
     _footnote_ref(doc, p_sav, 6, nota_pfpb_6)
     p_sav.add_run(', em ordem cronológica de emissão, duas cópias mantidas em locais distintos, uma em meio físico e outra em arquivo digitalizado, dos cupons vinculados assinados, dos documentos fiscais, das prescrições, dos laudos ou atestados médicos e dos documentos de identidade oficial apresentados no ato da compra e, ainda, dos documentos fiscais de aquisição dos respectivos medicamentos e/ou fraldas geriátricas dispensados no âmbito do PFPB.')
     for run in p_sav.runs:
@@ -1167,7 +1168,7 @@ def generate_nota_tecnica(
     _run(p_gtin, 'GTIN/EAN', color='334155', size=12, underline=True)
     _run(p_gtin, '. Nesse sentido, reforça-se que a descrição textual do produto é insuficiente para a liquidação da despesa, sendo o código de barras a única chave capaz de vincular com precisão o medicamento comprado ao preço de referência pago pelo governo.', color='0F172A', size=12)
     p_42_fim1 = doc.add_paragraph()
-    _run(p_42_fim1, 'Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sentinela extrai dos dados do Sistema Autorizador de Vendas (SAV) do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.', color='0F172A', size=12)
+    _run(p_42_fim1, 'Além do levantamento de valores de “vendas sem comprovação” para todas as empresas que operam no PFPB, o Sentinela extrai dos dados do SAV do Programa uma série de informações que permitem apontar para outras criticidades que corroboram a suspeita de possíveis registros fictícios de dispensações de medicamentos por parte dos estabelecimentos.', color='0F172A', size=12)
     p_42_fim1b = doc.add_paragraph()
     _run(p_42_fim1b, 'Por fim, cabe ressaltar que o Sentinela se concentra apenas nas dispensações de medicamentos do rol do PFPB, não sendo objeto de suas análises as vendas de fraldas geriátricas e de absorventes higiênicos.', color='0F172A', size=12)
     p_42_fim2 = doc.add_paragraph()
@@ -1184,6 +1185,9 @@ def generate_nota_tecnica(
     doc.add_heading(f'5.1 Informações sobre a Farmácia {razao_social} (CNPJ {cnpj_fmt})', level=2)
     ultimo_mes_sav = _build_ultimo_mes_sav_context(cnpj, data_inicio, data_fim)
     situacao_pfpb = "ATIVA" if cnpj_data.get("is_conexao_ativa") else "INATIVA"
+    nota_inativa_8 = (
+        'Para ser considerada inativa, a farmácia não deve possuir registros de vendas nos últimos 30 dias.'
+    )
     p_sav_5 = doc.add_paragraph()
     _run(
         p_sav_5,
@@ -1193,7 +1197,9 @@ def generate_nota_tecnica(
         size=12,
     )
     _run(p_sav_5, situacao_pfpb, color='0F172A', size=12, underline=True)
-    _run(p_sav_5, '” no Programa Farmácia Popular do Brasil, tendo realizado vendas totais de ', color='0F172A', size=12)
+    _run(p_sav_5, '”', color='0F172A', size=12)
+    _footnote_ref(doc, p_sav_5, 8, nota_inativa_8)
+    _run(p_sav_5, ' no Programa Farmácia Popular do Brasil, tendo realizado vendas totais de ', color='0F172A', size=12)
     _run(p_sav_5, f'R$ {_format_decimal_pt(ultimo_mes_sav["total"], 2)}', color='0F172A', size=12)
     _run(p_sav_5, ' em ', color='0F172A', size=12)
     _run(p_sav_5, ultimo_mes_sav["mes_formatado"], color='0F172A', size=12)
@@ -1273,7 +1279,7 @@ def generate_nota_tecnica(
     # ── 10. Seção 6 (rodapé limpo até o comparativo regional) ────────────────
     _start_section(doc, start=WD_SECTION.NEW_PAGE)
 
-    h6 = _format_main_heading(doc.add_heading(f'6. SOBRE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
+    h6 = _format_main_heading(doc.add_heading(f'6. SOBRE REGISTROS DE “VENDAS SEM COMPROVAÇÃO” REALIZADAS PELA FARMÁCIA {razao_social}', level=1))
     _add_bookmark(h6, "secao6_percentual_nao_comprovacao")
     p_53 = doc.add_paragraph()
     _run(p_53, f'Em relação à Farmácia {razao_social}, verificou-se, conforme detalhamento contido no ANEXO {anexo_memoria_num} desta Nota Técnica, diferenças relevantes entre os estoques de medicamentos estimados e suas distribuições para os cidadãos subsidiadas pelo Programa Farmácia Popular do Brasil, ', color='0F172A', size=12)
@@ -1323,7 +1329,7 @@ def generate_nota_tecnica(
     p_regional_53 = doc.add_paragraph()
     _run(p_regional_53, 'Tal percentual corresponde a ', color='0F172A', size=12)
     _run(p_regional_53, f'{multiplicador_fmt} {multiplicador_unidade}', color='334155', size=12, underline=True)
-    _run(p_regional_53, ' a mediana dos percentuais de “vendas sem comprovação” das farmácias da sua região,', color='0F172A', size=12)
+    _run(p_regional_53, ' a mediana dos percentuais de registros de “vendas sem comprovação” das farmácias da sua região,', color='0F172A', size=12)
     _footnote_ref(
         doc,
         p_regional_53,
@@ -1337,7 +1343,7 @@ def generate_nota_tecnica(
     p_geo_ampliado = doc.add_paragraph()
     _run(p_geo_ampliado, 'Ampliando-se o comparativo geográfico, o percentual equivale a ', color='0F172A', size=12)
     _run(p_geo_ampliado, f'{multiplicador_uf_fmt} {multiplicador_uf_unidade}', color='334155', size=12, underline=True)
-    _run(p_geo_ampliado, f' a mediana dos percentuais de “vendas sem comprovação” das farmácias localizadas em seu Estado ({regional_comp["uf"]}) e a ', color='0F172A', size=12)
+    _run(p_geo_ampliado, f' a mediana dos percentuais de registros de “vendas sem comprovação” das farmácias localizadas em seu Estado ({regional_comp["uf"]}) e a ', color='0F172A', size=12)
     _run(p_geo_ampliado, f'{multiplicador_brasil_fmt} {multiplicador_brasil_unidade}', color='334155', size=12, underline=True)
     _run(p_geo_ampliado, ' a mediana dos percentuais das farmácias de todo o Brasil.', color='0F172A', size=12)
 
@@ -1370,7 +1376,7 @@ def generate_nota_tecnica(
     p_gtin_conclusao = doc.add_paragraph()
     gtins_txt = "GTIN" if gtin_comp["total_gtins"] == 1 else "GTINs"
     representativos_txt = "GTIN" if gtin_comp["representativos_count"] == 1 else "GTINs"
-    _run(p_gtin_conclusao, f'Conforme a Tabela {tabela_gtins_num}, as “vendas sem comprovação” estão distribuídas em ', color='0F172A', size=12)
+    _run(p_gtin_conclusao, f'Conforme a Tabela {tabela_gtins_num}, os registros de “vendas sem comprovação” estão distribuídos em ', color='0F172A', size=12)
     _run(p_gtin_conclusao, f'{gtin_comp["total_gtins"]} {gtins_txt}', color='334155', size=12)
     _run(p_gtin_conclusao, ', que totalizam ', color='0F172A', size=12)
     _run(p_gtin_conclusao, f'R$ {_format_decimal_pt(gtin_comp["total_valor"], 2)}', color='334155', size=12)
@@ -1446,7 +1452,7 @@ def generate_nota_tecnica(
             top_labels = _format_list_pt([row["semestre_fmt"] for row in top_irregulares_ordenados])
             top_irregular_valor = round(sum(row["irregular"] for row in top_irregulares_ordenados), 2)
             top_prefixo = 'no ' if len(top_irregulares_ordenados) == 1 else 'nos '
-            _run(p_54_analise, f'Também se verificam valores relevantes de “vendas sem comprovação” {top_prefixo}', color='0F172A', size=12)
+            _run(p_54_analise, f'Também se verificam valores relevantes de registros de \"vendas sem comprovação\" {top_prefixo}', color='0F172A', size=12)
             _run(p_54_analise, top_labels, color='0F172A', size=12)
             _run(p_54_analise, ', que somam ', color='0F172A', size=12)
             _run(p_54_analise, f'R$ {_format_decimal_pt(top_irregular_valor, 2)}', color='334155', size=12, underline=True)
@@ -1492,7 +1498,7 @@ def generate_nota_tecnica(
     p_criticidades_intro = doc.add_paragraph()
     _run(
         p_criticidades_intro,
-        f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de “vendas sem comprovação” apurado para ela. A tabela, a seguir, sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela. Na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.',
+        f'Analisando-se informações declaradas pela Farmácia {razao_social} no SAV e, em alguns casos, cruzando-as com outras bases de dados, foram identificadas criticidades que corroboram o achado principal de registros de “vendas sem comprovação” apurado para ela. A tabela, a seguir, sintetiza os indicadores classificados como críticos na matriz de risco do Sistema Sentinela. Na sequência, são detalhadas as criticidades com evidências analíticas específicas para a presente Nota Técnica.',
         color='0F172A',
         size=12,
     )
@@ -1580,7 +1586,7 @@ def generate_nota_tecnica(
                         resumos_criticidades.append(resumo)
                     timing.mark(f"secao 7 criticidade {key}")
                     continue
-            if key == 'polimedicamento' and full_title.startswith('Vendas de quatro ou mais itens'):
+            if key == 'polimedicamento':
                 polimedicamento_comp = _build_polimedicamento_context(cnpj, data_inicio, data_fim)
                 if polimedicamento_comp:
                     _add_polimedicamento_text(doc, num, razao_social, polimedicamento_comp, bookmark_name=bookmark_name)
@@ -1773,18 +1779,19 @@ def generate_nota_tecnica(
     total_mov_conclusao = float(cnpj_data.get('totalMov') or 0.0)
     val_sem_comp_conclusao = float(cnpj_data.get('valSemComp') or 0.0)
     perc_sem_comp_conclusao = float(cnpj_data.get('percValSemComp') or 0.0)
+    total_repasses_conclusao = float(repasses_ctx.get('total') or 0.0)
     periodo_conclusao_txt = periodo_txt.replace('/', '.')
 
     p_conclusao = doc.add_paragraph()
-    _run(p_conclusao, 'Conforme detalhado no subitem 6 desta Nota Técnica, de um total de ', color='0F172A', size=12)
-    _run(p_conclusao, f'R$ {_format_decimal_pt(total_mov_conclusao, 2)}', color='334155', size=12, underline=True)
-    _run(p_conclusao, f' de medicamentos distribuídos pela Farmácia {razao_social} no âmbito do Programa Farmácia Popular do Brasil, no período de ', color='0F172A', size=12)
+    _run(p_conclusao, f'Conforme detalhado no subitem 6 desta Nota Técnica, a Farmácia {razao_social} recebeu do Ministério da Saúde, no período de ', color='0F172A', size=12)
     _run(p_conclusao, periodo_conclusao_txt, color='334155', size=12, underline=True)
-    _run(p_conclusao, ', foi identificado possível prejuízo ao erário público no valor de ', color='0F172A', size=12)
+    _run(p_conclusao, ', ', color='0F172A', size=12)
+    _run(p_conclusao, f'R$ {_format_decimal_pt(total_repasses_conclusao, 2)}', color='334155', size=12, underline=True)
+    _run(p_conclusao, ', correspondentes a supostas dispensações de itens de medicamentos constantes do rol do Programa Farmácia Popular do Brasil. Nesse período, foi identificado o indicador de registros de “vendas sem comprovação” (tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque para suportá-la) no valor total de ', color='0F172A', size=12)
     _run(p_conclusao, f'R$ {_format_decimal_pt(val_sem_comp_conclusao, 2)}', color='334155', size=12, underline=True)
     _run(p_conclusao, ' (', color='0F172A', size=12)
     _run(p_conclusao, f'{_format_decimal_pt(perc_sem_comp_conclusao, 2)}%', color='334155', size=12, underline=True)
-    _run(p_conclusao, ' daquele total), em virtude da prática de “vendas sem comprovação”, tipologia de fraude identificada pela CGU correspondente à dispensação de medicamentos sem quantitativo suficiente em estoque para suportá-la.', color='0F172A', size=12)
+    _run(p_conclusao, f' do valor total faturado pelo estabelecimento junto ao Ministério, de R$ {_format_decimal_pt(total_mov_conclusao, 2)}).', color='0F172A', size=12)
 
     _add_resumo_criticidades_conclusao(doc, resumos_criticidades)
 

@@ -5,6 +5,12 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.9] - 2026-09-10
+
+### Corrigido
+- **Erro 422 ao gerar Nota Técnica por GTIN de Parkinson não encontrado na tabela de medicamentos sem comprovação.** Na função `_add_parkinson_gtin_sem_comprovacao_text` (`nota_tecnica_criticidades.py`), a correlação entre o achado clínico de Doença de Parkinson e a tabela de medicamentos com vendas sem comprovação buscava exclusivamente um único GTIN fixo (`7896226506371` - Prolopa). Quando a farmácia apresentava o achado em outros medicamentos de Parkinson (ex.: Carbidol) ou o GTIN fixado não possuía vendas sem comprovação no período, o gerador abortava a emissão da Nota Técnica com erro 422. Corrigido para identificar dinamicamente na lista de medicamentos sem comprovação aqueles associados à patologia de Parkinson, selecionando o principal para citação ou omitindo o parágrafo complementar caso nenhum medicamento do grupo possua venda sem comprovação no estabelecimento.
+- **Erro 422 ao gerar Nota Técnica para farmácias em municípios com faixas etárias suprimidas no Censo IBGE 2022.** O Censo IBGE 2022 registra `NULL` em `nu_populacao` para faixas etárias (ex.: 85-89, 90-94, 95-99, 100+ anos) em que não há habitantes no município — comportamento esperado da base. O código de geração de Nota Técnica (`nota_tecnica_criticidades.py`) e o módulo clínico (`clinico.py`) tratavam esses nulos como dado corrompido e abortavam com erro fatal, impedindo a geração do documento. Corrigido substituindo `null` por `0` via `.fill_null(0)` no cast de `nu_populacao`, e removida a verificação que lançava exceção. Afetava centenas de municípios pequenos; identificado concretamente no CNPJ `14.239.517/0001-42` (`id_ibge7=1506161`).
+
 ## [1.6.8] - 2026-08-05
 
 ### Corrigido

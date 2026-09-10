@@ -91,7 +91,6 @@ _INDICADOR_QUADRO_META = {
 }
 
 _VOLUME_ATIPICO_VALOR_AUMENTO_COL = "volume_atipico_valor_aumento_atipico"
-_PARKINSON_BENSERAZIDA_LEVODOPA_GTIN = "7896226506371"
 
 _CLINICA_PATOLOGIA_META = {
     ("DOENCA DE PARKINSON", "IDADE_MENOR_50"): {
@@ -386,7 +385,8 @@ def _build_parkinson_demografia_context(
         pl.col("id_ibge7").cast(pl.Utf8),
         pl.col("ano_censo").cast(pl.Int16, strict=False),
         pl.col("idade_min").cast(pl.Int16, strict=False),
-        pl.col("nu_populacao").cast(pl.Int64, strict=False),
+        # null nessa base IBGE significa faixa etaria sem habitantes (populacao = 0)
+        pl.col("nu_populacao").cast(pl.Int64, strict=False).fill_null(0),
     ])
     demo_municipio = demografia.filter(
         (pl.col("id_ibge7") == id_ibge7)
@@ -408,8 +408,6 @@ def _build_parkinson_demografia_context(
         raise RuntimeError(f"Demografia IBGE sem populacao total valida para id_ibge7={id_ibge7}.")
     if pop_50_mais is None or int(pop_50_mais) <= 0:
         raise RuntimeError(f"Demografia IBGE sem populacao 50+ valida para id_ibge7={id_ibge7}.")
-    if demo_municipio.filter(pl.col("idade_min").is_null() | pl.col("nu_populacao").is_null()).height > 0:
-        raise RuntimeError(f"Demografia IBGE com idade/populacao nula para id_ibge7={id_ibge7}.")
 
     pop_total_int = int(pop_total)
     pop_50_int = int(pop_50_mais)
@@ -1431,25 +1429,22 @@ def _add_parkinson_gtin_sem_comprovacao_text(
     if not has_parkinson_menor_50:
         return
 
-    medicamento = next(
-        (
-            row for row in gtin_comp["rows"]
-            if str(row["gtin"]) == _PARKINSON_BENSERAZIDA_LEVODOPA_GTIN
-        ),
-        None,
+    medicamentos_parkinson = [
+        row for row in gtin_comp["rows"]
+        if _normalize_ascii_upper(row.get("patologia")) == "DOENCA DE PARKINSON"
+    ]
+    if not medicamentos_parkinson:
+        return
+
+    # Ordena pelo maior valor de vendas sem comprovacao
+    medicamento = max(
+        medicamentos_parkinson,
+        key=lambda r: float(r.get("valor_sem_comprovacao") or 0.0),
     )
-    if medicamento is None:
-        raise RuntimeError(
-            f"GTIN {_PARKINSON_BENSERAZIDA_LEVODOPA_GTIN} obrigatorio para relacionar "
-            "o achado de Parkinson a Tabela 1 da Nota Tecnica."
-        )
 
     valor_vendas = float(medicamento["valor_vendas"])
     if valor_vendas <= 0:
-        raise RuntimeError(
-            f"GTIN {_PARKINSON_BENSERAZIDA_LEVODOPA_GTIN} sem valor total de vendas "
-            "valido para calcular o percentual sem comprovacao."
-        )
+        return
     percentual_sem_comprovacao = (
         float(medicamento["valor_sem_comprovacao"]) / valor_vendas
     ) * 100.0

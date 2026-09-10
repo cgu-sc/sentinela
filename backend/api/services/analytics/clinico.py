@@ -309,14 +309,12 @@ def _build_parkinson_demografia(
             pl.col("id_ibge7").cast(pl.Utf8),
             pl.col("ano_censo").cast(pl.Int16, strict=False),
             pl.col("idade_min").cast(pl.Int16, strict=False),
-            pl.col("nu_populacao").cast(pl.Int64, strict=False),
+            pl.col("nu_populacao").cast(pl.Int64, strict=False).fill_null(0),
         )
         .filter((pl.col("id_ibge7") == id_ibge7) & (pl.col("ano_censo") == _IBGE_ANO_CENSO_DEMOGRAFIA))
     )
     if demo.is_empty():
         raise HTTPException(status_code=500, detail=f"Demografia IBGE ausente para id_ibge7={id_ibge7}.")
-    if demo.filter(pl.col("idade_min").is_null() | pl.col("nu_populacao").is_null()).height > 0:
-        raise HTTPException(status_code=500, detail=f"Demografia IBGE com idade/populacao nula para id_ibge7={id_ibge7}.")
 
     pop_total = int(demo.select(pl.sum("nu_populacao")).item() or 0)
     pop_50_mais = int(demo.filter(pl.col("idade_min") >= 50).select(pl.sum("nu_populacao")).item() or 0)

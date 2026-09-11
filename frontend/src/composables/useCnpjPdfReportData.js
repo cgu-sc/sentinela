@@ -69,7 +69,6 @@ function buildCrmKpis(crmData) {
     concentracaoTop5: Number(summary.pct_concentracao_top5 || 0),
     valorTop1,
     valorTop5,
-    medianaTop5Reg: summary.mediana_concentracao_top5_reg ?? summary.mediana_concentracao_top5_br,
     qtdPrescrIntensivaLocal: doctorsIntensivaLocal.length,
     qtdPrescrIntensivaOcultos: doctorsIntensivaBrasil.length,
     qtdCrmExclusivo: crmsInteresse.filter((m) => Number(m.flag_crm_exclusivo || 0) > 0).length,

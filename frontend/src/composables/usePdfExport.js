@@ -1014,7 +1014,7 @@ export function usePdfExport() {
           const summary2 = summary;
           const crmCards = [
             { label: 'TOP 1 CRM - VOLUME R$',         val: fmtVal(kpis.concentracaoTop1, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop1        > 40 ? red : kpis.concentracaoTop1 > 20 ? red : green,    subtitle: `CRM: ${summary2.id_top1_prescritor || 'ND'} · ${formatCurrencyFull(kpis.valorTop1 || 0)}` },
-            { label: 'TOP 5 CRMs - VOLUME R$',         val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop5        > 70 ? red : kpis.concentracaoTop5 > 50 ? red : green,    subtitle: `Mediana Região: ${fmtVal(kpis.medianaTop5Reg, 'pct', formatCurrencyFull)} · ${formatCurrencyFull(kpis.valorTop5 || 0)}` },
+            { label: 'TOP 5 CRMs - VOLUME R$',         val: fmtVal(kpis.concentracaoTop5, 'pct', formatCurrencyFull),  color: kpis.concentracaoTop5        > 70 ? red : kpis.concentracaoTop5 > 50 ? red : green,    subtitle: formatCurrencyFull(kpis.valorTop5 || 0) },
             { label: 'LANÇAMENTOS EM SEQUÊNCIA',        val: String(kpis.qtdLancamentosAgrupados  || 0),               color: kpis.qtdLancamentosAgrupados  > 0  ? red    : green, subtitle: 'Muitas autorizações em intervalo curto' },
             { label: '>30 PRESCRIÇÕES/DIA NESTE CNPJ', val: String(kpis.qtdPrescrIntensivaLocal   || 0),               color: kpis.qtdPrescrIntensivaLocal  > 0  ? red    : green, subtitle: 'Na unidade local' },
             { label: '>30 PRESCRIÇÕES/DIA NO BRASIL',  val: String(kpis.qtdPrescrIntensivaOcultos || 0),               color: kpis.qtdPrescrIntensivaOcultos > 0 ? red    : green, subtitle: 'Soma de todo o Brasil' },

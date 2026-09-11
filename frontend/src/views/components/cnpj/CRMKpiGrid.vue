@@ -10,6 +10,77 @@ const emit = defineEmits(['kpi-click']);
 
 const { formatCurrencyFull } = useFormatting();
 const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
+
+const escapeTooltipHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}[character]));
+
+const createCrmKpiTooltip = (title, body, note) => ({
+  value: `
+    <div class="crm-profile-tooltip-content">
+      <div class="crm-profile-tooltip-heading">
+        <i class="pi pi-info-circle" aria-hidden="true"></i>
+        <span>${escapeTooltipHtml(title)}</span>
+      </div>
+      <p class="crm-profile-tooltip-body">${escapeTooltipHtml(body)}</p>
+      <div class="crm-profile-tooltip-note">
+        <strong>Como interpretar</strong>
+        <span>${escapeTooltipHtml(note)}</span>
+      </div>
+    </div>
+  `,
+  escape: false,
+  class: 'crm-profile-info-tooltip',
+  showDelay: 120,
+  hideDelay: 80,
+});
+
+const crmKpiTooltips = Object.freeze({
+  top1: createCrmKpiTooltip(
+    'Top 1 CRM — volume financeiro',
+    'Percentual do valor total de autorizações da farmácia concentrado no prescritor com maior participação financeira no período selecionado.',
+    'O valor de apoio identifica o CRM líder e o montante associado às suas autorizações.'
+  ),
+  top5: createCrmKpiTooltip(
+    'Top 5 CRMs — volume financeiro',
+    'Percentual do volume financeiro acumulado pelos cinco prescritores com maior valor autorizado no estabelecimento.',
+    'O percentual mostra quanto do volume financeiro do estabelecimento está concentrado nos cinco principais prescritores.'
+  ),
+  agrupamento: createCrmKpiTooltip(
+    'Concentração CRM único',
+    'Quantidade de ocorrências em que um único CRM concentrou muitas autorizações em um intervalo de tempo muito curto.',
+    'Clique no card para filtrar a tabela pelos médicos relacionados e consultar os episódios detalhados.'
+  ),
+  intensiva: createCrmKpiTooltip(
+    'Mais de 30 prescrições por dia',
+    'Quantidade de médicos cuja média diária de prescrições ultrapassou 30 autorizações. O indicador considera a atuação local e a atuação do CRM em todo o Brasil no Farmácia Popular.',
+    'O apoio do card separa as ocorrências identificadas nesta unidade das encontradas no Brasil.'
+  ),
+  exclusivo: createCrmKpiTooltip(
+    'CRMs exclusivos',
+    'Quantidade de médicos cujas autorizações no Farmácia Popular foram registradas exclusivamente neste estabelecimento no conjunto de registros analisado.',
+    'A linha de apoio informa a proporção de exclusividade local associada ao indicador.'
+  ),
+  fraudeCrm: createCrmKpiTooltip(
+    'Fraudes CRM',
+    'Quantidade de CRMs com inconsistência cadastral ou temporal na base do Conselho Federal de Medicina: CRM inexistente ou prescrição anterior ao registro oficial.',
+    'O valor financeiro em destaque representa o montante associado às ocorrências identificadas.'
+  ),
+  distancia: createCrmKpiTooltip(
+    'Distância superior a 400 km',
+    'Quantidade de médicos associados a prescrições em estabelecimentos separados por mais de 400 quilômetros.',
+    'O card sinaliza o volume de prescritores relacionados; as evidências geográficas podem ser consultadas na tabela.'
+  ),
+  surtosCnpj: createCrmKpiTooltip(
+    'Concentração com CRMs múltiplos',
+    'Quantidade de ocorrências em que a farmácia apresentou concentração atípica de autorizações usando múltiplos CRMs em sequência.',
+    'A linha de apoio informa em quantos dias distintos esse padrão foi identificado.'
+  ),
+});
 </script>
 
 <template>
@@ -25,7 +96,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">TOP 1 CRM - VOLUME R$</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Percentual de participação do maior prescritor no volume total da farmácia.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.top="crmKpiTooltips.top1"
+          tabindex="0"
+          aria-label="Informações sobre Top 1 CRM — volume financeiro"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ formatPct(kpiData.concentracaoTop1) }}</span>
@@ -47,13 +123,17 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">TOP 5 CRMs - VOLUME R$</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Percentual de participação dos 5 maiores prescritores acumulados.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.top="crmKpiTooltips.top5"
+          tabindex="0"
+          aria-label="Informações sobre Top 5 CRMs — volume financeiro"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ formatPct(kpiData.concentracaoTop5) }}</span>
         <span class="alert-kpi-hint">
-          Mediana Região: {{ formatPct(kpiData.medianaTop5Reg) }}
-          <strong style="color: var(--text-color-85)"> · {{ formatCurrencyFull(kpiData.valorTop5) }}</strong>
+          <strong style="color: var(--text-color-85)">{{ formatCurrencyFull(kpiData.valorTop5) }}</strong>
         </span>
       </div>
     </div>
@@ -69,7 +149,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">CONCENTRAÇÃO CRM ÚNICO</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Médicos que emitiram todas as suas prescrições em um curtíssimo espaço de tempo.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.top="crmKpiTooltips.agrupamento"
+          tabindex="0"
+          aria-label="Informações sobre concentração CRM único"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ kpiData.qtdLancamentosAgrupados }}</span>
@@ -88,7 +173,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">>30 PRESCRIÇÕES/DIA</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Médicos que emitiram mais de 30 prescrições por dia (comportamento de robô), calculado localmente e em todo o Brasil.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.left="crmKpiTooltips.intensiva"
+          tabindex="0"
+          aria-label="Informações sobre mais de 30 prescrições por dia"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ kpiData.qtdPrescrIntensivaTotal }}</span>
@@ -109,7 +199,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">CRMs EXCLUSIVOS</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Médicos de gaveta: prescrevem exclusivamente para este estabelecimento em todo o Brasil.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.top="crmKpiTooltips.exclusivo"
+          tabindex="0"
+          aria-label="Informações sobre CRMs exclusivos"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ kpiData.qtdCrmExclusivo }}</span>
@@ -128,7 +223,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">FRAUDES CRM</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Fonte: CFM. CRMs inexistentes ou vendas antes do registro oficial.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.top="crmKpiTooltips.fraudeCrm"
+          tabindex="0"
+          aria-label="Informações sobre fraudes CRM"
+        />
       </div>
       <div class="alert-kpi-body">
         <div class="alert-kpi-val-row">
@@ -155,7 +255,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">DISTÂNCIA (>400KM)</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Médicos atuando em farmácias com mais de 400km de distância.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.top="crmKpiTooltips.distancia"
+          tabindex="0"
+          aria-label="Informações sobre distância superior a 400 quilômetros"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ kpiData.qtdAcima400km }}</span>
@@ -174,7 +279,12 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
     >
       <div class="alert-kpi-header">
         <span class="alert-kpi-label">CONCENTRAÇÃO CRMs MÚLTIPLOS</span>
-        <i class="pi pi-info-circle kpi-info-icon" v-tooltip.top="'Identifica se a farmácia registrou volume atípico de dispensações concentrado em poucas horas.'" />
+        <i
+          class="pi pi-info-circle kpi-info-icon"
+          v-tooltip.left="crmKpiTooltips.surtosCnpj"
+          tabindex="0"
+          aria-label="Informações sobre concentração com CRMs múltiplos"
+        />
       </div>
       <div class="alert-kpi-body">
         <span class="alert-kpi-val">{{ kpiData.totalSurtosCnpj }}</span>
@@ -332,9 +442,15 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
   font-size: 0.8rem;
   color: var(--text-muted);
   cursor: help;
+  outline: none;
   transition: color 0.15s;
 }
 .kpi-info-icon:hover { color: var(--primary-color); }
+.kpi-info-icon:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
 
 .alert-kpi-body {
   display: flex;
@@ -362,5 +478,63 @@ const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
   font-size: 0.72rem;
   color: var(--text-muted);
   font-weight: 400;
+}
+
+:global(.p-tooltip.crm-profile-info-tooltip) {
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 9px;
+  box-shadow: var(--tooltip-shadow);
+}
+
+:global(.crm-profile-tooltip-content) {
+  display: flex;
+  width: min(330px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.62rem;
+  padding: 0.75rem 0.85rem;
+  line-height: 1.42;
+}
+
+:global(.crm-profile-tooltip-heading) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-color-85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+:global(.crm-profile-tooltip-heading i) {
+  flex-shrink: 0;
+  color: var(--risk-medium);
+  font-size: 0.8rem;
+}
+
+:global(.crm-profile-tooltip-body) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+:global(.crm-profile-tooltip-note) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--tabs-border);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+:global(.crm-profile-tooltip-note strong) {
+  color: var(--risk-medium);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 </style>

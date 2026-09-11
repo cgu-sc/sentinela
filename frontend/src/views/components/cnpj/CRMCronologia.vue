@@ -371,12 +371,148 @@ function calcularMinutosEntreHoras(inicio, fim) {
   return Math.max(0, fimMinutos - inicioMinutos);
 }
 
+function escapeTooltipHtml(value) {
+  return String(value).replace(/[&<>\"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '\"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function createCronologiaInfoTooltip(title, intro, details = [], note = '') {
+  const detailsHtml = details.length
+    ? `
+      <div class="crm-info-tooltip-details">
+        ${details.map(([label, value]) => `
+          <div>
+            <span>${escapeTooltipHtml(label)}</span>
+            <strong>${escapeTooltipHtml(value)}</strong>
+          </div>
+        `).join('')}
+      </div>`
+    : '';
+  const noteHtml = note
+    ? `<div class="crm-info-tooltip-note"><strong>Como funciona</strong><span>${escapeTooltipHtml(note)}</span></div>`
+    : '';
+
+  return {
+    value: `
+      <div class="crm-info-tooltip-content">
+        <div class="crm-info-tooltip-title-row">
+          <i class="pi pi-info-circle" aria-hidden="true"></i>
+          <div class="crm-info-tooltip-title">${escapeTooltipHtml(title)}</div>
+        </div>
+        <p class="crm-info-tooltip-intro">${escapeTooltipHtml(intro)}</p>
+        ${detailsHtml}
+        ${noteHtml}
+      </div>
+    `,
+    escape: false,
+    class: 'crm-info-tooltip',
+    showDelay: 120,
+    hideDelay: 80,
+  };
+}
+
+const cronologiaInfoTooltips = Object.freeze({
+  previousMonth: createCronologiaInfoTooltip(
+    'Mês anterior',
+    'Desloca a janela de visualização do histórico diário para o período anterior.',
+    [['Ação', 'Recuar aproximadamente 30 dias']],
+    'A navegação altera somente a janela visual do gráfico e preserva os filtros ativos.'
+  ),
+  nextMonth: createCronologiaInfoTooltip(
+    'Próximo mês',
+    'Desloca a janela de visualização do histórico diário para o período seguinte.',
+    [['Ação', 'Avançar aproximadamente 30 dias']],
+    'A navegação altera somente a janela visual do gráfico e preserva os filtros ativos.'
+  ),
+  rankUnico: createCronologiaInfoTooltip(
+    'Ranqueamento · CRM Único',
+    'Classifica os dias pela maior intensidade de autorizações emitidas em sequência com o mesmo CRM em um intervalo reduzido.',
+    [['Critério', 'Concentração com um único CRM'], ['Resultado', 'Dias mais intensos no gráfico']],
+    'O ranking prioriza o maior ritmo horário identificado para esse padrão.'
+  ),
+  rankMultiplo: createCronologiaInfoTooltip(
+    'Ranqueamento · Multi-CRM',
+    'Classifica os dias pela maior intensidade de autorizações emitidas em sequência com participação de múltiplos CRMs.',
+    [['Critério', 'Concentração com vários CRMs'], ['Resultado', 'Dias mais intensos no gráfico']],
+    'O ranking considera o maior ritmo horário associado ao acionamento sequencial de diferentes CRMs.'
+  ),
+  rankVolume: createCronologiaInfoTooltip(
+    'Ranqueamento · Volume',
+    'Classifica os dias pelos maiores picos de dispensações por hora em comparação com a mediana histórica da operação.',
+    [['Critério', 'Volume horário acima do padrão'], ['Resultado', 'Dias com maior multiplicador']],
+    'O multiplicador compara o volume da hora com a mediana horária de referência.'
+  ),
+  rankLimit: createCronologiaInfoTooltip(
+    'Quantidade de dias exibidos',
+    'Define quantos dos dias mais intensos serão apresentados quando um critério de ranqueamento estiver ativo.',
+    [['Opções', 'Top 10, Top 20, Top 50 ou Todos'], ['Base', 'CRM Único, Multi-CRM ou Volume']],
+    'O controle fica disponível para limitar a lista ranqueada ou exibir todos os dias encontrados.'
+  ),
+  onlyAnomalies: createCronologiaInfoTooltip(
+    'Filtro · Apenas Anomalias',
+    'Exibe exclusivamente os dias que apresentaram volume horário atípico, concentração com CRM Único ou concentração Multi-CRM.',
+    [['Inclui', 'Dias com pelo menos uma anomalia'], ['Oculta', 'Dias de operação normal']],
+    'Ao selecionar um critério de ranqueamento, este filtro é desativado para que o ranking controle o recorte exibido.'
+  ),
+  unicoSection: createCronologiaInfoTooltip(
+    'Alertas de CRM Único no período',
+    'Apresenta as janelas em que várias autorizações foram concentradas em um único CRM.',
+    [['Exibe', 'Janela, volume e duração'], ['Também informa', 'Ritmo e classificação de severidade']],
+    'Cada alerta pode ser selecionado para acompanhar as autorizações correspondentes no Raio-X.'
+  ),
+  multiploSection: createCronologiaInfoTooltip(
+    'Alertas Multi-CRM no período',
+    'Apresenta as janelas em que várias autorizações foram emitidas em sequência com participação de múltiplos CRMs.',
+    [['Exibe', 'CRMs distintos, volume e duração'], ['Também informa', 'Ritmo e classificação de severidade']],
+    'Cada alerta pode ser selecionado para acompanhar as autorizações correspondentes no Raio-X.'
+  ),
+});
+
 function formatUnicoAlertTitle(alerta) {
-  return `U#${alerta.numero_alerta} | ${alerta.dt_ini_hora} -> ${alerta.dt_fim_hora} | ${alerta.severidade || 'ALERTA'} | ${alerta.ritmo_qtd_display} em ${alerta.ritmo_minutos_display}min | ${alerta.ritmo_hora_num.toFixed(1)}/h`;
+  const severityHtml = alerta.severidade
+    ? `<div><span>Classificação</span><strong>${escapeTooltipHtml(alerta.severidade)}</strong></div>`
+    : '';
+
+  return `
+    <div class="crm-alert-tooltip-content">
+      <div class="crm-alert-tooltip-title">CRM ÚNICO · ALERTA #${escapeTooltipHtml(alerta.numero_alerta)}</div>
+      <p class="crm-alert-tooltip-intro">Este alerta identifica uma concentração temporal de autorizações emitidas com o mesmo CRM.</p>
+      <div class="crm-alert-tooltip-details">
+        <div><span>CRM</span><strong>${escapeTooltipHtml(alerta.id_medico)}</strong></div>
+        <div><span>Janela observada</span><strong>${escapeTooltipHtml(alerta.dt_ini_hora)}–${escapeTooltipHtml(alerta.dt_fim_hora)}</strong></div>
+        <div><span>Volume concentrado</span><strong>${escapeTooltipHtml(alerta.ritmo_qtd_display)} autorizações</strong></div>
+        <div><span>Duração</span><strong>${escapeTooltipHtml(alerta.ritmo_minutos_display)} minutos</strong></div>
+        <div><span>Ritmo equivalente</span><strong>${Number(alerta.ritmo_hora_num).toFixed(1)} autorizações por hora</strong></div>
+        ${severityHtml}
+      </div>
+      <div class="crm-alert-tooltip-note"><strong>Interpretação</strong><span>O padrão indica uma concentração incomum de lançamentos em curto intervalo. Recomenda-se verificar as transações no Raio-X e comparar o comportamento com os demais alertas do estabelecimento.</span></div>
+    </div>`;
 }
 
 function formatMultiAlertTitle(alerta) {
-  return `M#${alerta.numero_alerta} | ${alerta.dt_ini_hora} -> ${alerta.dt_fim_hora} | ${alerta.severidade || 'ALERTA'} | ${alerta.nu_crms_display} CRMs | ${alerta.nu_prescricoes_display} em ${alerta.ritmo_minutos_display}min | ${alerta.ritmo_hora_num.toFixed(1)}/h`;
+  const severityHtml = alerta.severidade
+    ? `<div><span>Classificação</span><strong>${escapeTooltipHtml(alerta.severidade)}</strong></div>`
+    : '';
+
+  return `
+    <div class="crm-alert-tooltip-content">
+      <div class="crm-alert-tooltip-title">MULTI-CRM · ALERTA #${escapeTooltipHtml(alerta.numero_alerta)}</div>
+      <p class="crm-alert-tooltip-intro">Este alerta identifica uma concentração temporal de autorizações emitidas em sequência com participação de múltiplos CRMs.</p>
+      <div class="crm-alert-tooltip-details">
+        <div><span>CRMs distintos</span><strong>${escapeTooltipHtml(alerta.nu_crms_display)}</strong></div>
+        <div><span>Janela observada</span><strong>${escapeTooltipHtml(alerta.dt_ini_hora)}–${escapeTooltipHtml(alerta.dt_fim_hora)}</strong></div>
+        <div><span>Volume concentrado</span><strong>${escapeTooltipHtml(alerta.nu_prescricoes_display)} autorizações</strong></div>
+        <div><span>Duração</span><strong>${escapeTooltipHtml(alerta.ritmo_minutos_display)} minutos</strong></div>
+        <div><span>Ritmo equivalente</span><strong>${Number(alerta.ritmo_hora_num).toFixed(1)} autorizações por hora</strong></div>
+        ${severityHtml}
+      </div>
+      <div class="crm-alert-tooltip-note"><strong>Interpretação</strong><span>O padrão sugere acionamento sequencial de diferentes CRMs em um intervalo reduzido. Recomenda-se conferir cada autorização no Raio-X, observando horários, prescritores e demais evidências associadas.</span></div>
+    </div>`;
 }
 
 function setHoveredUnicoAlert(alerta) {
@@ -900,16 +1036,54 @@ const chartOptionHourly = computed(() => {
       shadowColor: 'rgba(0,0,0,0.15)',
       axisPointer: { type: 'shadow', shadowStyle: { color: c.axisShadow } },
       formatter: (params) => {
-        const barParam = params.find(p => p.seriesName === 'Autorizações (Volume)');
-        if (!barParam) return '';
-        const dataIndex = barParam.dataIndex;
+        const tooltipParams = Array.isArray(params) ? params : [params];
+        const barParam = tooltipParams.find(p => p.seriesName === 'Autorizações (Volume)');
+        const anchorParam = barParam ?? tooltipParams.find(p => p.dataIndex != null);
+        if (!anchorParam) return '';
+        const dataIndex = anchorParam.dataIndex;
         const pt = fullPoints[dataIndex];
-        const hora = barParam.axisValue;
-        const vol = barParam.value;
+        if (!pt) return '';
+        const hora = `${String(pt.hr_janela).padStart(2, '0')}h`;
+        const vol = pt.nu_prescricoes;
         const crms = pt.nu_crms_diferentes;
-        const med = params.find(p => p.seriesName === 'Mediana Referência (Hora)')?.value ?? 0;
+        const med = pt.mediana_hora ?? 0;
         const ratio = med > 0 ? (vol / med).toFixed(1) : null;
         const isAnomalo = pt.is_hora_com_alerta === 1;
+
+        const trackAlerts = [
+          pt.is_volume_horario_anomalo === 1 && {
+            color: '#10b981',
+            label: 'VOLUME',
+            description: 'pico de autorizações acima do padrão histórico do horário',
+          },
+          pt.is_crm_unico === 1 && {
+            color: '#f59e0b',
+            label: 'CRM ÚNICO',
+            description: 'concentração de autorizações em uma janela curta com um único CRM',
+          },
+          pt.is_crm_multiplo === 1 && {
+            color: '#8b5cf6',
+            label: 'MULTI-CRM',
+            description: 'concentração de autorizações em uma janela curta com múltiplos CRMs',
+          },
+        ].filter(Boolean);
+
+        const trackAlertsHtml = trackAlerts.length > 0
+          ? `
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid ${c.tooltipBorder};">
+              <div style="font-size:10px; color:${c.muted}; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Trilhas de alerta nesta hora</div>
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                ${trackAlerts.map(alert => `
+                  <div style="display:flex; align-items:flex-start; gap:7px;">
+                    <span style="width:9px; height:5px; border-radius:2px; background:${alert.color}; display:inline-block; margin-top:4px; flex:0 0 auto;"></span>
+                    <span style="display:flex; flex-direction:column; gap:2px;">
+                      <strong style="font-size:11px; color:${alert.color};">${alert.label}</strong>
+                      <span style="font-size:10px; color:${c.muted}; line-height:1.35;">${alert.description}</span>
+                    </span>
+                  </div>`).join('')}
+              </div>
+            </div>`
+          : '';
 
         const ratioHtml = ratio !== null
           ? `<div style="margin-top:8px; font-size:12px; color:${isAnomalo ? '#ef4444' : c.muted}; font-weight:${isAnomalo ? '600' : '400'};">${ratio}× ${isAnomalo ? 'acima da mediana' : 'da mediana'}</div>`
@@ -928,6 +1102,7 @@ const chartOptionHourly = computed(() => {
                 <span style="font-weight:700; font-size:13px;">${crms}</span>
               </div>
             </div>
+            ${trackAlertsHtml}
             ${ratioHtml}
           </div>`;
       },
@@ -1278,10 +1453,20 @@ const activeTransactionsLoading = computed(() =>
         </div>
         <div class="filter-controls">
           <div class="chart-nav-buttons">
-            <button class="nav-btn" @click="shiftZoom('prev')" title="Mês Anterior">
+            <button
+              class="nav-btn"
+              @click="shiftZoom('prev')"
+              v-tooltip.bottom="cronologiaInfoTooltips.previousMonth"
+              aria-label="Mês anterior"
+            >
               <i class="pi pi-chevron-left" />
             </button>
-            <button class="nav-btn" @click="shiftZoom('next')" title="Próximo Mês">
+            <button
+              class="nav-btn"
+              @click="shiftZoom('next')"
+              v-tooltip.bottom="cronologiaInfoTooltips.nextMonth"
+              aria-label="Próximo mês"
+            >
               <i class="pi pi-chevron-right" />
             </button>
           </div>
@@ -1290,46 +1475,83 @@ const activeTransactionsLoading = computed(() =>
             <button
               class="rank-btn is-unico"
               :class="{ 'is-active': dailyRankMode === 'unico' }"
-              title="Top 10 por CRM Único"
               @click="toggleDailyRankMode('unico')"
             >
               <i class="pi pi-user" />
               <span>CRM Único</span>
+              <i
+                class="pi pi-info-circle control-info-icon"
+                role="img"
+                aria-label="Informações sobre o ranqueamento por CRM Único"
+                v-tooltip.top="cronologiaInfoTooltips.rankUnico"
+                @click.stop
+              />
             </button>
             <button
               class="rank-btn is-multiplo"
               :class="{ 'is-active': dailyRankMode === 'multiplo' }"
-              title="Top 10 por Multi-CRM"
               @click="toggleDailyRankMode('multiplo')"
             >
               <i class="pi pi-users" />
               <span>Multi-CRM</span>
+              <i
+                class="pi pi-info-circle control-info-icon"
+                role="img"
+                aria-label="Informações sobre o ranqueamento por Multi-CRM"
+                v-tooltip.top="cronologiaInfoTooltips.rankMultiplo"
+                @click.stop
+              />
             </button>
             <button
               class="rank-btn is-volume"
               :class="{ 'is-active': dailyRankMode === 'volume' }"
-              title="Top 10 por volume anômalo"
               @click="toggleDailyRankMode('volume')"
             >
               <i class="pi pi-chart-bar" />
               <span>Volume</span>
+              <i
+                class="pi pi-info-circle control-info-icon"
+                role="img"
+                aria-label="Informações sobre o ranqueamento por volume"
+                v-tooltip.top="cronologiaInfoTooltips.rankVolume"
+                @click.stop
+              />
             </button>
-            <select
-              v-model.number="dailyRankLimit"
-              class="rank-limit-select"
-              title="Quantidade de dias no ranking"
-              :disabled="!dailyRankMode"
-            >
-              <option v-for="option in dailyRankLimitOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
+            <div class="rank-limit-control">
+              <select
+                v-model.number="dailyRankLimit"
+                class="rank-limit-select"
+                :disabled="!dailyRankMode"
+              >
+                <option v-for="option in dailyRankLimitOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+              <i
+                class="pi pi-info-circle control-info-icon rank-limit-info"
+                role="img"
+                aria-label="Informações sobre a quantidade de dias exibidos"
+                tabindex="0"
+                v-tooltip.top="cronologiaInfoTooltips.rankLimit"
+              />
+            </div>
           </div>
           <div class="filter-divider"></div>
-          <label class="filter-toggle" :class="{ 'is-disabled': dailyRankMode }">
+          <label
+            class="filter-toggle"
+            :class="{ 'is-disabled': dailyRankMode }"
+          >
             <input type="checkbox" v-model="filterDailyOnlyAnomalous" :disabled="dailyRankMode !== null" />
             <span class="toggle-slider"></span>
             <span class="toggle-label">Apenas Anomalias</span>
+            <i
+              class="pi pi-info-circle control-info-icon anomaly-filter-info"
+              role="img"
+              aria-label="Informações sobre o filtro Apenas Anomalias"
+              tabindex="0"
+                  v-tooltip.left="cronologiaInfoTooltips.onlyAnomalies"
+              @click.prevent.stop
+            />
           </label>
         </div>
       </div>
@@ -1473,6 +1695,13 @@ const activeTransactionsLoading = computed(() =>
         <div class="unico-alertas-header">
           <i class="pi pi-exclamation-triangle" />
           <span>Alertas de CRM Único no Período</span>
+          <i
+            class="pi pi-info-circle section-info-icon"
+            role="img"
+            aria-label="Informações sobre os alertas de CRM Único"
+            tabindex="0"
+            v-tooltip.top="cronologiaInfoTooltips.unicoSection"
+          />
         </div>
         <div class="unico-alertas-grouped-list">
           <div v-for="grupo in unicoAlertasAgrupados" :key="grupo.id_medico" class="unico-alerta-group">
@@ -1490,7 +1719,7 @@ const activeTransactionsLoading = computed(() =>
               >
                 <span
                   class="alerta-alert-id"
-                  v-tooltip.top="{ value: formatUnicoAlertTitle(alerta), showDelay: 120, hideDelay: 80 }"
+                  v-tooltip.right="{ value: formatUnicoAlertTitle(alerta), escape: false, class: 'crm-alert-tooltip', showDelay: 120, hideDelay: 80 }"
                   @pointerenter="setHoveredUnicoAlert(alerta)"
                   @pointerleave="clearHoveredAlert"
                 >
@@ -1511,6 +1740,13 @@ const activeTransactionsLoading = computed(() =>
         <div class="unico-alertas-header">
           <i class="pi pi-users" />
           <span>Alertas Multi-CRM no Período</span>
+          <i
+            class="pi pi-info-circle section-info-icon"
+            role="img"
+            aria-label="Informações sobre os alertas Multi-CRM"
+            tabindex="0"
+            v-tooltip.top="cronologiaInfoTooltips.multiploSection"
+          />
         </div>
         <div class="multi-alertas-numbered-list">
           <div
@@ -1520,7 +1756,7 @@ const activeTransactionsLoading = computed(() =>
           >
             <span
               class="multi-alerta-id"
-              v-tooltip.top="{ value: formatMultiAlertTitle(alerta), showDelay: 120, hideDelay: 80 }"
+              v-tooltip.right="{ value: formatMultiAlertTitle(alerta), escape: false, class: 'crm-alert-tooltip', showDelay: 120, hideDelay: 80 }"
               @pointerenter="setHoveredMultiAlert(alerta)"
               @pointerleave="clearHoveredAlert"
             >
@@ -1596,7 +1832,7 @@ const activeTransactionsLoading = computed(() =>
                       :key="alerta.key"
                       class="alerta-participacao-badge"
                       :class="`is-${alerta.type}`"
-                      v-tooltip.top="{ value: alerta.title, showDelay: 120, hideDelay: 80 }"
+                      v-tooltip.top="{ value: alerta.title, escape: false, class: 'crm-alert-tooltip', showDelay: 120, hideDelay: 80 }"
                       @pointerenter.stop="setHoveredTableAlert(alerta)"
                       @pointerleave.stop="clearHoveredAlert"
                     >
@@ -1909,6 +2145,7 @@ const activeTransactionsLoading = computed(() =>
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .rank-btn i { font-size: 0.75rem; }
+.rank-btn .control-info-icon { font-size: 0.65rem; }
 .rank-btn:hover {
   background: color-mix(in srgb, var(--text-color-85) 8%, transparent);
   color: var(--text-color-85);
@@ -1943,6 +2180,33 @@ const activeTransactionsLoading = computed(() =>
   opacity: 0.45;
   cursor: not-allowed;
 }
+.rank-limit-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.control-info-icon {
+  color: var(--text-muted);
+  cursor: help;
+  flex-shrink: 0;
+  line-height: 1;
+  opacity: 0.65;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+.control-info-icon:hover {
+  color: var(--primary-color);
+  opacity: 1;
+}
+.control-info-icon:focus-visible,
+.section-info-icon:focus-visible,
+.nav-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 70%, transparent);
+  outline-offset: 2px;
+}
+.rank-btn .control-info-icon { color: inherit; }
+.rank-btn:hover .control-info-icon { opacity: 1; }
+.rank-limit-info { margin-right: 0.15rem; }
+.anomaly-filter-info { margin-left: 0.05rem; }
 :global(.dark-mode) .rank-limit-select {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.1);
@@ -2153,6 +2417,17 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
   color: #f59e0b;
   margin-bottom: 0.75rem;
 }
+.section-info-icon {
+  font-size: 0.7rem;
+  color: inherit;
+  cursor: help;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.section-info-icon:hover {
+  color: var(--text-color-85);
+  opacity: 1;
+}
 .unico-alertas-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .unico-alerta-chip {
   display: flex;
@@ -2275,6 +2550,145 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .alerta-sep { opacity: 0.3; }
 .alerta-nivel { color: #f59e0b; font-size: 0.65rem; font-weight: 600; opacity: 0.8; }
 
+:global(.p-tooltip.crm-alert-tooltip) {
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 9px;
+  box-shadow: var(--tooltip-shadow);
+}
+:global(.p-tooltip.crm-info-tooltip) {
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 9px;
+  box-shadow: var(--tooltip-shadow);
+}
+:global(.crm-alert-tooltip-content) {
+  display: flex;
+  width: min(330px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  line-height: 1.35;
+}
+:global(.crm-alert-tooltip-title) {
+  color: var(--text-color-85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+:global(.crm-alert-tooltip-intro) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+:global(.crm-alert-tooltip-details) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--tabs-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+}
+:global(.crm-alert-tooltip-details > div) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+:global(.crm-alert-tooltip-details span) {
+  color: var(--text-muted);
+  font-size: 0.67rem;
+}
+:global(.crm-alert-tooltip-details strong) {
+  color: var(--text-color-85);
+  font-size: 0.7rem;
+  text-align: right;
+}
+:global(.crm-alert-tooltip-note) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+:global(.crm-alert-tooltip-note strong) {
+  color: var(--risk-medium);
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+:global(.crm-info-tooltip-content) {
+  display: flex;
+  width: min(330px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.62rem;
+  padding: 0.75rem 0.85rem;
+  line-height: 1.42;
+}
+:global(.crm-info-tooltip-title-row) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+:global(.crm-info-tooltip-title-row > i) {
+  flex-shrink: 0;
+  color: var(--risk-medium);
+  font-size: 0.8rem;
+}
+:global(.crm-info-tooltip-title) {
+  color: var(--text-color-85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+:global(.crm-info-tooltip-intro) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+:global(.crm-info-tooltip-details) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--tabs-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+}
+:global(.crm-info-tooltip-details > div) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+:global(.crm-info-tooltip-details span) {
+  color: var(--text-muted);
+  font-size: 0.67rem;
+}
+:global(.crm-info-tooltip-details strong) {
+  color: var(--text-color-85);
+  font-size: 0.7rem;
+  text-align: right;
+}
+:global(.crm-info-tooltip-note) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+:global(.crm-info-tooltip-note strong) {
+  color: var(--risk-medium);
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Legenda CRM Único */
 .unico-legend-tip {
   background: rgba(245,158,11,0.05);
@@ -2358,4 +2772,3 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 
 /* ── Trilha de Eventos Horários Legada (Removida) ─────────────────────────── */
 </style>
-

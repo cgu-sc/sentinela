@@ -4,24 +4,24 @@
  */
 
 .p-tooltip.sentinela-tooltip {
-  max-width: min(22rem, calc(100vw - 2rem));
-  padding: 0.3rem;
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0;
   position: fixed !important;
   pointer-events: none;
 }
 
 .p-tooltip.sentinela-tooltip .p-tooltip-text {
-  padding: 0.625rem 0.75rem;
+  padding: 0;
   border: 1px solid var(--tooltip-border);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--tooltip-bg);
   box-shadow: var(--tooltip-shadow);
   color: var(--tooltip-text);
   font-family: inherit;
-  font-size: 1rem;
+  font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0;
-  line-height: 1.45;
+  line-height: 1.42;
   overflow-wrap: anywhere;
   white-space: normal;
 }

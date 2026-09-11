@@ -5,6 +5,18 @@ Todas as mudanças relevantes do Sentinela serão registradas neste arquivo.
 O versionamento segue o padrão SemVer: `MAJOR.MINOR.PATCH`.
 
 
+## [1.6.10] - 2026-09-11
+
+### Alterado
+- **Tooltips das telas de detalhe de estabelecimento convertidos para HTML estruturado.** As explicações dos cards de CRM, da linha do tempo e Raio-X, dos alertas, dos falecidos e dos indicadores agora usam conteúdo formatado com título, descrição, seções explicativas e destaques visuais.
+- **Ícones informativos adicionados aos componentes com tooltip.** Cards, controles, marcações do gráfico de análise horária, alertas CRM, indicadores e colunas de tabelas passaram a sinalizar explicitamente a disponibilidade da explicação contextual.
+- **Conteúdo explicativo dos indicadores e comparativos ampliado.** Os textos passaram a explicar o significado dos resultados da farmácia, das medianas por região de saúde, UF e Brasil e dos respectivos riscos.
+- **Estilo visual dos tooltips padronizado.** Todos os tooltips HTML da tela seguem o mesmo padrão visual escuro, com borda, sombra, acento laranja e tokens globais do tema.
+
+### Corrigido
+- **Tooltips que ultrapassavam as bordas da viewport reposicionados.** Ajustado o posicionamento dos tooltips ancorados nos primeiros componentes e nos filtros para que o conteúdo permaneça visível dentro da tela.
+- **Mediana regional inválida no card "TOP 5 CRMs - VOLUME R$" removida.** O valor de `0.00%` vinha de um benchmark regional indisponível para o estabelecimento e era mascarado por uma inicialização silenciosa no backend. A informação foi retirada do card, da exportação em PDF e do contrato de dados do CRM, mantendo o percentual e o valor financeiro do Top 5.
+
 ## [1.6.9] - 2026-09-10
 
 ### Corrigido

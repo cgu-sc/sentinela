@@ -40,6 +40,125 @@ const { formatCurrencyFull, formatarData, formatTitleCase, formatCnpj, toLocalIS
 const analyticsStore = useAnalyticsStore();
 const farmaciaLists = useFarmaciaListsStore();
 
+const createMortalityTooltip = (title, body, methodology) => ({
+  value: `
+    <div class="mortality-info-tooltip-content">
+      <div class="mortality-info-tooltip-heading">
+        <i class="pi pi-info-circle" aria-hidden="true"></i>
+        <span>${title}</span>
+      </div>
+      <p class="mortality-info-tooltip-body">${body}</p>
+      <div class="mortality-info-tooltip-note">
+        <strong>Metodologia</strong>
+        <span>${methodology}</span>
+      </div>
+    </div>
+  `,
+  escape: false,
+  class: 'mortality-info-tooltip',
+  showDelay: 120,
+  hideDelay: 80,
+});
+
+const createMortalityTextTooltip = (value) => ({
+  value,
+  class: 'mortality-info-tooltip mortality-text-tooltip',
+  showDelay: 120,
+  hideDelay: 80,
+});
+
+const mortalityTooltips = Object.freeze({
+  cards: Object.freeze({
+    cpfsDistintos: createMortalityTooltip(
+      'CPFs distintos',
+      'Quantidade de CPFs únicos vinculados a pelo menos uma autorização identificada após o registro de óbito para este CNPJ, dentro do período selecionado. O mesmo CPF é contado uma única vez, ainda que possua várias autorizações.',
+      'Contagem deduplicada pela identificação do CPF.'
+    ),
+    totalAutorizacoes: createMortalityTooltip(
+      'Número de autorizações',
+      'Quantidade de autorizações de venda identificadas para este CNPJ no período selecionado. Cada autorização é contabilizada uma vez e reúne os itens registrados com o mesmo número de autorização.',
+      'Agrupamento dos itens pelo número da autorização.'
+    ),
+    valorTotal: createMortalityTooltip(
+      'Prejuízo estimado',
+      'Soma dos valores pagos registrados nas autorizações identificadas após o registro de óbito, no período selecionado. Representa o valor financeiro associado a essas ocorrências conforme os registros de venda.',
+      'Soma dos valores pagos dos itens que compõem as autorizações identificadas.'
+    ),
+    mediaDias: createMortalityTooltip(
+      'Média de dias pós-óbito',
+      'Média aritmética do intervalo, em dias, entre o registro de óbito e a data da autorização. O cálculo considera todas as autorizações do período; por isso, autorizações diferentes do mesmo CPF têm peso individual na média.',
+      'Média dos dias pós-óbito calculados para cada autorização.'
+    ),
+    maxDias: createMortalityTooltip(
+      'Máximo de dias pós-óbito',
+      'Maior intervalo, em dias, entre o registro de óbito e a data de uma autorização identificada para este CNPJ no período selecionado.',
+      'Maior valor de dias pós-óbito encontrado entre as autorizações.'
+    ),
+    pctFaturamento: createMortalityTooltip(
+      'Percentual do faturamento',
+      'Percentual obtido pela relação entre o valor total das autorizações pós-óbito e o faturamento PFPB registrado para este CNPJ na base de movimentação. Indica a participação financeira dessas ocorrências no faturamento do estabelecimento.',
+      'Valor das autorizações pós-óbito dividido pelo faturamento PFPB total registrado na base de movimentação.'
+    ),
+    cpfsMultiCnpj: createMortalityTooltip(
+      'CPFs Multi-CNPJ',
+      'Quantidade de CPFs identificados neste CNPJ que também aparecem vinculados a autorizações pós-óbito em outros CNPJs monitorados no mesmo período. O percentual entre parênteses é calculado sobre o total de CPFs distintos deste CNPJ.',
+      'Contagem de CPFs compartilhados com outros CNPJs e proporção sobre os CPFs distintos do estabelecimento.'
+    ),
+  }),
+  columns: Object.freeze({
+    cpf: createMortalityTooltip(
+      'CPF',
+      'Identificador do beneficiário associado à autorização. É utilizado como chave de cruzamento entre os registros de venda e a base de óbitos, além de permitir o agrupamento das autorizações da mesma pessoa.',
+      'Chave de cruzamento e agrupamento dos registros.'
+    ),
+    nomeFalecido: createMortalityTooltip(
+      'Nome do falecido',
+      'Nome associado ao CPF na base cadastral utilizada para complementar o registro. Quando não há nome disponível para o CPF, o sistema pode exibir “Não Identificado”.',
+      'Informação obtida da base cadastral de pessoas físicas.'
+    ),
+    municipioUf: createMortalityTooltip(
+      'Município / UF',
+      'Município e unidade federativa associados ao beneficiário na base cadastral. Essa localização se refere ao CPF do beneficiário e não necessariamente ao endereço do estabelecimento que realizou a venda.',
+      'Localização cadastral do beneficiário, não do estabelecimento.'
+    ),
+    fonteObito: createMortalityTooltip(
+      'Fonte do óbito',
+      'Identificação da fonte que forneceu o registro de óbito na base unificada, como SIM, SIRC ou SISOBI.',
+      'Origem registrada na base unificada de óbitos.'
+    ),
+    numeroAutorizacao: createMortalityTooltip(
+      'Número da autorização',
+      'Número identificador da autorização registrada no Sistema Autorizador de Vendas. Ele é utilizado para reunir os itens pertencentes à mesma operação de venda.',
+      'Identificador da operação de venda e chave de agregação dos itens.'
+    ),
+    dataObito: createMortalityTooltip(
+      'Data do óbito',
+      'Data de óbito consolidada para o CPF na base unificada de óbitos. Essa é a data utilizada pelo sistema no cruzamento com as autorizações.',
+      'Data consolidada a partir dos registros disponíveis para o CPF.'
+    ),
+    dataVenda: createMortalityTooltip(
+      'Data da venda',
+      'Data em que a autorização foi registrada no sistema de vendas. Quando uma autorização possui vários itens, é considerada a primeira data/hora registrada para aquela autorização; a tabela exibe somente a data.',
+      'Primeiro registro de data/hora associado ao número da autorização.'
+    ),
+    itens: createMortalityTooltip(
+      'Itens',
+      'Quantidade de registros de itens de medicamentos associados à autorização no recorte auditado. O número representa as linhas de itens consideradas na composição daquela autorização.',
+      'Contagem das linhas de movimentação incluídas no conjunto de medicamentos auditado.'
+    ),
+    valor: createMortalityTooltip(
+      'Valor da autorização',
+      'Soma dos valores pagos registrados para os itens que compõem a autorização. Esse valor é utilizado na composição do prejuízo estimado.',
+      'Soma do campo de valor pago dos itens da autorização.'
+    ),
+    diasAposObito: createMortalityTooltip(
+      'Dias após o óbito',
+      'Quantidade de dias entre a data do óbito e a data da autorização. O valor é calculado para cada autorização e permite avaliar a distância temporal entre o óbito registrado e a venda identificada.',
+      'Diferença em dias entre o óbito e a data/hora da autorização.'
+    ),
+  }),
+});
+
 // Mapa para busca O(1) de dados do CNPJ no Pinia Store para enriquecer o painel.
 const cnpjsDict = computed(() => {
   const dict = {};
@@ -226,33 +345,96 @@ const falecidosAgrupadosFiltrados = computed(() => {
       <!-- 7 CARDS DE KPI -->
       <div class="falecidos-kpi-grid">
         <div class="f-kpi-card" :class="cachedFalecidosData.summary.cpfs_distintos > 0 ? 'highlight-red' : ''">
-          <span class="f-kpi-label">CPFs Distintos</span>
+          <span class="f-kpi-label">
+            <span>CPFs Distintos</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre CPFs distintos"
+              v-tooltip.right="mortalityTooltips.cards.cpfsDistintos"
+            />
+          </span>
           <span class="f-kpi-val">{{ cachedFalecidosData.summary.cpfs_distintos }}</span>
         </div>
         <div class="f-kpi-card" :class="cachedFalecidosData.summary.total_autorizacoes > 0 ? 'highlight-red' : ''">
-          <span class="f-kpi-label">Núm. Autorizações</span>
+          <span class="f-kpi-label">
+            <span>Núm. Autorizações</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre o número de autorizações"
+              v-tooltip.top="mortalityTooltips.cards.totalAutorizacoes"
+            />
+          </span>
           <span class="f-kpi-val">{{ cachedFalecidosData.summary.total_autorizacoes }}</span>
         </div>
         <div class="f-kpi-card" :class="cachedFalecidosData.summary.valor_total > 0 ? 'highlight-red highlight-prejuizo' : ''">
-          <span class="f-kpi-label">Prejuízo Estimado</span>
+          <span class="f-kpi-label">
+            <span>Prejuízo Estimado</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre o prejuízo estimado"
+              v-tooltip.top="mortalityTooltips.cards.valorTotal"
+            />
+          </span>
           <div class="f-kpi-val-container">
             <span class="f-kpi-val">{{ formatCurrencyFull(cachedFalecidosData.summary.valor_total) }}</span>
           </div>
         </div>
         <div class="f-kpi-card" :class="(cachedFalecidosData.summary.media_dias || 0) > 0 ? 'highlight-red' : ''">
-          <span class="f-kpi-label">Média Dias Pós-Óbito</span>
+          <span class="f-kpi-label">
+            <span>Média Dias Pós-Óbito</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre a média de dias pós-óbito"
+              v-tooltip.top="mortalityTooltips.cards.mediaDias"
+            />
+          </span>
           <span class="f-kpi-val">{{ cachedFalecidosData.summary.media_dias.toFixed(1) }} <small>dias</small></span>
         </div>
         <div class="f-kpi-card" :class="cachedFalecidosData.summary.max_dias > 0 ? 'highlight-red' : ''">
-          <span class="f-kpi-label">Máximo Dias Pós-Óbito</span>
+          <span class="f-kpi-label">
+            <span>Máximo Dias Pós-Óbito</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre o máximo de dias pós-óbito"
+              v-tooltip.top="mortalityTooltips.cards.maxDias"
+            />
+          </span>
           <span class="f-kpi-val">{{ cachedFalecidosData.summary.max_dias }} <small>dias</small></span>
         </div>
         <div class="f-kpi-card" :class="cachedFalecidosData.summary.pct_faturamento > 0 ? 'highlight-orange' : ''">
-          <span class="f-kpi-label">% do Faturamento</span>
+          <span class="f-kpi-label">
+            <span>% do Faturamento</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre o percentual do faturamento"
+              v-tooltip.top="mortalityTooltips.cards.pctFaturamento"
+            />
+          </span>
           <span class="f-kpi-val">{{ (cachedFalecidosData.summary.pct_faturamento * 100).toFixed(3) }}%</span>
         </div>
         <div class="f-kpi-card" :class="cachedFalecidosData.summary.cpfs_multi_cnpj > 0 ? 'highlight-red' : ''">
-          <span class="f-kpi-label">CPFs Multi-CNPJ</span>
+          <span class="f-kpi-label">
+            <span>CPFs Multi-CNPJ</span>
+            <i
+              class="pi pi-info-circle mortality-info-icon"
+              role="img"
+              tabindex="0"
+              aria-label="Informações sobre CPFs Multi-CNPJ"
+              v-tooltip.left="mortalityTooltips.cards.cpfsMultiCnpj"
+            />
+          </span>
           <span class="f-kpi-val">{{ cachedFalecidosData.summary.cpfs_multi_cnpj }} <small>({{ (cachedFalecidosData.summary.pct_multi_cnpj * 100).toFixed(1) }}%)</small></span>
         </div>
       </div>
@@ -302,7 +484,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
                   class="rank-filter-btn"
                   :class="{ active: filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj }"
                   @click.stop="toggleRankingFilter(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj)"
-                  v-tooltip.top="'Filtrar a tabela de transações por este CNPJ'"
+                  v-tooltip.top="createMortalityTextTooltip('Filtrar a tabela de transações por este CNPJ')"
                 >
                   <i :class="filteredRankingCnpj === getEstabelecimentoInfo(r.estabelecimento).cleanCnpj ? 'pi pi-filter-slash' : 'pi pi-filter'" />
                   <span>Exibir</span>
@@ -310,7 +492,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
                 <button
                   class="rank-filter-btn"
                   :class="{ active: farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) }"
-                  v-tooltip.top="farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) ? 'Remover da lista de interesse' : 'Salvar na lista de interesse para acompanhamento'"
+                  v-tooltip.top="createMortalityTextTooltip(farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) ? 'Remover da lista de interesse' : 'Salvar na lista de interesse para acompanhamento')"
                   @click.stop="farmaciaLists.toggleInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj, getEstabelecimentoInfo(r.estabelecimento).name)"
                 >
                   <i :class="farmaciaLists.isInteresse(getEstabelecimentoInfo(r.estabelecimento).cleanCnpj) ? 'pi pi-star-fill' : 'pi pi-star'" />
@@ -318,7 +500,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
                 </button>
                 <button
                   class="rank-filter-btn rank-open-btn"
-                  v-tooltip.top="'Abrir análise completa deste CNPJ'"
+                  v-tooltip.top="createMortalityTextTooltip('Abrir análise completa deste CNPJ')"
                   @click.stop="openEstablishment(r.estabelecimento)"
                 >
                   <i class="pi pi-external-link" />
@@ -374,16 +556,126 @@ const falecidosAgrupadosFiltrados = computed(() => {
             </colgroup>
             <thead>
               <tr>
-                <th>CPF</th>
-                <th>Nome do Falecido</th>
-                <th>Município / UF</th>
-                <th>Fonte Óbito</th>
-                <th>Nº Autorização</th>
-                <th>Dt. Óbito</th>
-                <th>Data da Venda</th>
-                <th>Itens</th>
-                <th>Valor (R$)</th>
-                <th class="txt-center">Dias após Óbito</th>
+                <th>
+                  <span class="f-th-label">
+                    <span>CPF</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna CPF"
+                      v-tooltip.right="mortalityTooltips.columns.cpf"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Nome do Falecido</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Nome do Falecido"
+                      v-tooltip.top="mortalityTooltips.columns.nomeFalecido"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Município / UF</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Município ou UF"
+                      v-tooltip.top="mortalityTooltips.columns.municipioUf"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Fonte Óbito</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Fonte Óbito"
+                      v-tooltip.top="mortalityTooltips.columns.fonteObito"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Nº Autorização</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Número da Autorização"
+                      v-tooltip.top="mortalityTooltips.columns.numeroAutorizacao"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Dt. Óbito</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Data do Óbito"
+                      v-tooltip.top="mortalityTooltips.columns.dataObito"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Data da Venda</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Data da Venda"
+                      v-tooltip.top="mortalityTooltips.columns.dataVenda"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Itens</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Itens"
+                      v-tooltip.top="mortalityTooltips.columns.itens"
+                    />
+                  </span>
+                </th>
+                <th>
+                  <span class="f-th-label">
+                    <span>Valor (R$)</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Valor"
+                      v-tooltip.top="mortalityTooltips.columns.valor"
+                    />
+                  </span>
+                </th>
+                <th class="txt-center">
+                  <span class="f-th-label">
+                    <span>Dias após Óbito</span>
+                    <i
+                      class="pi pi-info-circle mortality-info-icon"
+                      role="img"
+                      tabindex="0"
+                      aria-label="Informações sobre a coluna Dias após Óbito"
+                      v-tooltip.left="mortalityTooltips.columns.diasAposObito"
+                    />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -416,7 +708,7 @@ const falecidosAgrupadosFiltrados = computed(() => {
                   </td>
                   <td class="f-date">{{ grupo.municipio }}/{{ grupo.uf }}</td>
                   <td class="f-fonte">
-                    <span v-if="t.fonte_obito && t.fonte_obito.length > 10" v-tooltip.top="t.fonte_obito" style="cursor: default">
+                    <span v-if="t.fonte_obito && t.fonte_obito.length > 10" v-tooltip.top="createMortalityTextTooltip(t.fonte_obito)" style="cursor: default">
                       {{ t.fonte_obito.substring(0, 10) }}...
                     </span>
                     <span v-else>{{ t.fonte_obito }}</span>
@@ -504,12 +796,40 @@ const falecidosAgrupadosFiltrados = computed(() => {
 }
 
 .f-kpi-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
   font-size: 0.65rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   opacity: 0.85;
+}
+
+.f-th-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.mortality-info-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  cursor: help;
+  font-size: 0.68rem;
+  line-height: 1;
+  opacity: 0.68;
+  outline: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.mortality-info-icon:hover,
+.mortality-info-icon:focus-visible {
+  color: var(--primary-color);
+  opacity: 1;
 }
 
 .f-kpi-val-container {
@@ -1042,5 +1362,67 @@ const falecidosAgrupadosFiltrados = computed(() => {
 
 .tab-placeholder p {
   font-size: 0.875rem;
+}
+
+:global(.p-tooltip.mortality-info-tooltip) {
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 9px;
+  box-shadow: var(--tooltip-shadow);
+}
+
+:global(.mortality-info-tooltip-content) {
+  display: flex;
+  width: min(330px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.62rem;
+  padding: 0.75rem 0.85rem;
+  line-height: 1.42;
+}
+
+:global(.mortality-info-tooltip-heading) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-color-85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+:global(.mortality-info-tooltip-heading i) {
+  flex-shrink: 0;
+  color: var(--risk-medium);
+  font-size: 0.8rem;
+}
+
+:global(.mortality-info-tooltip-body) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+:global(.mortality-info-tooltip-note) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--tabs-border);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+:global(.mortality-info-tooltip-note strong) {
+  color: var(--risk-medium);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:global(.p-tooltip.mortality-text-tooltip .p-tooltip-text) {
+  padding: 0.75rem 0.85rem;
 }
 </style>

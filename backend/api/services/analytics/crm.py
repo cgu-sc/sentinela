@@ -17,9 +17,6 @@ from data_cache import (
     get_df,
     get_rede_df,
     get_localidades_df,
-    get_df_bench_crm_regiao,
-    get_df_bench_crm_br,
-    get_df_dados_farmacia,
     get_df_perfil_estabelecimento,
     get_cache_dir,
 )
@@ -635,28 +632,6 @@ def get_crm_data(
     timing.mark("summary CRM")
 
     # â”€â”€ 5. Benchmarks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    bench_top5_reg = 0.0
-    bench_top5_br  = 0.0
-    try:
-        df_farm   = get_df_dados_farmacia()
-        row_farm  = df_farm.filter(pl.col("cnpj") == cnpj)
-        id_regiao = row_farm["id_regiao_saude"][0] if not row_farm.is_empty() else None
-
-        df_br = get_df_bench_crm_br()
-        if comp_ini: df_br = df_br.filter(pl.col("competencia") >= comp_ini)
-        if comp_fim: df_br = df_br.filter(pl.col("competencia") <= comp_fim)
-        bench_top5_br = _to_float(df_br["mediana_concentracao_top5_br"].mean())
-
-        if id_regiao:
-            df_reg = get_df_bench_crm_regiao()
-            df_reg = df_reg.filter(pl.col("id_regiao_saude") == id_regiao)
-            if comp_ini: df_reg = df_reg.filter(pl.col("competencia") >= comp_ini)
-            if comp_fim: df_reg = df_reg.filter(pl.col("competencia") <= comp_fim)
-            bench_top5_reg = _to_float(df_reg["mediana_concentracao_top5_reg"].mean())
-    except Exception:
-        pass
-    timing.mark("benchmarks CRM")
-
     # â”€â”€ 6. Metadados do CNPJ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     razao_social = municipio = uf_str = None
     try:
@@ -685,8 +660,6 @@ def get_crm_data(
         "pct_valor_crm_antes_registro":   pct_antes_reg,
         "qtd_prescritores_conc_temporal": qtd_conc_temp,
         "qtd_prescritores_surto":         _to_int(df_med["alerta_concentracao_multiplos_crms"].sum()),
-        "mediana_concentracao_top5_reg":  round(bench_top5_reg, 2),
-        "mediana_concentracao_top5_br":   round(bench_top5_br,  2),
         "razaoSocial":                    razao_social,
         "municipio":                      municipio,
         "uf":                             uf_str,

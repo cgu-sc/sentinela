@@ -8,6 +8,11 @@ import { useFormatting } from '@/composables/useFormatting';
 import { useStableTabState } from '@/composables/useStableTabState';
 import { INDICATOR_GROUPS } from '@/config/riskConfig';
 import { GENERIC_INDICATOR_DETAIL_KEYS } from '@/config/indicatorDetailConfig';
+import {
+  INDICATOR_COLUMN_TOOLTIP_COPY,
+  INDICATOR_TABLE_TOOLTIP_COPY,
+  INDICATOR_TOOLTIP_COPY,
+} from '@/config/indicatorTooltipConfig';
 import ClinicalIncompatibilityDialog from './ClinicalIncompatibilityDialog.vue';
 import GeographicDispersionDialog from './GeographicDispersionDialog.vue';
 import IndicatorDetailDialog from './IndicatorDetailDialog.vue';
@@ -68,9 +73,85 @@ function formatIndicadorValue(valor, formato) {
   return valor.toFixed(2);
 }
 
-function valorFinanceiroTooltip(indicadorData) {
+function escapeTooltipHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function renderTooltipSection(section) {
+  const content = section.items
+    ? `<ul>${section.items.map((item) => `<li>${escapeTooltipHtml(item)}</li>`).join('')}</ul>`
+    : section.formula
+      ? `<div class="indicator-tooltip-formula"><span>Fórmula</span><strong>${escapeTooltipHtml(section.formula)}</strong></div>`
+      : `<p>${escapeTooltipHtml(section.text)}</p>`;
+
+  return `
+    <section class="indicator-tooltip-section">
+      <strong class="indicator-tooltip-section-label">${escapeTooltipHtml(section.label)}</strong>
+      ${content}
+    </section>
+  `;
+}
+
+function createIndicatorHtmlTooltip(copy) {
+  if (!copy?.title || !copy?.intro || !Array.isArray(copy.sections)) {
+    throw new Error('Texto de tooltip de indicador incompleto.');
+  }
+
+  return {
+    value: `
+      <div class="indicator-tooltip-content">
+        <div class="indicator-tooltip-heading">
+          <i class="pi pi-info-circle" aria-hidden="true"></i>
+          <span>${escapeTooltipHtml(copy.title)}</span>
+        </div>
+        <p class="indicator-tooltip-intro">${escapeTooltipHtml(copy.intro)}</p>
+        <div class="indicator-tooltip-sections">
+          ${copy.sections.map(renderTooltipSection).join('')}
+        </div>
+      </div>
+    `,
+    escape: false,
+    class: 'indicator-info-tooltip',
+    showDelay: 120,
+    hideDelay: 80,
+  };
+}
+
+const tableHelpTooltip = createIndicatorHtmlTooltip(INDICATOR_TABLE_TOOLTIP_COPY);
+
+function columnTooltip(key) {
+  const copy = INDICATOR_COLUMN_TOOLTIP_COPY[key];
+  if (!copy) throw new Error(`Texto de tooltip de coluna não encontrado: ${key}`);
+  return createIndicatorHtmlTooltip(copy);
+}
+
+function indicatorTooltip(indicator) {
+  const copy = INDICATOR_TOOLTIP_COPY[indicator?.key];
+  if (!copy) throw new Error(`Texto de tooltip de indicador não encontrado: ${indicator?.key}`);
+  return createIndicatorHtmlTooltip(copy);
+}
+
+function valorFinanceiroTooltip(indicadorData, indicator) {
   if (indicadorData?.valor_financeiro == null) return null;
-  return `Valor financeiro: ${formatCurrencyFull(indicadorData.valor_financeiro)}`;
+  const copy = INDICATOR_TOOLTIP_COPY[indicator?.key];
+  if (!copy?.financialMeaning) {
+    throw new Error(`Contexto financeiro de tooltip não encontrado: ${indicator?.key}`);
+  }
+
+  return createIndicatorHtmlTooltip({
+    title: 'Valor financeiro associado',
+    intro: `Montante em reais relacionado ao indicador ${copy.title.toLowerCase()} no período analisado.`,
+    sections: [
+      { label: 'Valor informado', formula: formatCurrencyFull(indicadorData.valor_financeiro) },
+      { label: 'O que representa', text: copy.financialMeaning + '.' },
+    ],
+  });
 }
 
 function normalizeCnpj(value) {
@@ -266,7 +347,7 @@ function riscoTextStyle(indicadorData) {
             <span>Indicadores de Risco</span>
             <span
               class="detail-hint-badge"
-              v-tooltip.top="'Clique nas linhas dos indicadores para abrir a análise detalhada'"
+              v-tooltip.top="tableHelpTooltip"
             >
               <span class="detail-hint-badge__dot" aria-hidden="true" />
               <i class="pi pi-chart-scatter" />
@@ -301,14 +382,102 @@ function riscoTextStyle(indicadorData) {
           <thead class="ind-thead">
             <tr>
               <th>Indicador</th>
-              <th>Farmácia</th>
-              <th>Mediana Região</th>
-              <th>Mediana UF</th>
-              <th>Mediana Nacional</th>
-              <th>Risco Região</th>
-              <th>Risco UF</th>
-              <th>Risco Nacional</th>
-              <th>Status</th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Farmácia</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Farmácia"
+                    v-tooltip.top="columnTooltip('farmacia')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Mediana Região</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Mediana Região"
+                    v-tooltip.top="columnTooltip('medianaRegiao')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Mediana UF</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Mediana UF"
+                    v-tooltip.top="columnTooltip('medianaUf')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Mediana Nacional</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Mediana Nacional"
+                    v-tooltip.top="columnTooltip('medianaNacional')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Risco Região</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Risco Região"
+                    v-tooltip.top="columnTooltip('riscoRegiao')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Risco UF</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Risco UF"
+                    v-tooltip.top="columnTooltip('riscoUf')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Risco Nacional</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Risco Nacional"
+                    v-tooltip.left="columnTooltip('riscoNacional')"
+                  />
+                </span>
+              </th>
+              <th>
+                <span class="ind-heading-with-tooltip">
+                  <span>Status</span>
+                  <i
+                    class="pi pi-info-circle ind-header-info-icon"
+                    role="img"
+                    tabindex="0"
+                    aria-label="Explicação da coluna Status"
+                    v-tooltip.left="columnTooltip('status')"
+                  />
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -331,7 +500,10 @@ function riscoTextStyle(indicadorData) {
                     <span>{{ ind.label }}</span>
                     <i
                       class="pi pi-info-circle ind-info-icon"
-                      v-tooltip.right="{ value: ind.metodologia, class: 'ind-tooltip' }"
+                      role="img"
+                      tabindex="0"
+                      :aria-label="`Explicação do indicador ${ind.label}`"
+                      v-tooltip.right="indicatorTooltip(ind)"
                     />
                     
                   </div>
@@ -347,9 +519,12 @@ function riscoTextStyle(indicadorData) {
                         {{ formatIndicadorValue(cachedIndicadoresData.indicadores[ind.key].valor, ind.formato) }}
                       </span>
                       <i
-                        v-if="valorFinanceiroTooltip(cachedIndicadoresData.indicadores[ind.key])"
+                        v-if="valorFinanceiroTooltip(cachedIndicadoresData.indicadores[ind.key], ind)"
                         class="pi pi-info-circle ind-finance-icon"
-                        v-tooltip.top="{ value: valorFinanceiroTooltip(cachedIndicadoresData.indicadores[ind.key]), class: 'ind-tooltip' }"
+                        role="img"
+                        tabindex="0"
+                        aria-label="Explicação do valor financeiro associado"
+                        v-tooltip.top="valorFinanceiroTooltip(cachedIndicadoresData.indicadores[ind.key], ind)"
                       />
                     </div>
                   </td>
@@ -896,6 +1071,34 @@ function riscoTextStyle(indicadorData) {
 
 .ind-thead th:first-child { text-align: left; }
 
+.ind-heading-with-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.ind-header-info-icon {
+  color: var(--risk-medium);
+  cursor: help;
+  font-size: 0.7rem;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.ind-header-info-icon:hover,
+.ind-header-info-icon:focus-visible {
+  color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.ind-header-info-icon:focus-visible,
+.ind-info-icon:focus-visible,
+.ind-finance-icon:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 65%, transparent);
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
 /* Linha de grupo - Estilo Relatório de Mesa (Refinado) */
 .ind-group-row td {
   padding: 1rem 1rem 0.35rem 1rem;
@@ -1140,6 +1343,126 @@ function riscoTextStyle(indicadorData) {
   font-size: 2.5rem;
   color: var(--sidebar-border);
   opacity: 0.7;
+}
+
+:global(.p-tooltip.indicator-info-tooltip) {
+  max-width: min(360px, calc(100vw - 2rem));
+  width: auto;
+  padding: 0;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 9px;
+  box-shadow: var(--tooltip-shadow);
+}
+
+:global(.p-tooltip.indicator-info-tooltip .p-tooltip-text) {
+  width: 100%;
+  padding: 0;
+  white-space: normal;
+}
+
+:global(.indicator-tooltip-content) {
+  display: flex;
+  width: min(330px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.62rem;
+  padding: 0.75rem 0.85rem;
+  color: var(--text-color-85);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+:global(.indicator-tooltip-heading) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-color-85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+:global(.indicator-tooltip-heading i) {
+  flex-shrink: 0;
+  color: var(--risk-medium);
+  font-size: 0.8rem;
+}
+
+:global(.indicator-tooltip-intro) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+:global(.indicator-tooltip-sections) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+:global(.indicator-tooltip-section) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--tabs-border);
+}
+
+:global(.indicator-tooltip-section:first-child) {
+  padding-top: 0;
+  border-top: 0;
+}
+
+:global(.indicator-tooltip-section-label) {
+  color: var(--risk-medium);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+:global(.indicator-tooltip-section p) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+:global(.indicator-tooltip-section ul) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+:global(.indicator-tooltip-section li::marker) {
+  color: var(--risk-medium);
+}
+
+:global(.indicator-tooltip-formula) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--tabs-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+}
+
+:global(.indicator-tooltip-formula span) {
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+:global(.indicator-tooltip-formula strong) {
+  color: var(--text-color-85);
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 

@@ -21,6 +21,203 @@ const emit = defineEmits(['clear-filters']);
 const { formatCurrencyFull, formatNumberFull, formatarData } = useFormatting();
 const formatPct = (val) => val != null ? `${Number(val).toFixed(2)}%` : "0.00%";
 
+const escapeTooltipHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}[character]));
+
+const createCrmTableTooltip = (title, body, note, icon = 'pi-info-circle') => ({
+  value: `
+    <div class="crm-profile-tooltip-content">
+      <div class="crm-profile-tooltip-heading">
+        <i class="pi ${icon}" aria-hidden="true"></i>
+        <span>${escapeTooltipHtml(title)}</span>
+      </div>
+      <p class="crm-profile-tooltip-body">${escapeTooltipHtml(body)}</p>
+      <div class="crm-profile-tooltip-note">
+        <strong>Como interpretar</strong>
+        <span>${escapeTooltipHtml(note)}</span>
+      </div>
+    </div>
+  `,
+  escape: false,
+  class: 'crm-profile-info-tooltip',
+  showDelay: 120,
+  hideDelay: 80,
+});
+
+const crmTableTooltips = Object.freeze({
+  filterBadge: createCrmTableTooltip(
+    'Filtro de KPI ativo',
+    'A tabela está exibindo somente os médicos relacionados ao indicador selecionado no card acima.',
+    'O contador informa quantos registros permanecem visíveis em relação ao total carregado.',
+    'pi-filter-fill'
+  ),
+  clearFilter: createCrmTableTooltip(
+    'Limpar filtro',
+    'Remove o filtro aplicado pelo card de KPI e restaura a lista completa de CRMs.',
+    'A seleção de “Apenas com Alertas / Anomalias” permanece independente.',
+    'pi-times'
+  ),
+  columns: Object.freeze({
+    rank: createCrmTableTooltip(
+      'Classificação',
+      'Ordenação decrescente pelo valor financeiro total autorizado por este CRM no estabelecimento.',
+      'A posição é recalculada conforme o período analisado e os filtros aplicados.',
+      'pi-sort-amount-down'
+    ),
+    crm: createCrmTableTooltip(
+      'CRM / Médico',
+      'Identificação do CRM e da UF de registro do prescritor. A linha abaixo informa a primeira inscrição no Conselho Federal de Medicina disponível para esse registro.',
+      'O CRM é a chave usada para vincular as autorizações às análises de comportamento do prescritor.',
+      'pi-id-card'
+    ),
+    status: createCrmTableTooltip(
+      'Status / Alertas',
+      'Reúne os sinais identificados para o CRM, como volume intensivo, concentração temporal, inconsistência no CFM, exclusividade, distância atípica e uso sequencial de múltiplos CRMs.',
+      'Badges clicáveis abrem as evidências quando há detalhamento disponível.',
+      'pi-shield'
+    ),
+    volume: createCrmTableTooltip(
+      'Volume / Valor',
+      'Mostra o valor financeiro total das autorizações vinculadas ao CRM e a quantidade de autorizações consideradas no período.',
+      'O valor também é utilizado para ordenar a classificação financeira da tabela.',
+      'pi-chart-bar'
+    ),
+    participation: createCrmTableTooltip(
+      'Participação / Acumulado',
+      'Participação é a parcela do faturamento do estabelecimento atribuída ao CRM. Acumulado soma as participações da primeira posição até o CRM atual e evidencia a concentração do volume financeiro.',
+      'As barras representam a participação individual e o percentual acumulado.',
+      'pi-chart-line'
+    ),
+    prescriptions: createCrmTableTooltip(
+      'Prescrições por dia',
+      'Exibe a média diária de prescrições em duas perspectivas: local, considerando apenas esta farmácia; e Brasil, considerando as farmácias do Farmácia Popular associadas ao CRM.',
+      'Médias acima de 30 prescrições por dia são sinalizadas como emissão atípica.',
+      'pi-calendar-clock'
+    ),
+    exclusive: createCrmTableTooltip(
+      'Taxa de exclusividade',
+      'Percentual das prescrições do CRM no Farmácia Popular que foram autorizadas exclusivamente neste estabelecimento.',
+      'Valores próximos de 100% indicam concentração elevada da atuação do médico nesta unidade.',
+      'pi-lock'
+    ),
+  }),
+  issues: Object.freeze({
+    roboLocal: createCrmTableTooltip(
+      'Mais de 30 prescrições/dia — local',
+      'A média diária de prescrições deste CRM nesta farmácia ultrapassou 30 autorizações por dia.',
+      'O sinal é calculado sobre a atuação do CRM neste estabelecimento.',
+      'pi-history'
+    ),
+    roboBrasil: createCrmTableTooltip(
+      'Mais de 30 prescrições/dia — Brasil',
+      'A média diária de prescrições deste CRM no conjunto das farmácias do Farmácia Popular ultrapassou 30 autorizações por dia.',
+      'O sinal pode existir mesmo sem ocorrência acima do limite nesta unidade.',
+      'pi-globe'
+    ),
+    crmInvalido: createCrmTableTooltip(
+      'CRM inexistente',
+      'O CRM não foi encontrado na base oficial do Conselho Federal de Medicina.',
+      'O alerta aponta uma inconsistência cadastral que precisa ser confrontada com os registros da autorização.',
+      'pi-ban'
+    ),
+    antesRegistro: createCrmTableTooltip(
+      'CRM irregular',
+      'Foi identificada uma venda anterior à data de registro oficial do CRM no Conselho Federal de Medicina.',
+      'A análise compara a data da autorização com o início de registro disponível para o prescritor.',
+      'pi-calendar-times'
+    ),
+    exclusivo: createCrmTableTooltip(
+      'CRM exclusivo',
+      'No conjunto de registros do Farmácia Popular analisado, o CRM prescreveu exclusivamente para este CNPJ.',
+      'O padrão representa concentração integral da atuação observada nesta unidade.',
+      'pi-lock'
+    ),
+    semOcorrencias: createCrmTableTooltip(
+      'Sem ocorrências identificadas',
+      'Nenhum alerta ou sinal de anomalia foi identificado para este CRM no recorte analisado.',
+      'A tabela continua apresentando os dados financeiros e de participação do prescritor.',
+      'pi-check-circle'
+    ),
+  }),
+  evidence: Object.freeze({
+    unico: createCrmTableTooltip(
+      'CRM único',
+      'Dias em que este CRM acumulou um alto número de autorizações em um intervalo muito curto. A evidência detalha a data, o volume, a janela de tempo e a taxa por hora.',
+      'Quanto maior a taxa por hora, maior o indício de lançamento automatizado com um único médico.',
+      'pi-user'
+    ),
+    distancia: createCrmTableTooltip(
+      'Distância geográfica',
+      'Pares de estabelecimentos em que o mesmo CRM foi utilizado simultaneamente em municípios distantes entre si. A distância informa a separação entre os locais.',
+      'O padrão pode indicar incompatibilidade de presença física e deve ser analisado junto às datas e horários das autorizações.',
+      'pi-map-marker'
+    ),
+    multiplos: createCrmTableTooltip(
+      'CRMs múltiplos',
+      'Horas em que este CNPJ emitiu volume elevado de autorizações usando vários CRMs diferentes em sequência. A evidência mostra a diversidade de médicos e o total de prescrições.',
+      'O padrão é compatível com lançamento em lote com rodízio de prescritores.',
+      'pi-users'
+    ),
+  }),
+  raiox: createCrmTableTooltip(
+    'Abrir no Raio-X',
+    'Clique na linha para navegar diretamente para a análise detalhada do dia e da hora selecionados.',
+    'O Raio-X apresenta as autorizações que compõem o episódio identificado.',
+    'pi-search'
+  ),
+});
+
+const alertToggleTooltipCopy = Object.freeze({
+  conc: Object.freeze({
+    collapsed: {
+      title: 'Ver episódios de CRM único',
+      body: 'Abre os dias em que este CRM concentrou autorizações em um intervalo muito curto.',
+      note: 'O painel detalha volume, janela de tempo e taxa por hora.',
+    },
+    expanded: {
+      title: 'Recolher episódios de CRM único',
+      body: 'Oculta o painel com os episódios detalhados de concentração deste CRM.',
+      note: 'Os indicadores e alertas da linha permanecem visíveis.',
+    },
+  }),
+  geo: Object.freeze({
+    collapsed: {
+      title: 'Ver evidências de distância',
+      body: 'Abre os pares de estabelecimentos em que o mesmo CRM aparece associado a locais separados por mais de 400 km.',
+      note: 'A tabela apresenta municípios, datas, horários e distância calculada.',
+    },
+    expanded: {
+      title: 'Recolher evidências de distância',
+      body: 'Oculta o painel com as evidências geográficas associadas a este CRM.',
+      note: 'Os indicadores e alertas da linha permanecem visíveis.',
+    },
+  }),
+  surto: Object.freeze({
+    collapsed: {
+      title: 'Ver episódios de CRMs múltiplos',
+      body: 'Abre as horas em que a farmácia concentrou autorizações usando vários CRMs em sequência.',
+      note: 'A tabela apresenta os CRMs acionados, os volumes e a diversidade do episódio.',
+    },
+    expanded: {
+      title: 'Recolher episódios de CRMs múltiplos',
+      body: 'Oculta o painel com os episódios detalhados de concentração com múltiplos CRMs.',
+      note: 'Os indicadores e alertas da linha permanecem visíveis.',
+    },
+  }),
+});
+
+function getAlertToggleTooltip(type, isExpanded) {
+  const copy = alertToggleTooltipCopy[type];
+  if (!copy) throw new Error(`Tipo de alerta CRM não configurado: ${type}.`);
+  const state = copy[isExpanded ? 'expanded' : 'collapsed'];
+  return createCrmTableTooltip(state.title, state.body, state.note, 'pi-info-circle');
+}
+
 const filterOnlyIssues = ref(false);
 const showAllCrms     = ref(false);
 const expandedAlertasMedico = ref(new Set());
@@ -177,13 +374,18 @@ const maxPDOverall = computed(() => {
 
     <p class="subtitle" style="padding-left: 1.75rem; margin-top: -0.5rem; margin-bottom: 1rem">
       Detalhamento dos médicos que mais aprovaram medicamentos nesta unidade, ordenados pelo financeiro.
-      <div v-if="activeKpiFilter" class="filter-badge animate-fade-in" v-tooltip.bottom="'Filtro de KPI Ativo'">
+      <div v-if="activeKpiFilter" class="filter-badge animate-fade-in" v-tooltip.bottom="crmTableTooltips.filterBadge">
         <i class="pi pi-filter-fill" />
         <span class="filter-text">
           <small style="opacity: 0.8; font-weight: 500; margin-right: 2px; text-transform: uppercase; font-size: 0.6rem;">Filtro:</small>
           {{ kpiFilterLabels[activeKpiFilter] }} — <strong class="filter-count">{{ filteredCrmsInteresse.length }} de {{ crmsInteresse.length }}</strong>
         </span>
-        <button class="clear-filter-btn" @click.stop="clearAllFilters" title="Limpar filtro">
+        <button
+          class="clear-filter-btn"
+          v-tooltip.top="crmTableTooltips.clearFilter"
+          aria-label="Limpar filtro"
+          @click.stop="clearAllFilters"
+        >
           <i class="pi pi-times" />
         </button>
       </div>
@@ -200,13 +402,69 @@ const maxPDOverall = computed(() => {
       <table class="ind-table premium-table row-hover">
         <thead class="sticky-thead">
           <tr>
-            <th style="width: 45px;" class="col-center">#</th>
-            <th style="width: 160px;">CRM / Médico</th>
-            <th style="width: 42%">Status / Alertas</th>
-            <th class="col-right" style="width: 15%">Volume / Valor</th>
-            <th class="col-center" style="width: 16%">Participação / Acumulado</th>
-            <th class="col-center" style="width: 12%">Prescrições por Dia</th>
-            <th class="col-center" style="width: 5%">Excl.</th>
+            <th style="width: 45px;" class="col-center">
+              #
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.top="crmTableTooltips.columns.rank"
+                tabindex="0"
+                aria-label="Informações sobre a classificação"
+              />
+            </th>
+            <th style="width: 160px;">
+              CRM / Médico
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.top="crmTableTooltips.columns.crm"
+                tabindex="0"
+                aria-label="Informações sobre CRM e médico"
+              />
+            </th>
+            <th style="width: 42%">
+              Status / Alertas
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.top="crmTableTooltips.columns.status"
+                tabindex="0"
+                aria-label="Informações sobre status e alertas"
+              />
+            </th>
+            <th class="col-right" style="width: 15%">
+              Volume / Valor
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.top="crmTableTooltips.columns.volume"
+                tabindex="0"
+                aria-label="Informações sobre volume e valor"
+              />
+            </th>
+            <th class="col-center" style="width: 16%">
+              Participação / Acumulado
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.top="crmTableTooltips.columns.participation"
+                tabindex="0"
+                aria-label="Informações sobre participação e acumulado"
+              />
+            </th>
+            <th class="col-center" style="width: 12%">
+              Prescrições por Dia
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.top="crmTableTooltips.columns.prescriptions"
+                tabindex="0"
+                aria-label="Informações sobre prescrições por dia"
+              />
+            </th>
+            <th class="col-center" style="width: 5%">
+              Excl.
+              <i
+                class="pi pi-info-circle th-info-icon"
+                v-tooltip.left="crmTableTooltips.columns.exclusive"
+                tabindex="0"
+                aria-label="Informações sobre a taxa de exclusividade"
+              />
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -226,35 +484,35 @@ const maxPDOverall = computed(() => {
               </td>
               <td class="flags-cell">
                 <div class="tags-container">
-                  <span v-if="m.flag_robo" class="issue-tag red" v-tooltip.top="'>30 Prescrições/dia neste CNPJ'">
+                  <span v-if="m.flag_robo" class="issue-tag red" v-tooltip.top="crmTableTooltips.issues.roboLocal">
                     <i class="pi pi-history"></i> >30 PRESC/DIA (LOCAL)
                   </span>
-                  <span v-if="m.flag_robo_oculto && !m.flag_robo" class="issue-tag orange" v-tooltip.top="'>30 Prescrições/dia em todo o Brasil (Robô Oculto)'">
+                  <span v-if="m.flag_robo_oculto && !m.flag_robo" class="issue-tag orange" v-tooltip.top="crmTableTooltips.issues.roboBrasil">
                     <i class="pi pi-globe"></i> >30 PRESC/DIA (BRASIL)
                   </span>
                   <span
                     v-if="m.alerta_concentracao_unico_crm"
                     class="issue-tag violet clickable-badge"
-                    v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios detalhados'"
+                    v-tooltip.top="getAlertToggleTooltip('conc', expandedAlertasMedico.has(m.id_medico))"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-stopwatch"></i> CONCENTRAÇÃO CRM ÚNICO
                     <span v-if="qtdAlertasUnico(m) > 0" class="badge-count">({{ qtdAlertasUnico(m) }}x)</span>
                     <i :class="expandedAlertasMedico.has(m.id_medico) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" style="font-size:0.6rem; margin-left:0.2rem;" />
                   </span>
-                  <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="'CRM não encontrado na base de dados oficial do Conselho Federal de Medicina (CFM)'">
+                  <span v-if="m.flag_crm_invalido" class="issue-tag red" v-tooltip.top="crmTableTooltips.issues.crmInvalido">
                     <i class="pi pi-ban"></i> CRM INEXISTENTE
                   </span>
-                  <span v-if="m.flag_prescricao_antes_registro" class="issue-tag red" v-tooltip.top="'Venda anterior ao Registro oficial no CFM'">
+                  <span v-if="m.flag_prescricao_antes_registro" class="issue-tag red" v-tooltip.top="crmTableTooltips.issues.antesRegistro">
                     <i class="pi pi-calendar-times"></i> CRM IRREGULAR
                   </span>
-                  <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag blue-network" v-tooltip.top="'Médico prescreveu exclusivamente para este CNPJ no total do Brasil'">
+                  <span v-if="m.flag_crm_exclusivo > 0" class="issue-tag blue-network" v-tooltip.top="crmTableTooltips.issues.exclusivo">
                     <i class="pi pi-lock"></i> CRM EXCLUSIVO
                   </span>
                   <span 
                     v-if="m.alerta5_geografico" 
                     class="issue-tag purple-geo clickable-badge" 
-                    v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver evidências de distância'"
+                    v-tooltip.top="getAlertToggleTooltip('geo', expandedAlertasMedico.has(m.id_medico))"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-map-marker"></i> DISTÂNCIA >400KM
@@ -264,7 +522,7 @@ const maxPDOverall = computed(() => {
                   <span
                     v-if="m.alerta_concentracao_multiplos_crms"
                     class="issue-tag amber clickable-badge"
-                    v-tooltip.top="expandedAlertasMedico.has(m.id_medico) ? 'Recolher detalhes' : 'Ver episódios de surto geral'"
+                    v-tooltip.top="getAlertToggleTooltip('surto', expandedAlertasMedico.has(m.id_medico))"
                     @click.stop="toggleAlertasDiarios(m.id_medico)"
                   >
                     <i class="pi pi-bolt"></i> CONCENTRAÇÃO CRMs MÚLTIPLOS
@@ -275,7 +533,7 @@ const maxPDOverall = computed(() => {
                     v-if="!hasAlertasDetalhados(m) && !m.flag_robo && !m.flag_robo_oculto && !m.flag_crm_invalido && !m.flag_prescricao_antes_registro && !m.alerta5_geografico && !m.alerta_concentracao_multiplos_crms && (!m.flag_crm_exclusivo || m.flag_crm_exclusivo === 0)"
                     class="pi pi-check-circle"
                     style="color: var(--text-muted); font-size: 0.85rem;"
-                    v-tooltip.top="'Sem ocorrências identificadas'"
+                    v-tooltip.top="crmTableTooltips.issues.semOcorrencias"
                   />
                 </div>
               </td>
@@ -379,6 +637,11 @@ const maxPDOverall = computed(() => {
                       >
                         CRM Único
                         <span class="seg-count">{{ qtdAlertasUnico(m) }}</span>
+                        <i
+                          class="pi pi-info-circle seg-info-icon"
+                          v-tooltip.top="crmTableTooltips.evidence.unico"
+                          @click.stop
+                        />
                       </button>
                       <button
                         v-if="qtdAlertasGeo(m) > 0"
@@ -389,6 +652,11 @@ const maxPDOverall = computed(() => {
                         <i class="pi pi-map-marker" />
                         Distância
                         <span class="seg-count">{{ qtdAlertasGeo(m) }}</span>
+                        <i
+                          class="pi pi-info-circle seg-info-icon"
+                          v-tooltip.top="crmTableTooltips.evidence.distancia"
+                          @click.stop
+                        />
                       </button>
                       <button
                         v-if="qtdAlertasMultiplos(m) > 0"
@@ -398,6 +666,11 @@ const maxPDOverall = computed(() => {
                       >
                         CRMs Múltiplos
                         <span class="seg-count">{{ qtdAlertasMultiplos(m) }}</span>
+                        <i
+                          class="pi pi-info-circle seg-info-icon"
+                          v-tooltip.top="crmTableTooltips.evidence.multiplos"
+                          @click.stop
+                        />
                       </button>
                     </div>
                   </div>
@@ -482,7 +755,7 @@ const maxPDOverall = computed(() => {
                         v-for="(s, l) in getAlertasDetalhados(m.id_medico).alertas_crm_multiplos" 
                         :key="'surto-'+l"
                         class="clickable-surto-row"
-                        v-tooltip.top="'Clique para ver no Raio-X'"
+                        v-tooltip.top="crmTableTooltips.raiox"
                         @click="handleTimelineNavigation(s.dt, s.hr)"
                       >
                         <td class="col-date">{{ formatarDataAlerta(s.dt) }}</td>
@@ -607,6 +880,8 @@ input:checked + .toggle-slider:before { transform: translateX(14px); }
 .premium-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .premium-table th { padding: 0.6rem 0.5rem; background: transparent; color: color-mix(in srgb, var(--text-secondary) 85%, transparent); font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; border-bottom: 2px solid var(--tabs-border); text-align: center; }
 .premium-table th:first-child { text-align: left; }
+.th-info-icon { font-size: 0.72rem; margin-left: 0.25rem; opacity: 0.6; cursor: help; vertical-align: middle; transition: opacity 0.2s ease, color 0.2s ease; }
+.th-info-icon:hover { opacity: 1; color: var(--primary-color); }
 .premium-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--tabs-border); vertical-align: middle; color: color-mix(in srgb, var(--text-color-85) 85%, transparent); font-size: 0.8rem; text-transform: none !important; }
 .premium-table th:nth-child(2), .premium-table td:nth-child(2) { text-align: left; overflow: hidden; text-overflow: ellipsis; }
 .premium-table tbody tr:last-child td { border-bottom: none; }
@@ -935,5 +1210,97 @@ tr:hover .rank-badge .rank-val { color: var(--primary-color); }
 .clickable-surto-row {
   cursor: pointer;
   transition: background 0.2s ease;
+}
+
+/* Ícones de informação no cabeçalho da tabela */
+.th-info-icon {
+  font-size: 0.68rem;
+  opacity: 0.7;
+  margin-left: 0.3rem;
+  cursor: help;
+  outline: none;
+  vertical-align: middle;
+  color: var(--primary-color);
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+th:hover .th-info-icon {
+  opacity: 1;
+}
+.th-info-icon:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* Ícones de informação nos botões do segmented control */
+.seg-info-icon {
+  font-size: 0.65rem;
+  opacity: 0.65;
+  margin-left: 0.25rem;
+  cursor: help;
+  vertical-align: middle;
+  color: inherit;
+  transition: opacity 0.15s ease;
+}
+.segment-btn:hover .seg-info-icon {
+  opacity: 1;
+}
+
+:global(.p-tooltip.crm-profile-info-tooltip) {
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 9px;
+  box-shadow: var(--tooltip-shadow);
+}
+
+:global(.crm-profile-tooltip-content) {
+  display: flex;
+  width: min(330px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.62rem;
+  padding: 0.75rem 0.85rem;
+  line-height: 1.42;
+}
+
+:global(.crm-profile-tooltip-heading) {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-color-85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+:global(.crm-profile-tooltip-heading i) {
+  flex-shrink: 0;
+  color: var(--risk-medium);
+  font-size: 0.8rem;
+}
+
+:global(.crm-profile-tooltip-body) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+:global(.crm-profile-tooltip-note) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--tabs-border);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+:global(.crm-profile-tooltip-note strong) {
+  color: var(--risk-medium);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 </style>
